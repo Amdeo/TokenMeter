@@ -1,0 +1,117 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000010000000000000001 /* TokenMeterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* TokenMeterApp.swift */; };
+		A10000010000000000000002 /* UsageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000002 /* UsageModels.swift */; };
+		A10000010000000000000003 /* UsageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000003 /* UsageProvider.swift */; };
+		A10000010000000000000004 /* DemoUsageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000004 /* DemoUsageProvider.swift */; };
+		A10000010000000000000005 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* CredentialStore.swift */; };
+			A10000010000000000000021 /* KimiOAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* KimiOAuthService.swift */; };
+		A10000010000000000000022 /* ChromeSessionImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000022 /* ChromeSessionImporter.swift */; };
+		A10000010000000000000006 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* UsageStore.swift */; };
+		A10000010000000000000007 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* MenuBarView.swift */; };
+		A10000010000000000000008 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* DetailView.swift */; };
+			A10000010000000000000013 /* AddSubscriptionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* AddSubscriptionSheet.swift */; };
+			A10000010000000000000009 /* LiveUsageProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000011 /* LiveUsageProviders.swift */; };
+			A10000010000000000000014 /* PlatformLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000014 /* PlatformLogo.swift */; };
+			A10000010000000000000015 /* icon-deepseek.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* icon-deepseek.png */; };
+			A10000010000000000000016 /* icon-zhipu.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000016 /* icon-zhipu.png */; };
+			A10000010000000000000017 /* icon-kimi.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000017 /* icon-kimi.png */; };
+			A10000010000000000000018 /* icon-opencodego.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000018 /* icon-opencodego.png */; };
+			A10000010000000000000019 /* icon-minimax.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000019 /* icon-minimax.png */; };
+		B10000010000000000000001 /* QuotaAndKimiTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* QuotaAndKimiTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A20000010000000000000001 /* TokenMeterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenMeterApp.swift; sourceTree = "<group>"; };
+		A20000010000000000000002 /* UsageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageModels.swift; sourceTree = "<group>"; };
+		A20000010000000000000003 /* UsageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageProvider.swift; sourceTree = "<group>"; };
+		A20000010000000000000004 /* DemoUsageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoUsageProvider.swift; sourceTree = "<group>"; };
+		A20000010000000000000005 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
+			A20000010000000000000021 /* KimiOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiOAuthService.swift; sourceTree = "<group>"; };
+		A20000010000000000000022 /* ChromeSessionImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeSessionImporter.swift; sourceTree = "<group>"; };
+		A20000010000000000000006 /* UsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStore.swift; sourceTree = "<group>"; };
+		A20000010000000000000007 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+					A20000010000000000000008 /* DetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailView.swift; sourceTree = "<group>"; };
+			A20000010000000000000013 /* AddSubscriptionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddSubscriptionSheet.swift; sourceTree = "<group>"; };
+			A20000010000000000000011 /* LiveUsageProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveUsageProviders.swift; sourceTree = "<group>"; };
+			A20000010000000000000014 /* PlatformLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformLogo.swift; sourceTree = "<group>"; };
+			A20000010000000000000015 /* icon-deepseek.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-deepseek.png"; sourceTree = "<group>"; };
+			A20000010000000000000016 /* icon-zhipu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-zhipu.png"; sourceTree = "<group>"; };
+			A20000010000000000000017 /* icon-kimi.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-kimi.png"; sourceTree = "<group>"; };
+			A20000010000000000000018 /* icon-opencodego.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-opencodego.png"; sourceTree = "<group>"; };
+			A20000010000000000000019 /* icon-minimax.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-minimax.png"; sourceTree = "<group>"; };
+		A20000010000000000000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000010000000000000010 /* TokenMeter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenMeter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000010000000000000001 /* QuotaAndKimiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaAndKimiTests.swift; sourceTree = "<group>"; };
+		B20000010000000000000002 /* TokenMeterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenMeterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000003, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A30000010000000000000008, A20000010000000000000009, A20000010000000000000001, B30000010000000000000001, ); path = TokenMeter; sourceTree = "<group>"; };
+		A30000010000000000000002 = {isa = PBXGroup; children = (A20000010000000000000002, ); name = Models; path = Models; sourceTree = "<group>"; };
+		A30000010000000000000003 = {isa = PBXGroup; children = (A20000010000000000000003, A20000010000000000000004, A20000010000000000000011, ); name = Providers; path = Providers; sourceTree = "<group>"; };
+		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000021, A20000010000000000000022, ); name = Services; path = Services; sourceTree = "<group>"; };
+		A30000010000000000000005 = {isa = PBXGroup; children = (A20000010000000000000006, ); name = Store; path = Store; sourceTree = "<group>"; };
+		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000008, A20000010000000000000013, A20000010000000000000014, ); name = Views; path = Views; sourceTree = "<group>"; };
+			A30000010000000000000010 = {isa = PBXGroup; children = (A30000010000000000000011, ); name = Resources; path = Resources; sourceTree = "<group>"; };
+			A30000010000000000000011 = {isa = PBXGroup; children = (A20000010000000000000015, A20000010000000000000016, A20000010000000000000017, A20000010000000000000018, A20000010000000000000019, ); name = PlatformIcons; path = PlatformIcons; sourceTree = "<group>"; };
+		A30000010000000000000007 = {isa = PBXGroup; children = (A20000010000000000000010, B20000010000000000000002, ); name = Products; sourceTree = "<group>"; };
+		B30000010000000000000001 = {isa = PBXGroup; children = (B20000010000000000000001, ); name = TokenMeterTests; path = Tests; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = A50000010000000000000002; buildPhases = (A60000010000000000000001, A60000010000000000000002, A60000010000000000000003, ); buildRules = ( ); dependencies = ( ); name = TokenMeter; productName = TokenMeter; productReference = A20000010000000000000010; productType = "com.apple.product-type.application"; };
+		B40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B50000010000000000000001; buildPhases = (B60000010000000000000001, B60000010000000000000002, B60000010000000000000003, ); buildRules = ( ); dependencies = (B91000010000000000000001, ); name = TokenMeterTests; productName = TokenMeterTests; productReference = B20000010000000000000002; productType = "com.apple.product-type.bundle.unit-test"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A70000010000000000000001 = {isa = PBXProject; attributes = { LastSwiftUpdateCheck = 2600; ORGANIZATIONNAME = TokenMeter; TargetAttributes = { A40000010000000000000001 = { CreatedOnToolsVersion = 26.0; }; B40000010000000000000001 = { CreatedOnToolsVersion = 26.0; TestTargetID = A40000010000000000000001; }; }; }; buildConfigurationList = A50000010000000000000001; compatibilityVersion = "Xcode 16.0"; developmentRegion = zh_CN; hasScannedForEncodings = 0; knownRegions = (en, zh_CN, ); mainGroup = A30000010000000000000001; productRefGroup = A30000010000000000000007; projectDirPath = ""; projectRoot = ""; targets = (A40000010000000000000001, B40000010000000000000001, ); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A60000010000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000015, A10000010000000000000016, A10000010000000000000017, A10000010000000000000018, A10000010000000000000019, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000003, A10000010000000000000004, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000008, A10000010000000000000009, A10000010000000000000013, A10000010000000000000014, A10000010000000000000021, A10000010000000000000022, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXFrameworksBuildPhase section */
+	A60000010000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		B60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000010000000000000001, ); runOnlyForDeploymentPostprocessing = 0; };
+		B60000010000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		B60000010000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A80000010000000000000001 = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CODE_SIGN_IDENTITY = "-"; CODE_SIGNING_REQUIRED = NO; CODE_SIGNING_ALLOWED = NO; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 6.0; }; name = Debug; };
+		A80000010000000000000002 = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CODE_SIGN_IDENTITY = "-"; CODE_SIGNING_REQUIRED = NO; CODE_SIGNING_ALLOWED = NO; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0; }; name = Release; };
+		A80000010000000000000003 = {isa = XCBuildConfiguration; buildSettings = { INFOPLIST_FILE = TokenMeter/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.tokenmeter.app; PRODUCT_NAME = TokenMeter; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Debug; };
+		A80000010000000000000004 = {isa = XCBuildConfiguration; buildSettings = { INFOPLIST_FILE = TokenMeter/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.tokenmeter.app; PRODUCT_NAME = TokenMeter; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Release; };
+		B80000010000000000000001 = {isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@loader_path/../Frameworks", "@loader_path/../../../../Frameworks", ); ONLY_ACTIVE_ARCH = YES; PRODUCT_BUNDLE_IDENTIFIER = com.tokenmeter.tests; PRODUCT_NAME = TokenMeterTests; SWIFT_VERSION = 6.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TokenMeter.app/Contents/MacOS/TokenMeter"; }; name = Debug; };
+		B80000010000000000000002 = {isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@loader_path/../Frameworks", "@loader_path/../../../../Frameworks", ); ONLY_ACTIVE_ARCH = YES; PRODUCT_BUNDLE_IDENTIFIER = com.tokenmeter.tests; PRODUCT_NAME = TokenMeterTests; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TokenMeter.app/Contents/MacOS/TokenMeter"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A50000010000000000000001 = {isa = XCConfigurationList; buildConfigurations = (A80000010000000000000001, A80000010000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A50000010000000000000002 = {isa = XCConfigurationList; buildConfigurations = (A80000010000000000000003, A80000010000000000000004, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		B50000010000000000000001 = {isa = XCConfigurationList; buildConfigurations = (B80000010000000000000001, B80000010000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+/* Begin PBXContainerItemProxy section */
+		B90000010000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A70000010000000000000001; proxyType = 1; remoteGlobalIDString = A40000010000000000000001; remoteInfo = TokenMeter; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		B91000010000000000000001 = {isa = PBXTargetDependency; target = A40000010000000000000001; targetProxy = B90000010000000000000001; };
+/* End PBXTargetDependency section */
+	};
+	rootObject = A70000010000000000000001;
+}
