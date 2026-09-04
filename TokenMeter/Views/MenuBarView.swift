@@ -3,18 +3,16 @@ import AppKit
 
 struct MenuBarView: View {
     @Environment(UsageStore.self) private var store
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismissMenuBar
 
     private func openAddSubscription() {
         dismissMenuBar()
-        AddSubscriptionWindow.show(store: store)
+        SubscriptionEditorWindow.show(store: store)
     }
 
-    private func openDetails() {
+    private func openEditor(for subscription: Subscription) {
         dismissMenuBar()
-        openWindow(id: "details")
-        NSApp.activate(ignoringOtherApps: true)
+        SubscriptionEditorWindow.show(store: store, subscription: subscription)
     }
 
     var body: some View {
@@ -35,7 +33,8 @@ struct MenuBarView: View {
                     ForEach(store.orderedSubscriptions) { subscription in
                         SubscriptionMenuCard(
                             subscription: subscription,
-                            snapshot: store.snapshots[subscription.id]
+                            snapshot: store.snapshots[subscription.id],
+                            onEdit: { openEditor(for: subscription) }
                         )
                     }
                 }
@@ -46,13 +45,6 @@ struct MenuBarView: View {
             Divider().padding(.vertical, 14)
 
             HStack(spacing: 10) {
-                Button(action: openDetails) {
-                    Label("打开详情", systemImage: "rectangle.stack")
-                }
-                .buttonStyle(.borderless)
-
-                Spacer()
-
                 Button { openAddSubscription() } label: {
                     Image(systemName: "plus")
                         .font(.body.weight(.semibold))
@@ -143,21 +135,8 @@ private struct MenuBarEmptyState: View {
 private struct SubscriptionMenuCard: View {
     let subscription: Subscription
     let snapshot: UsageSnapshot?
-
-    private var visibleStatus: QuotaStatus {
-        guard let snapshot else { return .normal }
-        switch subscription.platform {
-        case .deepSeek:
-            return snapshot.status(for: [.balance])
-        case .kimi:
-            let coreKinds: Set<Quota.Kind> = [.fiveHour, .weekly, .monthly]
-            return snapshot.quotas.contains { coreKinds.contains($0.kind) }
-                ? snapshot.status(for: coreKinds)
-                : snapshot.status(for: [.balance])
-        default:
-            return snapshot.overallStatus
-        }
-    }
+    let onEdit: () -> Void
+    @State private var isHovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -173,7 +152,15 @@ private struct SubscriptionMenuCard: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                if snapshot != nil {
+                if isHovering {
+                    Button(action: onEdit) {
+                        Image(systemName: "gearshape")
+                            .font(.subheadline)
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("编辑订阅")
+                } else if snapshot != nil {
                     Text(visibleStatus.label)
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(visibleStatus.tint)
@@ -181,7 +168,7 @@ private struct SubscriptionMenuCard: View {
             }
 
             if let snapshot, snapshot.errorMessage == nil {
-                SubscriptionMenuUsageView(subscription: subscription, snapshot: snapshot)
+                SubscriptionUsageView(subscription: subscription, snapshot: snapshot, style: .compact)
             } else if let snapshot, let error = snapshot.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption2)
@@ -204,123 +191,11 @@ private struct SubscriptionMenuCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(.primary.opacity(0.08))
         )
+        .onHover { isHovering = $0 }
     }
-}
 
-private struct SubscriptionMenuUsageView: View {
-    let subscription: Subscription
-    let snapshot: UsageSnapshot
-
-    @ViewBuilder
-    var body: some View {
-        switch subscription.platform {
-        case .deepSeek:
-            BalanceMenuRow(quota: snapshot.quotas.first { $0.kind == .balance })
-        case .kimi:
-            VStack(alignment: .leading, spacing: 10) {
-                QuotaProgressRow(title: "5 小时额度", quota: snapshot.quotas.first { $0.kind == .fiveHour })
-                QuotaProgressRow(title: "每周额度", quota: snapshot.quotas.first { $0.kind == .weekly })
-                QuotaProgressRow(title: "月度额度", quota: snapshot.quotas.first { $0.kind == .monthly })
-            }
-        default:
-            if snapshot.quotas.isEmpty {
-                Text("暂无可显示的额度数据")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(snapshot.quotas) { quota in
-                        QuotaProgressRow(title: quota.name, quota: quota)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct BalanceMenuRow: View {
-    let quota: Quota?
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("可用余额")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(quota?.remainingText ?? "—")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(quota?.status.tint ?? .secondary)
-        }
-    }
-}
-
-private struct QuotaProgressRow: View {
-    let title: String
-    let quota: Quota?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title)
-                    .font(.caption)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                if let quota {
-                    Text(quota.fraction, format: .percent.precision(.fractionLength(0)))
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundStyle(quota.status.tint)
-                } else {
-                    Text("—")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if let quota {
-                ProgressView(value: quota.fraction)
-                    .tint(quota.status.tint)
-                    .controlSize(.small)
-                    .accessibilityLabel("\(title)已用比例")
-                    .accessibilityValue(quota.fraction.formatted(.percent.precision(.fractionLength(0))))
-            } else {
-                Text("接口未返回")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-struct StatusBadge: View {
-    let status: QuotaStatus
-
-    var body: some View {
-        Text(status.label)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(status.tint)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
-            .background(status.tint.opacity(0.11), in: Capsule())
-    }
-}
-
-extension Platform {
-    var tint: Color {
-        switch self {
-        case .deepSeek: .blue
-        case .zhipu: .purple
-        case .kimi: .indigo
-        case .openCodeGo: .green
-        case .miniMax: .orange
-        }
-    }
-}
-
-extension QuotaStatus {
-    var tint: Color {
-        switch self {
-        case .normal: .green
-        case .warning: .orange
-        case .exhausted, .error: .red
-        }
+    private var visibleStatus: QuotaStatus {
+        guard let snapshot else { return .normal }
+        return snapshot.visibleStatus(for: subscription)
     }
 }

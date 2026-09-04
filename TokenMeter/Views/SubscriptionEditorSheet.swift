@@ -1,11 +1,15 @@
 import SwiftUI
 import AppKit
 
-struct AddSubscriptionSheet: View {
+// 订阅的添加/编辑窗口内容：编辑模式用分段切换「用量」与「设置」，
+// 用量页复用 SubscriptionUsageView 与菜单栏面板相同的数据展示。
+struct SubscriptionEditorSheet: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openURL) private var openURL
-    let editingSubscription: Subscription?
+    let subscription: Subscription?
     let onClose: () -> Void
+
+    @State private var segment = 0
     @State private var platform: Platform = .deepSeek
     @State private var authMethod: Subscription.AuthMethod = .manualAPIKey
     @State private var name = ""
@@ -18,79 +22,39 @@ struct AddSubscriptionSheet: View {
     @State private var browserImportTask: Task<Void, Never>?
     @State private var oauthSessionID = UUID()
     @State private var message: String?
+    @State private var showDeleteConfirmation = false
 
-    init(editingSubscription: Subscription? = nil, onClose: @escaping () -> Void = {}) {
-        self.editingSubscription = editingSubscription
+    init(subscription: Subscription? = nil, onClose: @escaping () -> Void = {}) {
+        self.subscription = subscription
         self.onClose = onClose
-        _platform = State(initialValue: editingSubscription?.platform ?? .deepSeek)
-        _authMethod = State(initialValue: editingSubscription?.authMethod ?? .manualAPIKey)
-        _name = State(initialValue: editingSubscription?.name ?? "")
+        _platform = State(initialValue: subscription?.platform ?? .deepSeek)
+        _authMethod = State(initialValue: subscription?.authMethod ?? .manualAPIKey)
+        _name = State(initialValue: subscription?.name ?? "")
     }
+
+    private var isEditing: Bool { subscription != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(editingSubscription == nil ? "连接账户，集中查看额度使用情况" : "更新凭证，继续查看额度使用情况")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 18)
+            if let subscription {
+                editorHeader(subscription)
+            } else {
+                Text("连接账户，集中查看额度使用情况")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 18)
+            }
 
-            VStack(alignment: .leading, spacing: 20) {
-                SheetSection(title: "选择平台", subtitle: "不同平台的额度接口与认证方式不同。") {
-                    PlatformSelection(platform: $platform)
-                        .disabled(editingSubscription != nil)
-                    Label(platform.capabilityDescription, systemImage: "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                SheetSection(title: "订阅信息", subtitle: "名称仅用于本地识别，可稍后重命名。") {
-                    FormField("名称（可选）", text: $name)
-                }
-
-                SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
-                    AuthMethodSelection(
-                        authMethod: $authMethod,
-                        platform: platform,
-                        apiKey: $apiKey,
-                        oauthDevice: oauthDevice,
-                        oauthStatus: oauthStatus,
-                        isAuthorizing: oauthTask != nil,
-                        onStartOAuth: startOAuth,
-                        onCancelOAuth: cancelOAuth,
-                        isImportingBrowser: browserImportTask != nil,
-                        onImportBrowser: importBrowserSession,
-                        onOpenURL: { openURL($0) },
-                        onCopy: copy
-                    )
-                }
-
-                if let message {
-                    HStack(alignment: .top, spacing: 9) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                        Text(message)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .padding(11)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
+            if segment == 0, let subscription {
+                usagePane(subscription)
+            } else {
+                settingsPane
             }
 
             Spacer(minLength: 12)
 
             Divider()
-            HStack {
-                Spacer()
-                Button("取消") { onClose() }
-                    .keyboardShortcut(.cancelAction)
-                Button(editingSubscription == nil ? "添加订阅" : "保存凭证") { addSubscription() }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!canAdd || oauthTask != nil)
-            }
-            .padding(.top, 14)
+            footer
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
@@ -111,17 +75,225 @@ struct AddSubscriptionSheet: View {
         .onDisappear {
             resetCredentialState()
         }
+        .alert("删除订阅", isPresented: $showDeleteConfirmation) {
+            Button("删除", role: .destructive) { deleteSubscription() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除「\(subscription?.name ?? "")」的订阅与本地凭证，此操作不可撤销。")
+        }
     }
 
-    private var canAdd: Bool {
+    private func editorHeader(_ subscription: Subscription) -> some View {
+        HStack(spacing: 10) {
+            PlatformLogo(platform: subscription.platform, size: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(subscription.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text("\(subscription.platform.rawValue) · \(subscription.authMethod.label)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 10)
+            Picker("", selection: $segment) {
+                Text("用量").tag(0)
+                Text("设置").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 190)
+        }
+        .padding(.bottom, 16)
+    }
+
+    private func usagePane(_ subscription: Subscription) -> some View {
+        VStack(alignment: .leading, spacing: 13) {
+            if let snapshot = store.snapshots[subscription.id] {
+                if let error = snapshot.errorMessage {
+                    SnapshotStatePanel(snapshot: snapshot, message: error)
+                } else {
+                    SubscriptionUsageView(subscription: subscription, snapshot: snapshot, style: .full)
+                }
+                HStack {
+                    Text("最近更新：\(snapshot.updatedAt.tokenMeterTimeText)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        Task { await store.refresh(subscription) }
+                    } label: {
+                        Label("刷新", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("等待首次刷新…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("立即刷新") {
+                        Task { await store.refresh(subscription) }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.vertical, 34)
+            }
+        }
+    }
+
+    private var settingsPane: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            SheetSection(title: "选择平台", subtitle: "不同平台的额度接口与认证方式不同。") {
+                PlatformSelection(platform: $platform)
+                    .disabled(isEditing)
+                Label(platform.capabilityDescription, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            SheetSection(title: "订阅信息", subtitle: "名称仅用于本地识别，可稍后重命名。") {
+                FormField("名称（可选）", text: $name)
+            }
+
+            SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
+                AuthMethodSelection(
+                    authMethod: $authMethod,
+                    platform: platform,
+                    apiKey: $apiKey,
+                    oauthDevice: oauthDevice,
+                    oauthStatus: oauthStatus,
+                    isAuthorizing: oauthTask != nil,
+                    onStartOAuth: startOAuth,
+                    onCancelOAuth: cancelOAuth,
+                    isImportingBrowser: browserImportTask != nil,
+                    onImportBrowser: importBrowserSession,
+                    onOpenURL: { openURL($0) },
+                    onCopy: copy
+                )
+            }
+
+            if let message {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(message)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .padding(11)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            if isEditing {
+                Button("删除订阅", role: .destructive) { showDeleteConfirmation = true }
+                    .buttonStyle(.borderless)
+            }
+            Spacer()
+            Button("取消") { onClose() }
+                .keyboardShortcut(.cancelAction)
+            Button(isEditing ? "保存修改" : "添加订阅") { save() }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave || oauthTask != nil)
+        }
+        .padding(.top, 14)
+    }
+
+    private var canSave: Bool {
         switch authMethod {
         case .manualAPIKey:
+            if isEditing { return true }
             return !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .kimiOAuth:
+            if isEditing, oauthCredential == nil { return true }
             return oauthCredential != nil
         case .kimiBrowserSession:
+            if isEditing, browserCredential == nil { return true }
             return browserCredential != nil
         }
+    }
+
+    private func save() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let subscription {
+            saveEditing(subscription, trimmedName: trimmedName)
+        } else {
+            saveNew(trimmedName: trimmedName)
+        }
+    }
+
+    private func saveNew(trimmedName: String) {
+        let subscription = Subscription(
+            id: UUID(),
+            platform: platform,
+            name: trimmedName.isEmpty ? platform.rawValue : trimmedName,
+            authMethod: authMethod
+        )
+        do {
+            switch authMethod {
+            case .manualAPIKey:
+                try CredentialStore().save(apiKey: apiKey, for: subscription.id)
+            case .kimiOAuth:
+                guard let oauthCredential else { return }
+                try CredentialStore().save(oauthCredential: oauthCredential, for: subscription.id)
+            case .kimiBrowserSession:
+                guard let browserCredential else { return }
+                try CredentialStore().save(browserCredential: browserCredential, for: subscription.id)
+            }
+            store.add(subscription)
+            onClose()
+            Task { await store.refresh(subscription) }
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func saveEditing(_ subscription: Subscription, trimmedName: String) {
+        do {
+            switch authMethod {
+            case .manualAPIKey:
+                let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !key.isEmpty {
+                    try CredentialStore().save(apiKey: key, for: subscription.id)
+                }
+            case .kimiOAuth:
+                if let oauthCredential {
+                    try CredentialStore().save(oauthCredential: oauthCredential, for: subscription.id)
+                }
+            case .kimiBrowserSession:
+                if let browserCredential {
+                    try CredentialStore().save(browserCredential: browserCredential, for: subscription.id)
+                }
+            }
+            var updated = subscription
+            if subscription.authMethod != authMethod {
+                store.updateAuthMethod(subscription, to: authMethod)
+                updated.authMethod = authMethod
+            }
+            if subscription.name != trimmedName, !trimmedName.isEmpty {
+                store.rename(subscription, to: trimmedName)
+                updated.name = trimmedName
+            }
+            onClose()
+            Task { await store.refresh(updated) }
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func deleteSubscription() {
+        guard let subscription else { return }
+        store.remove(subscription)
+        onClose()
     }
 
     private func resetCredentialState() {
@@ -194,38 +366,6 @@ struct AddSubscriptionSheet: View {
     private func copy(_ value: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
-    }
-
-    private func addSubscription() {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        var subscription = editingSubscription ?? Subscription(
-            id: UUID(),
-            platform: platform,
-            name: trimmedName.isEmpty ? platform.rawValue : trimmedName,
-            authMethod: authMethod
-        )
-        subscription.authMethod = authMethod
-        do {
-            switch authMethod {
-            case .manualAPIKey:
-                try CredentialStore().save(apiKey: apiKey, for: subscription.id)
-            case .kimiOAuth:
-                guard let oauthCredential else { return }
-                try CredentialStore().save(oauthCredential: oauthCredential, for: subscription.id)
-            case .kimiBrowserSession:
-                guard let browserCredential else { return }
-                try CredentialStore().save(browserCredential: browserCredential, for: subscription.id)
-            }
-            if let editingSubscription {
-                store.updateAuthMethod(editingSubscription, to: authMethod)
-            } else {
-                store.add(subscription)
-            }
-            onClose()
-            Task { await store.refresh(subscription) }
-        } catch {
-            message = error.localizedDescription
-        }
     }
 }
 

@@ -13,13 +13,6 @@ struct TokenMeterApp: App {
             Label("TokenMeter", systemImage: "gauge.with.dots.needle.67percent")
         }
         .menuBarExtraStyle(.window)
-
-        Window("我的订阅", id: "details") {
-            DetailView()
-                .environment(store)
-        }
-        .defaultSize(width: 820, height: 700)
-        .windowResizability(.contentSize)
     }
 
     init() {
@@ -30,35 +23,42 @@ struct TokenMeterApp: App {
 }
 
 @MainActor
-enum AddSubscriptionWindow {
+enum SubscriptionEditorWindow {
     private static var window: NSWindow?
-    private static var delegate: AddSubscriptionWindowDelegate?
+    private static var delegate: SubscriptionEditorWindowDelegate?
 
-    static func show(store: UsageStore, editingSubscription: Subscription? = nil) {
+    static func show(store: UsageStore, subscription: Subscription? = nil) {
+        let title = subscription.map { "编辑订阅 · \($0.name)" } ?? "添加订阅"
+        let content = AnyView(
+            SubscriptionEditorSheet(subscription: subscription, onClose: { close() })
+                .environment(store)
+        )
         if let window {
+            if let controller = window.contentViewController as? NSHostingController<AnyView> {
+                controller.rootView = content
+            }
+            window.title = title
             window.center()
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
-        let content = AddSubscriptionSheet(editingSubscription: editingSubscription, onClose: { close() })
-        let controller = NSHostingController(rootView: content.environment(store))
+        let controller = NSHostingController(rootView: content)
 
         let window = NSWindow(contentViewController: controller)
-        window.title = editingSubscription == nil ? "添加订阅" : "更新凭证"
+        window.title = title
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.setContentSize(NSSize(width: 560, height: 640))
 
-        let delegate = AddSubscriptionWindowDelegate()
+        let delegate = SubscriptionEditorWindowDelegate()
         window.delegate = delegate
         self.window = window
         self.delegate = delegate
 
         window.center()
         window.makeKeyAndOrderFront(nil)
-        window.center()
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async { window.center() }
     }
@@ -75,8 +75,8 @@ enum AddSubscriptionWindow {
     }
 }
 
-private final class AddSubscriptionWindowDelegate: NSObject, NSWindowDelegate {
+private final class SubscriptionEditorWindowDelegate: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        AddSubscriptionWindow.handleWindowClosed()
+        SubscriptionEditorWindow.handleWindowClosed()
     }
 }
