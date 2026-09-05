@@ -16,9 +16,10 @@ struct TokenMeterApp: App {
     }
 
     init() {
-        let store = UsageStore()
+        let settings = SettingsStore()
+        let store = UsageStore(settings: settings)
         _store = State(initialValue: store)
-        store.start()
+        if settings.autoRefreshEnabled { store.start() }
     }
 }
 
@@ -50,7 +51,9 @@ enum SubscriptionEditorWindow {
         window.title = title
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 560, height: 640))
+        window.setContentSize(NSSize(width: 600, height: 680))
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(TM.editorBackground)
 
         let delegate = SubscriptionEditorWindowDelegate()
         window.delegate = delegate

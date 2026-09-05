@@ -21,10 +21,11 @@ struct PlatformLogo: View {
             }
         }
         .frame(width: size, height: size)
+        .background(platform.tint.opacity(0.09), in: RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                .strokeBorder(.primary.opacity(0.10))
+                .strokeBorder(platform.tint.opacity(0.28), lineWidth: 1)
         )
         .accessibilityLabel(platform.rawValue)
     }

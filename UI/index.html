@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Meter · AI 配额监控</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: [
+                "-apple-system",
+                "BlinkMacSystemFont",
+                '"SF Pro Display"',
+                '"PingFang SC"',
+                '"Helvetica Neue"',
+                "sans-serif",
+              ],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        min-height: 100%;
+      }
+      body {
+        margin: 0;
+        color: #f4f4f1;
+        background: #0d0e0e;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
+          "Helvetica Neue", sans-serif;
+        letter-spacing: -0.012em;
+      }
+      button {
+        font: inherit;
+      }
+      .desktop-glow {
+        background:
+          radial-gradient(
+            circle at 50% 7%,
+            rgba(79, 92, 104, 0.27),
+            transparent 42%
+          ),
+          #0d0e0e;
+      }
+      .menu-bar {
+        background: rgba(22, 23, 24, 0.72);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(20px);
+      }
+      .popover {
+        width: 398px;
+        min-height: 636px;
+        overflow: hidden;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: linear-gradient(
+          145deg,
+          #222324 0%,
+          #1a1b1c 55%,
+          #181919 100%
+        );
+        box-shadow:
+          0 30px 90px rgba(0, 0, 0, 0.55),
+          0 2px 10px rgba(0, 0, 0, 0.4),
+          inset 0 1px rgba(255, 255, 255, 0.045);
+      }
+      .popover-header {
+        background: rgba(255, 255, 255, 0.018);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+      }
+      .subtle-border {
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+      .ghost-button {
+        color: #9fa3a1;
+        transition:
+          color 0.16s ease,
+          background 0.16s ease,
+          transform 0.16s ease;
+      }
+      .ghost-button:hover {
+        color: #f4f4f1;
+        background: rgba(255, 255, 255, 0.065);
+      }
+      .ghost-button:active {
+        transform: scale(0.96);
+      }
+      .control-button {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        border-radius: 9px;
+      }
+      .control-button svg {
+        width: 18px;
+        height: 18px;
+      }
+      .control-button:hover {
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+      .reopen-button {
+        color: #d6dad7;
+        background: rgba(31, 32, 33, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow:
+          0 18px 50px rgba(0, 0, 0, 0.35),
+          inset 0 1px rgba(255, 255, 255, 0.06);
+        transition: all 0.16s ease;
+      }
+      .reopen-button:hover {
+        background: #292b2c;
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateY(-1px);
+      }
+      .soft-button {
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        transition: all 0.16s ease;
+      }
+      .soft-button:hover {
+        background: rgba(255, 255, 255, 0.115);
+        border-color: rgba(255, 255, 255, 0.16);
+      }
+      .soft-button:active {
+        transform: scale(0.985);
+      }
+      .primary-button {
+        color: #191a1a;
+        background: #e9ebe8;
+        box-shadow:
+          0 1px 1px rgba(0, 0, 0, 0.2),
+          inset 0 1px rgba(255, 255, 255, 0.7);
+        transition: all 0.16s ease;
+      }
+      .primary-button:hover {
+        background: #fff;
+        transform: translateY(-1px);
+      }
+      .provider-card {
+        background: rgba(255, 255, 255, 0.028);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition:
+          transform 0.18s ease,
+          background 0.18s ease,
+          border 0.18s ease;
+      }
+      .provider-card:hover {
+        background: rgba(255, 255, 255, 0.052);
+        border-color: rgba(255, 255, 255, 0.14);
+        transform: translateY(-1px);
+      }
+      .provider-card:active {
+        transform: scale(0.988);
+      }
+      .icon-tile {
+        box-shadow:
+          inset 0 1px rgba(255, 255, 255, 0.15),
+          0 4px 12px rgba(0, 0, 0, 0.18);
+      }
+      .progress-track {
+        background: rgba(255, 255, 255, 0.09);
+      }
+      .progress-fill {
+        box-shadow: 0 0 9px rgba(91, 170, 255, 0.22);
+      }
+      .tiny-caps {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+      .page-fade {
+        animation: page-in 0.22s ease both;
+      }
+      @keyframes page-in {
+        from {
+          opacity: 0;
+          transform: translateX(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .sheet {
+        animation: sheet-in 0.2s ease both;
+      }
+      @keyframes sheet-in {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .spin {
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.06) 25%,
+          rgba(255, 255, 255, 0.13) 50%,
+          rgba(255, 255, 255, 0.06) 75%
+        );
+        background-size: 220% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      @keyframes shimmer {
+        to {
+          background-position: -220% 0;
+        }
+      }
+      .modal-backdrop {
+        background: rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(5px);
+      }
+      .light-input {
+        background: rgba(0, 0, 0, 0.19);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        outline: none;
+        transition: border 0.15s;
+      }
+      .light-input:focus {
+        border-color: rgba(112, 175, 255, 0.7);
+        box-shadow: 0 0 0 3px rgba(74, 139, 221, 0.12);
+      }
+      .settings-row {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      }
+      .switch {
+        width: 34px;
+        height: 20px;
+        border-radius: 20px;
+        background: #3779be;
+        position: relative;
+      }
+      .switch::after {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        top: 2px;
+        right: 2px;
+        border-radius: 50%;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .switch.off {
+        background: rgba(255, 255, 255, 0.16);
+      }
+      .switch.off::after {
+        right: 16px;
+      }
+    </style>
+  </head>
+  <body class="desktop-glow min-h-screen">
+    <div
+      class="menu-bar h-8 flex items-center justify-between px-5 text-[12px] text-white/75 select-none"
+    >
+      <div class="flex items-center gap-4">
+        <span class="font-semibold text-white/90"></span
+        ><span class="font-semibold text-white/85">访达</span><span>文件</span
+        ><span>编辑</span><span>显示</span><span>前往</span><span>窗口</span
+        ><span>帮助</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span>⌁</span><span>◔</span><span>▣</span><span>9月24日 上午10:42</span>
+      </div>
+    </div>
+
+    <main
+      class="min-h-[calc(100vh-32px)] flex items-start justify-center pt-[72px] pb-10"
+    >
+      <section class="popover relative" id="app"></section>
+      <button
+        id="reopen"
+        data-action="reopen"
+        class="reopen-button hidden rounded-xl px-4 py-2.5 text-[12px] font-medium"
+      >
+        重新打开 AI Meter
+      </button>
+    </main>
+
+    <script>
+      const providers = {
+        deepseek: {
+          name: "DeepSeek",
+          subtitle: "API 余额",
+          accent: "#69a7ff",
+          icon: "DS",
+          balance: "¥18.42",
+          updated: "12 秒前",
+        },
+        kimi: {
+          name: "Kimi",
+          subtitle: "多窗口用量",
+          accent: "#9b83ff",
+          icon: "K",
+          updated: "18 秒前",
+          usage: [
+            {
+              label: "5 小时用量",
+              value: "82%",
+              percent: 82,
+              note: "接近上限",
+              reset: "约 2 小时后重置",
+            },
+            {
+              label: "周用量",
+              value: "64%",
+              percent: 64,
+              note: "正常",
+              reset: "周一重置",
+            },
+            {
+              label: "总用量",
+              value: "41%",
+              percent: 41,
+              note: "正常",
+              reset: "本月累计",
+            },
+          ],
+        },
+      };
+
+      let state = {
+        page: "dashboard",
+        selected: "deepseek",
+        demo: "normal",
+        refreshing: false,
+        account: "个人账号",
+        demoSheet: false,
+      };
+      const app = document.getElementById("app");
+      const svg = (path, cls = "w-4 h-4") =>
+        `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+      const icons = {
+        refresh: svg(
+          '<path d="M20 11a8.1 8.1 0 0 0-14.8-3L3 11m0 0V6m0 5h5M4 13a8.1 8.1 0 0 0 14.8 3L21 13m0 0v5m0-5h-5"/>',
+        ),
+        settings: svg(
+          '<path d="M4 6h5m4 0h7M4 12h8m4 0h4M4 18h3m4 0h9"/><path d="M9 4v4m7-4v4m-5 6v4m-4-2v4m9-4v4"/>',
+        ),
+        chevron: svg('<path d="m9 18 6-6-6-6"/>', "w-4 h-4 text-white/30"),
+        back: svg('<path d="m15 18-6-6 6-6"/>'),
+        plus: svg('<path d="M12 5v14M5 12h14"/>'),
+        lock: svg(
+          '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+        ),
+        key: svg(
+          '<circle cx="8" cy="15" r="3"/><path d="m10.5 13.5 7-7M16 6l2 2"/>',
+        ),
+        browser: svg(
+          '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/>',
+        ),
+        more: svg(
+          '<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>',
+        ),
+        warning: svg(
+          '<path d="m12 3 9 17H3L12 3Z"/><path d="M12 9v4m0 3h.01"/>',
+        ),
+        power: svg('<path d="M12 3v8"/><path d="M18.4 6.6a8 8 0 1 1-12.8 0"/>'),
+        x: svg('<path d="m6 6 12 12M18 6 6 18"/>'),
+      };
+
+      function providerIcon(provider, small = false) {
+        return `<div class="icon-tile shrink-0 flex items-center justify-center rounded-[10px] font-semibold ${small ? "w-7 h-7 text-[10px]" : "w-9 h-9 text-[12px]"}" style="background:${provider.accent}1c;color:${provider.accent};border:1px solid ${provider.accent}45">${provider.icon}</div>`;
+      }
+
+      function header(title = "AI 额度", meta = "2 个服务 · 12 秒前更新") {
+        return `<header class="popover-header px-5 pt-4 pb-3"><div class="flex items-center justify-between"><div class="flex items-center gap-2.5"><div class="w-7 h-7 rounded-[9px] flex items-center justify-center bg-white/[.09] border border-white/10 text-white/90">✦</div><span class="text-[13px] font-semibold tracking-[-.02em]">AI Meter</span></div><div class="flex items-center gap-0.5"><button data-action="refresh" aria-label="刷新" title="刷新" class="control-button ghost-button ${state.refreshing ? "spin" : ""}">${icons.refresh.replace("w-4 h-4", "w-4 h-4")}</button><button data-action="settings" aria-label="设置" title="设置" class="control-button ghost-button">${icons.settings.replace("w-4 h-4", "w-4 h-4")}</button><button data-action="close" aria-label="关闭面板" title="关闭面板" class="control-button ghost-button text-[#a9adaa]">${icons.power.replace("w-4 h-4", "w-4 h-4")}</button></div></div><div class="mt-4"><h1 class="text-[20px] leading-6 font-semibold tracking-[-.035em]">${title}</h1><p class="mt-1 text-[11px] text-[#8f9391]">${meta}</p></div></header>`;
+      }
+
+      function statusDot(color = "#67c89d") {
+        return `<span class="w-1.5 h-1.5 rounded-full" style="background:${color}"></span>`;
+      }
+
+      function deepseekCard() {
+        const loading = state.demo === "loading";
+        const low = state.demo === "low";
+        const error = state.demo === "error";
+        return `<button data-provider="deepseek" class="provider-card w-full rounded-2xl p-4 text-left"><div class="flex items-start justify-between"><div class="flex items-center gap-3">${providerIcon(providers.deepseek)}<div><div class="flex items-center gap-2"><span class="text-[14px] font-semibold">DeepSeek</span>${statusDot(error || low ? "#d59b5c" : "#67c89d")}</div><div class="mt-1 text-[10px] text-[#858987]">API 余额 · ${error ? "无法刷新" : low ? "余额偏低" : "已连接"}</div></div></div>${icons.chevron}</div><div class="mt-4 flex items-end justify-between"><div><div class="tiny-caps text-[#777d79]">${loading ? "正在读取余额" : low ? "余额偏低" : "可用余额"}</div><div class="mt-1 text-[29px] leading-8 font-semibold tracking-[-.065em] ${low ? "text-[#e5b16d]" : ""}">${loading ? '<span class="inline-block w-28 h-8 rounded skeleton align-middle"></span>' : error ? "—" : providers.deepseek.balance}</div></div><div class="text-right text-[10px] text-[#737875]">${loading ? "读取中…" : error ? '<span data-action="retry" class="text-[#e1ad6b] underline underline-offset-2">重试</span>' : "已同步"}</div></div></button>`;
+      }
+
+      function kimiCard() {
+        const loading = state.demo === "loading";
+        const expired = state.demo === "expired";
+        return `<button data-provider="kimi" class="provider-card w-full rounded-2xl p-4 text-left"><div class="flex items-start justify-between"><div class="flex items-center gap-3">${providerIcon(providers.kimi)}<div><div class="flex items-center gap-2"><span class="text-[14px] font-semibold">Kimi</span>${statusDot(expired ? "#d59b5c" : "#67c89d")}</div><div class="mt-1 text-[10px] text-[#858987]">${expired ? "需要重新认证" : "5 小时 · 周 · 总用量"}</div></div></div><div class="flex items-center gap-1.5 text-[10px] text-[#777d79]">${expired ? '<span class="text-[#e1ad6b">重新连接</span>' : "已连接"}${icons.chevron}</div></div><div class="mt-4 space-y-2.5">${providers.kimi.usage.map((item) => `<div class="rounded-xl bg-black/[.12] border border-white/[.055] px-3 py-2.5"><div class="flex items-center justify-between"><span class="text-[11px] text-[#aeb3b0]">${item.label}</span><span class="text-[18px] leading-5 font-semibold tracking-[-.045em]">${loading ? '<span class="inline-block w-10 h-5 rounded skeleton align-middle"></span>' : item.value}</span></div><div class="progress-track mt-2 h-1.5 rounded-full overflow-hidden"><div class="progress-fill h-full rounded-full" style="width:${item.percent}%;background:${providers.kimi.accent}"></div></div><div class="mt-1 flex justify-between text-[9px] text-[#6f7471]"><span>${loading ? "读取中" : item.note}</span><span>${item.reset}</span></div></div>`).join("")}</div></button>`;
+      }
+
+      function dashboard() {
+        return `${header()}<div class="page-fade px-4 pt-4"><div class="space-y-2.5">${deepseekCard()}${kimiCard()}</div></div><footer class="dashboard-footer mt-5 px-5 py-3 border-t subtle-border bg-black/[.08] flex items-center gap-3"><button data-action="add" class="shrink-0 text-[12px] text-[#cbd0cc] hover:text-white flex items-center gap-1.5">${icons.plus.replace("w-4 h-4", "w-3.5 h-3.5")} 添加订阅</button><span class="ml-auto shrink-0 text-[10px] text-[#737875] flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[#67c89d]"></span>已同步</span></footer>`;
+      }
+
+      function addPage() {
+        return `${header("添加订阅", "选择要连接的 AI 服务")}<div class="page-fade px-4 pt-4"><button data-action="dashboard" class="ghost-button flex items-center gap-1 text-[12px] mb-4">${icons.back.replace("w-4 h-4", "w-3.5 h-3.5")} 返回概览</button><div class="space-y-2.5"><button data-provider-add="deepseek" class="provider-card w-full rounded-xl px-3.5 py-3.5 flex items-center gap-3 text-left">${providerIcon(providers.deepseek, true)}<div class="flex-1"><div class="text-[13px] font-medium">DeepSeek</div><div class="mt-0.5 text-[10px] text-[#828784]">API 余额</div></div>${icons.chevron}</button><button data-provider-add="kimi" class="provider-card w-full rounded-xl px-3.5 py-3.5 flex items-center gap-3 text-left">${providerIcon(providers.kimi, true)}<div class="flex-1"><div class="text-[13px] font-medium">Kimi</div><div class="mt-0.5 text-[10px] text-[#828784]">5 小时、周和总用量</div></div>${icons.chevron}</button><button data-action="custom" class="provider-card w-full rounded-xl px-3.5 py-3.5 flex items-center gap-3 text-left"><div class="w-7 h-7 rounded-[9px] flex items-center justify-center bg-white/[.06] border border-white/10 text-white/45">${icons.plus.replace("w-4 h-4", "w-3.5 h-3.5")}</div><div class="flex-1"><div class="text-[13px] font-medium">自定义服务</div><div class="mt-0.5 text-[10px] text-[#777c79]">未来支持更多 Provider</div></div>${icons.chevron}</button></div></div><footer class="absolute bottom-0 left-0 right-0 px-5 py-3 border-t subtle-border text-[10px] text-[#707572] flex items-center gap-1.5">${icons.lock.replace("w-4 h-4", "w-3 h-3")} 凭据将安全存储在 macOS 钥匙串</footer>`;
+      }
+
+      function authPage() {
+        const provider = providers[state.selected];
+        const isDeepSeek = state.selected === "deepseek";
+        return `${header(provider.name, "连接你的账号")}<div class="page-fade px-5 pt-5"><button data-action="add" class="ghost-button flex items-center gap-1 text-[12px] mb-7">${icons.back.replace("w-4 h-4", "w-3.5 h-3.5")} 返回服务列表</button><div class="flex items-center gap-3 mb-5">${providerIcon(provider)}<div><div class="text-[16px] font-semibold">连接 ${provider.name}</div><div class="text-[11px] text-[#858a87] mt-0.5">选择一种安全的认证方式</div></div></div><div class="space-y-2">${isDeepSeek ? `<button data-auth="api" class="provider-card w-full p-3.5 rounded-xl flex items-center gap-3 text-left"><div class="w-8 h-8 rounded-lg bg-[#6ba9ff]/10 text-[#79b3ff] flex items-center justify-center">${icons.key}</div><div class="flex-1"><div class="text-[13px] font-medium">API 密钥</div><div class="text-[10px] text-[#808582] mt-0.5">粘贴开发者控制台中的密钥</div></div>${icons.chevron}</button>` : `<button data-auth="oauth" class="provider-card w-full p-3.5 rounded-xl flex items-center gap-3 text-left"><div class="w-8 h-8 rounded-lg bg-[#9b83ff]/10 text-[#b09cff] flex items-center justify-center">${icons.browser}</div><div class="flex-1"><div class="text-[13px] font-medium">OAuth 授权</div><div class="text-[10px] text-[#808582] mt-0.5">在默认浏览器中完成授权</div></div>${icons.chevron}</button>`}</div><div class="mt-7 rounded-xl border border-white/[.07] bg-white/[.025] p-3.5 flex gap-2.5 text-[#89908b]">${icons.lock.replace("w-4 h-4", "w-3.5 h-3.5 mt-0.5 shrink-0")}<p class="text-[11px] leading-4">你的凭据将安全存储在 <span class="text-[#b8bfba]">macOS 钥匙串</span> 中。</p></div></div>`;
+      }
+
+      function apiPage() {
+        const provider = providers[state.selected];
+        return `${header("连接 API 密钥", "安全连接 DeepSeek 开发者账号")}<div class="page-fade px-5 pt-5"><button data-action="auth" class="ghost-button flex items-center gap-1 text-[12px] mb-8">${icons.back.replace("w-4 h-4", "w-3.5 h-3.5")} 返回认证方式</button><div class="flex items-center gap-2.5 mb-5">${providerIcon(provider, true)}<span class="text-[14px] font-medium">${provider.name}</span></div><label class="block tiny-caps text-[#7d827f] mb-2">API 密钥</label><div class="relative"><input id="apiKey" type="password" placeholder="粘贴你的 API 密钥" class="light-input w-full rounded-lg px-3.5 py-3 text-[13px] text-white placeholder:text-[#656b68] pr-10"/><span class="absolute right-3 top-3.5 text-[#6f7672]">${icons.key}</span></div><p class="mt-2 text-[10px] text-[#777d79] flex items-center gap-1">${icons.lock.replace("w-4 h-4", "w-3 h-3")} 将安全存储在 macOS 钥匙串</p><button data-action="connected" class="primary-button mt-7 w-full rounded-lg py-2.5 text-[12px] font-medium">连接账号</button></div>`;
+      }
+
+      function oauthPage() {
+        const provider = providers[state.selected];
+        return `${header("继续 OAuth 授权", "无需分享密码即可完成连接")}<div class="page-fade px-5 pt-10 text-center"><div class="mx-auto">${providerIcon(provider)}</div><h2 class="mt-4 text-[17px] font-semibold">在浏览器中授权</h2><p class="mt-2 text-[12px] leading-5 text-[#858b87] px-5">即将打开浏览器，连接你的 ${provider.name} 账号。</p><button data-action="connected" class="primary-button mt-7 w-full rounded-lg py-2.5 text-[12px] font-medium flex items-center justify-center gap-2">${icons.browser.replace("w-4 h-4", "w-3.5 h-3.5")} 打开浏览器授权</button><p class="mt-4 text-[10px] text-[#707672] flex items-center justify-center gap-1">${icons.lock.replace("w-4 h-4", "w-3 h-3")} AI Meter 不会获取你的密码</p></div>`;
+      }
+
+      function usageRows() {
+        return providers.kimi.usage
+          .map(
+            (item) =>
+              `<div class="rounded-xl border border-white/[.07] bg-white/[.025] px-3.5 py-3"><div class="flex items-center justify-between"><div><div class="text-[12px] font-medium">${item.label}</div><div class="mt-1 text-[10px] text-[#777d79]">${item.reset}</div></div><div class="text-right"><div class="text-[20px] leading-6 font-semibold tracking-[-.045em]">${item.value}</div><div class="mt-1 text-[9px] text-[#888e8a]">${item.note}</div></div></div><div class="progress-track mt-3 h-1.5 rounded-full overflow-hidden"><div class="progress-fill h-full rounded-full" style="width:${item.percent}%;background:${providers.kimi.accent}"></div></div></div>`,
+          )
+          .join("");
+      }
+
+      function detailPage() {
+        const provider = providers[state.selected];
+        if (state.selected === "kimi")
+          return `${header("Kimi", state.account)}<div class="page-fade px-5 pt-4"><button data-action="dashboard" class="ghost-button flex items-center gap-1 text-[12px] mb-4">${icons.back.replace("w-4 h-4", "w-3.5 h-3.5")} 返回全部订阅</button><div class="flex items-center justify-between mb-5"><div class="flex items-center gap-2.5">${providerIcon(provider, true)}<div><div class="text-[14px] font-medium">Kimi</div><button data-action="account" class="mt-0.5 text-[10px] text-[#8d938f] hover:text-white">${state.account} · 2 个账号 ${icons.chevron.replace("w-4 h-4", "w-2.5 h-2.5 inline ml-0.5")}</button></div></div><button class="ghost-button p-1.5">${icons.more}</button></div><div class="tiny-caps text-[#727875] mb-2.5">用量详情</div><div class="space-y-2">${usageRows()}</div><div class="mt-5 tiny-caps text-[#727875]">连接状态</div><div class="mt-2 rounded-xl border border-white/[.07] divide-y divide-white/[.06]"><div class="flex items-center justify-between px-3 py-2.5 text-[11px]"><span class="text-[#828884]">认证方式</span><span>OAuth</span></div><div class="flex items-center justify-between px-3 py-2.5 text-[11px]"><span class="text-[#828884]">状态</span><span class="flex items-center gap-1.5">${statusDot()}已连接</span></div><div class="flex items-center justify-between px-3 py-2.5 text-[11px]"><span class="text-[#828884]">上次更新</span><span>18 秒前</span></div></div><div class="mt-5 grid grid-cols-2 gap-2"><button data-action="refresh" class="soft-button rounded-lg py-2 text-[11px] flex items-center justify-center gap-1.5">${icons.refresh.replace("w-4 h-4", "w-3 h-3")} 立即刷新</button><button data-action="edit" class="soft-button rounded-lg py-2 text-[11px]">编辑账号</button></div><button data-action="remove" class="w-full mt-2 py-2 text-[10px] text-[#888079] hover:text-[#d79a73]">移除订阅</button></div>`;
+        const low = state.demo === "low";
+        const loading = state.demo === "loading";
+        return `${header("DeepSeek", state.account)}<div class="page-fade px-5 pt-4"><button data-action="dashboard" class="ghost-button flex items-center gap-1 text-[12px] mb-4">${icons.back.replace("w-4 h-4", "w-3.5 h-3.5")} 返回全部订阅</button><div class="flex items-center justify-between mb-5"><div class="flex items-center gap-2.5">${providerIcon(provider, true)}<div><div class="text-[14px] font-medium">DeepSeek</div><button data-action="account" class="mt-0.5 text-[10px] text-[#8d938f] hover:text-white">${state.account} · 2 个账号 ${icons.chevron.replace("w-4 h-4", "w-2.5 h-2.5 inline ml-0.5")}</button></div></div><button class="ghost-button p-1.5">${icons.more}</button></div><div class="rounded-2xl bg-white/[.045] border border-white/[.075] px-4 py-4"><div class="tiny-caps text-[#818784]">${low ? "余额偏低" : "可用余额"}</div><div class="mt-1 text-[36px] leading-10 font-semibold tracking-[-.07em] ${low ? "text-[#e5b16d]" : ""}">${loading ? '<span class="inline-block w-28 h-9 rounded skeleton"></span>' : provider.balance}</div><div class="mt-2 text-[11px] text-[#858b87]">API 余额</div></div><div class="mt-5 tiny-caps text-[#727875]">账号状态</div><div class="mt-2 rounded-xl border border-white/[.07] divide-y divide-white/[.06]"><div class="flex items-center justify-between px-3 py-2.5 text-[11px]"><span class="text-[#828884]">认证方式</span><span>API 密钥</span></div><div class="flex items-center justify-between px-3 py-2.5 text-[11px]"><span class="text-[#828884]">状态</span><span class="flex items-center gap-1.5">${statusDot()}已连接</span></div><div class="flex items-center justify-between px-3 py-2.5 text-[11px]"><span class="text-[#828884]">上次更新</span><span>12 秒前</span></div></div>${low ? '<p class="mt-3 text-[10px] text-[#c3945d]">低余额提醒阈值：¥5</p>' : ""}<div class="mt-5 grid grid-cols-2 gap-2"><button data-action="refresh" class="soft-button rounded-lg py-2 text-[11px] flex items-center justify-center gap-1.5">${icons.refresh.replace("w-4 h-4", "w-3 h-3")} 立即刷新</button><button data-action="edit" class="soft-button rounded-lg py-2 text-[11px]">编辑账号</button></div><button data-action="remove" class="w-full mt-2 py-2 text-[10px] text-[#888079] hover:text-[#d79a73]">移除订阅</button></div>`;
+      }
+
+      function settingsPage() {
+        return `${header("设置", "AI Meter 偏好设置")}<div class="page-fade px-5 pt-4"><button data-action="dashboard" class="ghost-button flex items-center gap-1 text-[12px] mb-5">${icons.back.replace("w-4 h-4", "w-3.5 h-3.5")} 返回概览</button><div class="tiny-caps text-[#747a76] mb-2">通用</div><div class="rounded-xl border border-white/[.07] overflow-hidden">${[
+          ["登录时启动", true],
+          ["打开时刷新", true],
+          ["后台自动刷新", false],
+        ]
+          .map(
+            (item) =>
+              `<div class="settings-row px-3.5 py-3 flex items-center justify-between"><span class="text-[12px]">${item[0]}</span><span class="switch ${item[1] ? "" : "off"}"></span></div>`,
+          )
+          .join(
+            "",
+          )}</div><div class="tiny-caps text-[#747a76] mb-2 mt-5">通知</div><div class="rounded-xl border border-white/[.07] overflow-hidden">${[
+          ["余额偏低提醒", true],
+          ["认证过期提醒", true],
+          ["服务错误提醒", false],
+        ]
+          .map(
+            (item) =>
+              `<div class="settings-row px-3.5 py-3 flex items-center justify-between"><span class="text-[12px]">${item[0]}</span><span class="switch ${item[1] ? "" : "off"}"></span></div>`,
+          )
+          .join(
+            "",
+          )}</div><div class="tiny-caps text-[#747a76] mb-2 mt-5">订阅管理</div><div class="rounded-xl border border-white/[.07] overflow-hidden"><button data-action="add" class="settings-row w-full px-3.5 py-3 flex items-center justify-between text-left"><span class="text-[12px]">添加订阅</span>${icons.chevron}</button><button class="w-full px-3.5 py-3 flex items-center justify-between text-left"><span class="text-[12px]">管理账号</span>${icons.chevron}</button></div><div class="mt-5 flex items-center justify-between text-[10px] text-[#6f7571]"><span>安全存储 · macOS 钥匙串</span><span>v1.0.0</span></div></div>`;
+      }
+
+      function emptyPage() {
+        return `${header("AI 额度", "还没有连接任何服务")}<div class="page-fade flex flex-col items-center text-center px-8 pt-28"><div class="w-16 h-16 rounded-[20px] bg-white/[.065] border border-white/10 flex items-center justify-center text-[31px] text-white/80 shadow-[0_12px_35px_rgba(0,0,0,.2)]">✦</div><h2 class="mt-5 text-[17px] font-semibold tracking-[-.025em]">集中查看 AI 用量</h2><p class="mt-2 max-w-[255px] text-[12px] leading-5 text-[#858a87]">添加 DeepSeek 或 Kimi 账号，随时查看余额与用量。</p><button data-action="add" class="primary-button mt-6 rounded-lg px-4 py-2 text-[12px] font-medium">${icons.plus.replace("w-4 h-4", "w-3.5 h-3.5 inline mr-1")} 添加订阅</button></div><footer class="absolute bottom-0 left-0 right-0 px-5 py-3 border-t subtle-border flex justify-end"><button data-action="demo" class="ghost-button text-[10px]">预览状态</button></footer>`;
+      }
+
+      function demoSheet() {
+        return `<div class="modal-backdrop absolute inset-0 z-10 flex items-end"><div class="sheet w-full bg-[#232425] border-t border-white/10 rounded-t-2xl px-5 pt-4 pb-5 shadow-2xl"><div class="flex items-center justify-between"><span class="text-[13px] font-semibold">预览组件状态</span><button data-action="close-demo" class="ghost-button p-1">${icons.x}</button></div><p class="text-[10px] text-[#858a87] mt-1 mb-3">点击下方选项，查看面板如何反馈不同情况。</p><div class="grid grid-cols-2 gap-2">${[
+          ["normal", "正常连接"],
+          ["loading", "正在更新"],
+          ["expired", "认证已过期"],
+          ["error", "网络错误"],
+          ["low", "余额偏低"],
+          ["empty", "空状态"],
+        ]
+          .map(
+            (item) =>
+              `<button data-demo="${item[0]}" class="soft-button rounded-lg py-2.5 text-[11px] text-left px-3">${item[1]}</button>`,
+          )
+          .join("")}</div></div></div>`;
+      }
+
+      function render() {
+        if (state.demo === "empty" && state.page === "dashboard") {
+          app.replaceChildren(
+            document.createRange().createContextualFragment(emptyPage()),
+          );
+          bind();
+          return;
+        }
+        const html =
+          state.page === "dashboard"
+            ? dashboard()
+            : state.page === "add"
+              ? addPage()
+              : state.page === "auth"
+                ? authPage()
+                : state.page === "api"
+                  ? apiPage()
+                  : state.page === "oauth"
+                    ? oauthPage()
+                    : state.page === "detail"
+                      ? detailPage()
+                      : settingsPage();
+        app.replaceChildren(
+          document
+            .createRange()
+            .createContextualFragment(
+              html + (state.demoSheet ? demoSheet() : ""),
+            ),
+        );
+        bind();
+      }
+
+      function bind() {
+        app.querySelectorAll("[data-provider]").forEach(
+          (button) =>
+            (button.onclick = () => {
+              state.selected = button.dataset.provider;
+              state.page = "detail";
+              render();
+            }),
+        );
+        app.querySelectorAll("[data-provider-add]").forEach(
+          (button) =>
+            (button.onclick = () => {
+              state.selected = button.dataset.provider;
+              state.page = "auth";
+              render();
+            }),
+        );
+        app.querySelectorAll("[data-auth]").forEach(
+          (button) =>
+            (button.onclick = () => {
+              state.page = button.dataset.auth === "api" ? "api" : "oauth";
+              render();
+            }),
+        );
+        app.querySelectorAll("[data-demo]").forEach(
+          (button) =>
+            (button.onclick = () => {
+              state.demo = button.dataset.demo;
+              state.demoSheet = false;
+              state.page =
+                state.demo === "empty"
+                  ? "dashboard"
+                  : state.page === "dashboard"
+                    ? "dashboard"
+                    : "detail";
+              render();
+            }),
+        );
+        app.querySelectorAll("[data-action]").forEach((button) => {
+          button.onclick = () => action(button.dataset.action);
+        });
+        document.querySelector("#reopen").onclick = () => action("reopen");
+      }
+
+      function action(actionName) {
+        if (actionName === "close") {
+          app.classList.add("hidden");
+          document.querySelector("#reopen").classList.remove("hidden");
+          return;
+        }
+        if (actionName === "reopen") {
+          app.classList.remove("hidden");
+          document.querySelector("#reopen").classList.add("hidden");
+          return;
+        }
+
+        if (actionName === "add") state.page = "add";
+        if (actionName === "dashboard") state.page = "dashboard";
+        if (actionName === "settings") state.page = "settings";
+        if (actionName === "auth") state.page = "auth";
+        if (actionName === "refresh") {
+          state.refreshing = true;
+          render();
+          setTimeout(() => {
+            state.refreshing = false;
+            state.demo = "normal";
+            render();
+          }, 700);
+        }
+        if (actionName === "connected") {
+          state.page = "detail";
+          state.demo = "normal";
+        }
+        if (actionName === "edit")
+          state.page = state.selected === "deepseek" ? "api" : "oauth";
+        if (actionName === "remove") {
+          state.page = "dashboard";
+          state.demo = "empty";
+        }
+        if (actionName === "account")
+          state.account =
+            state.account === "个人账号" ? "工作账号" : "个人账号";
+        if (actionName === "demo") state.demoSheet = true;
+        if (actionName === "close-demo") state.demoSheet = false;
+        render();
+      }
+
+      render();
+    </script>
+  </body>
+</html>

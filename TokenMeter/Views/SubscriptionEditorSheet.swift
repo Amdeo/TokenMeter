@@ -3,6 +3,24 @@ import AppKit
 
 // 订阅的添加/编辑窗口内容：编辑模式用分段切换「用量」与「设置」，
 // 用量页复用 SubscriptionUsageView 与菜单栏面板相同的数据展示。
+enum SubscriptionCredentialRequirement {
+    static func canSave(
+        original: Subscription.AuthMethod?,
+        selected: Subscription.AuthMethod,
+        apiKey: String,
+        hasOAuthCredential: Bool,
+        hasBrowserCredential: Bool,
+        isImportingBrowser: Bool
+    ) -> Bool {
+        guard !isImportingBrowser else { return false }
+        guard original != selected else { return true }
+        return switch selected {
+        case .manualAPIKey: !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .kimiOAuth: hasOAuthCredential
+        case .kimiBrowserSession: hasBrowserCredential
+        }
+    }
+}
 struct SubscriptionEditorSheet: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openURL) private var openURL
@@ -20,6 +38,7 @@ struct SubscriptionEditorSheet: View {
     @State private var oauthStatus: String?
     @State private var oauthTask: Task<Void, Never>?
     @State private var browserImportTask: Task<Void, Never>?
+    @State private var browserImportSessionID = UUID()
     @State private var oauthSessionID = UUID()
     @State private var message: String?
     @State private var showDeleteConfirmation = false
@@ -36,30 +55,29 @@ struct SubscriptionEditorSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let subscription {
-                editorHeader(subscription)
-            } else {
-                Text("连接账户，集中查看额度使用情况")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 18)
+            header
+
+            Rectangle().fill(TM.divider).frame(height: 1)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if segment == 0, let subscription {
+                        usagePane(subscription)
+                    } else {
+                        settingsPane
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 18)
             }
+            .scrollIndicators(.hidden)
 
-            if segment == 0, let subscription {
-                usagePane(subscription)
-            } else {
-                settingsPane
-            }
-
-            Spacer(minLength: 12)
-
-            Divider()
+            Rectangle().fill(TM.divider).frame(height: 1)
             footer
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 18)
-        .frame(width: 560)
+        .frame(width: 600)
+        .background(TM.editorBackground)
+        .foregroundStyle(TM.textPrimary)
         .onChange(of: platform) { _, newValue in
             resetCredentialState()
             message = nil
@@ -83,31 +101,57 @@ struct SubscriptionEditorSheet: View {
         }
     }
 
-    private func editorHeader(_ subscription: Subscription) -> some View {
-        HStack(spacing: 10) {
-            PlatformLogo(platform: subscription.platform, size: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(subscription.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                Text("\(subscription.platform.rawValue) · \(subscription.authMethod.label)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            if let subscription {
+                PlatformLogo(platform: subscription.platform, size: 36)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(subscription.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .tracking(-0.3)
+                        .lineLimit(1)
+                    Text("\(subscription.platform.rawValue) · \(subscription.authMethod.label)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 10)
+                Picker("", selection: $segment) {
+                    Text("用量").tag(0)
+                    Text("设置").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 170)
+                .accessibilityLabel("切换用量与设置")
+            } else {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(TM.accent)
+                    .frame(width: 36, height: 36)
+                    .background(TM.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(TM.accent.opacity(0.28), lineWidth: 1))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("添加订阅")
+                        .font(.system(size: 16, weight: .semibold))
+                        .tracking(-0.3)
+                    Text("连接账户，集中查看额度使用情况")
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textSecondary)
+                }
+                Spacer(minLength: 10)
             }
-            Spacer(minLength: 10)
-            Picker("", selection: $segment) {
-                Text("用量").tag(0)
-                Text("设置").tag(1)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 190)
         }
-        .padding(.bottom, 16)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 14)
+        .background(Color.white.opacity(0.018))
     }
 
+    // MARK: - 用量页
+
     private func usagePane(_ subscription: Subscription) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: 14) {
             if let snapshot = store.snapshots[subscription.id] {
                 if let error = snapshot.errorMessage {
                     SnapshotStatePanel(snapshot: snapshot, message: error)
@@ -115,44 +159,50 @@ struct SubscriptionEditorSheet: View {
                     SubscriptionUsageView(subscription: subscription, snapshot: snapshot, style: .full)
                 }
                 HStack {
-                    Text("最近更新：\(snapshot.updatedAt.tokenMeterTimeText)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button {
-                        Task { await store.refresh(subscription) }
-                    } label: {
-                        Label("刷新", systemImage: "arrow.clockwise")
+                    HStack(spacing: 5) {
+                        Circle().fill(snapshot.state == .realtime ? TM.ok : TM.warn).frame(width: 6, height: 6)
+                        Text("最近更新：\(snapshot.updatedAt.tokenMeterTimeText)")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .font(.system(size: 10))
+                    .foregroundStyle(TM.textSecondary)
+                    Spacer()
+                    EditorSoftButton(title: "刷新", systemImage: "arrow.clockwise") {
+                        Task { await store.refresh(subscription) }
+                    }
+                    .disabled(store.isRefreshing)
                 }
             } else {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
+                VStack(spacing: 12) {
+                    ProgressView().controlSize(.regular)
                     Text("等待首次刷新…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("立即刷新") {
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textSecondary)
+                    EditorSoftButton(title: "立即刷新", systemImage: "arrow.clockwise") {
                         Task { await store.refresh(subscription) }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
-                .padding(.vertical, 34)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 60)
             }
         }
     }
 
+    // MARK: - 设置页
+
     private var settingsPane: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 18) {
             SheetSection(title: "选择平台", subtitle: "不同平台的额度接口与认证方式不同。") {
                 PlatformSelection(platform: $platform)
                     .disabled(isEditing)
-                Label(platform.capabilityDescription, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .opacity(isEditing ? 0.55 : 1)
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 10))
+                    Text(platform.capabilityDescription)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(TM.textSecondary)
             }
 
             SheetSection(title: "订阅信息", subtitle: "名称仅用于本地识别，可稍后重命名。") {
@@ -179,47 +229,63 @@ struct SubscriptionEditorSheet: View {
             if let message {
                 HStack(alignment: .top, spacing: 9) {
                     Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
                     Text(message)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.caption)
-                .foregroundStyle(.orange)
-                .padding(11)
+                .font(.system(size: 11))
+                .foregroundStyle(TM.warn)
+                .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(TM.warn.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(TM.warn.opacity(0.22), lineWidth: 1))
             }
         }
     }
 
+    // MARK: - Footer
+
     private var footer: some View {
-        HStack {
+        HStack(spacing: 10) {
             if isEditing {
-                Button("删除订阅", role: .destructive) { showDeleteConfirmation = true }
-                    .buttonStyle(.borderless)
+                Button(role: .destructive) { showDeleteConfirmation = true } label: {
+                    Text("删除订阅")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(TM.danger)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("删除订阅与本地凭证")
             }
             Spacer()
             Button("取消") { onClose() }
+                .font(.system(size: 12))
                 .keyboardShortcut(.cancelAction)
             Button(isEditing ? "保存修改" : "添加订阅") { save() }
+                .font(.system(size: 12, weight: .medium))
                 .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
                 .keyboardShortcut(.defaultAction)
-                .disabled(!canSave || oauthTask != nil)
+                .disabled(!canSave || oauthTask != nil || browserImportTask != nil)
         }
-        .padding(.top, 14)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 13)
+        .background(Color.black.opacity(0.08))
     }
 
+    // MARK: - 保存 / 删除 / 认证逻辑（保持不变）
+
     private var canSave: Bool {
-        switch authMethod {
-        case .manualAPIKey:
-            if isEditing { return true }
-            return !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .kimiOAuth:
-            if isEditing, oauthCredential == nil { return true }
-            return oauthCredential != nil
-        case .kimiBrowserSession:
-            if isEditing, browserCredential == nil { return true }
-            return browserCredential != nil
-        }
+        SubscriptionCredentialRequirement.canSave(
+            original: subscription?.authMethod,
+            selected: authMethod,
+            apiKey: apiKey,
+            hasOAuthCredential: oauthCredential != nil,
+            hasBrowserCredential: browserCredential != nil,
+            isImportingBrowser: browserImportTask != nil
+        )
     }
 
     private func save() {
@@ -258,6 +324,12 @@ struct SubscriptionEditorSheet: View {
     }
 
     private func saveEditing(_ subscription: Subscription, trimmedName: String) {
+        guard canSave else {
+            message = browserImportTask != nil
+                ? "正在从 Chrome 导入登录态，请完成后再保存。"
+                : "切换认证方式后，请先提供对应的新凭证。"
+            return
+        }
         do {
             switch authMethod {
             case .manualAPIKey:
@@ -298,9 +370,14 @@ struct SubscriptionEditorSheet: View {
 
     private func resetCredentialState() {
         resetOAuthState()
+        invalidateBrowserImport()
+        browserCredential = nil
+    }
+
+    private func invalidateBrowserImport() {
+        browserImportSessionID = UUID()
         browserImportTask?.cancel()
         browserImportTask = nil
-        browserCredential = nil
     }
 
     private func resetOAuthState() {
@@ -346,19 +423,23 @@ struct SubscriptionEditorSheet: View {
 
     private func importBrowserSession() {
         resetOAuthState()
-        browserImportTask?.cancel()
+        invalidateBrowserImport()
+        let sessionID = browserImportSessionID
         message = nil
         browserImportTask = Task { @MainActor in
             do {
                 let credential = try await Task.detached {
                     try await ChromeSessionImporter().importCredential()
                 }.value
+                guard sessionID == browserImportSessionID, authMethod == .kimiBrowserSession else { return }
                 browserCredential = credential
                 oauthStatus = "已从 Chrome 导入 Kimi 网页登录态"
             } catch is CancellationError {
             } catch {
+                guard sessionID == browserImportSessionID, authMethod == .kimiBrowserSession else { return }
                 message = error.localizedDescription
             }
+            guard sessionID == browserImportSessionID, authMethod == .kimiBrowserSession else { return }
             browserImportTask = nil
         }
     }
@@ -369,16 +450,23 @@ struct SubscriptionEditorSheet: View {
     }
 }
 
+// MARK: - 通用组件
+
 private struct SheetSection<Content: View>: View {
     let title: String
     let subtitle: String
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 9) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                Text(title)
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(TM.textTertiary)
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(TM.textSecondary)
             }
             content()
         }
@@ -396,6 +484,8 @@ private struct FormField: View {
         self.isSecure = isSecure
     }
 
+    @FocusState private var focused: Bool
+
     var body: some View {
         Group {
             if isSecure {
@@ -405,40 +495,121 @@ private struct FormField: View {
             }
         }
         .textFieldStyle(.plain)
+        .font(.system(size: 12))
+        .foregroundStyle(TM.textPrimary)
+        .focused($focused)
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .padding(.vertical, 10)
+        .background(TM.fieldFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(focused ? TM.accent.opacity(0.6) : TM.border, lineWidth: 1)
+        )
+        .animation(.easeOut(duration: 0.12), value: focused)
     }
 }
 
+/// 编辑窗口的次级按钮：低透明填充 + 细描边。
+private struct EditorSoftButton: View {
+    let title: String
+    var systemImage: String? = nil
+    var prominent = false
+    let action: () -> Void
+
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(prominent ? Color(hex: 0x191A1A) : (isEnabled ? TM.textPrimary : TM.textTertiary))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                prominent
+                    ? Color(hex: 0xE9EBE8).opacity(isEnabled ? 1 : 0.5)
+                    : Color.white.opacity(hovering ? 0.11 : 0.07),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(prominent ? .clear : (hovering ? TM.borderStrong : TM.border), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+// MARK: - 平台选择
+
 private struct PlatformSelection: View {
     @Binding var platform: Platform
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
             ForEach(Platform.allCases) { item in
-                Button { platform = item } label: {
-                    HStack(spacing: 10) {
-                        PlatformLogo(platform: item, size: 26)
-                        Text(item.rawValue)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                        Spacer()
-                        if item == platform {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(item == platform ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(item == platform ? Color.accentColor.opacity(0.45) : .clear, lineWidth: 1))
+                PlatformCard(item: item, isSelected: item == platform) {
+                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { platform = item }
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 }
+
+private struct PlatformCard: View {
+    let item: Platform
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                PlatformLogo(platform: item, size: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.rawValue)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(TM.textPrimary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(item.tint)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(
+                isSelected ? item.tint.opacity(0.09) : (hovering ? TM.cardFillHover : TM.cardFill),
+                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(isSelected ? item.tint.opacity(0.45) : (hovering ? TM.borderStrong : TM.border), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(item.rawValue)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - 认证方式
 
 private struct AuthMethodSelection: View {
     @Binding var authMethod: Subscription.AuthMethod
@@ -461,6 +632,7 @@ private struct AuthMethodSelection: View {
                     title: "手动 API Key",
                     detail: "适用于所有平台",
                     icon: "key.fill",
+                    tint: TM.accent,
                     isSelected: authMethod == .manualAPIKey
                 ) { authMethod = .manualAPIKey }
 
@@ -468,13 +640,15 @@ private struct AuthMethodSelection: View {
                     AuthOption(
                         title: "Kimi Code OAuth",
                         detail: "实验性设备授权",
-                        icon: "lock.shield",
+                        icon: "lock.shield.fill",
+                        tint: .indigo,
                         isSelected: authMethod == .kimiOAuth
                     ) { authMethod = .kimiOAuth }
                     AuthOption(
                         title: "网页登录态",
                         detail: "从 Chrome 导入",
                         icon: "globe",
+                        tint: .green,
                         isSelected: authMethod == .kimiBrowserSession
                     ) { authMethod = .kimiBrowserSession }
                 }
@@ -482,60 +656,107 @@ private struct AuthMethodSelection: View {
 
             switch authMethod {
             case .manualAPIKey:
-                FormField("API Key", text: $apiKey, isSecure: true)
+                VStack(alignment: .leading, spacing: 7) {
+                    FormField("API Key", text: $apiKey, isSecure: true)
+                    Label("仅存储在本机的 TokenMeter 私有凭证文件中，并受文件权限保护", systemImage: "lock.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.textTertiary)
+                }
             case .kimiOAuth:
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     if let oauthDevice {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("用户码").font(.caption).foregroundStyle(.secondary)
-                                Text(oauthDevice.userCode).font(.title3.monospaced().weight(.semibold))
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(alignment: .center, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("用户码")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .tracking(0.6)
+                                        .foregroundStyle(TM.textTertiary)
+                                    Text(oauthDevice.userCode)
+                                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(TM.textPrimary)
+                                }
+                                Spacer()
+                                EditorSoftButton(title: "复制用户码", systemImage: "doc.on.doc") {
+                                    onCopy(oauthDevice.userCode)
+                                }
                             }
-                            Spacer()
-                            Button("复制用户码") { onCopy(oauthDevice.userCode) }
-                                .buttonStyle(.bordered)
+                            Rectangle().fill(TM.divider).frame(height: 1)
+                            HStack(spacing: 8) {
+                                Text(oauthDevice.verificationURL.absoluteString)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(TM.textSecondary)
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                                Spacer(minLength: 6)
+                                EditorSoftButton(title: "复制链接", systemImage: "doc.on.doc") {
+                                    onCopy(oauthDevice.verificationURL.absoluteString)
+                                }
+                                EditorSoftButton(title: "打开浏览器", systemImage: "safari", prominent: true) {
+                                    onOpenURL(oauthDevice.verificationURL)
+                                }
+                            }
                         }
-                        HStack {
-                            Text(oauthDevice.verificationURL.absoluteString)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                            Spacer()
-                            Button("复制链接") { onCopy(oauthDevice.verificationURL.absoluteString) }
-                                .buttonStyle(.bordered)
-                            Button("打开") { onOpenURL(oauthDevice.verificationURL) }
-                                .buttonStyle(.borderedProminent)
-                        }
+                        .padding(14)
+                        .tmCard()
                     }
                     if let oauthStatus {
                         HStack(spacing: 8) {
-                            if isAuthorizing { ProgressView().controlSize(.small) }
+                            if isAuthorizing {
+                                ProgressView().controlSize(.small)
+                            } else if oauthCredentialDone {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(TM.ok)
+                                    .font(.system(size: 11))
+                            }
                             Text(oauthStatus)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 11))
+                                .foregroundStyle(TM.textSecondary)
                         }
                     }
-                    Button(isAuthorizing ? "取消授权" : "开始 Kimi Code OAuth 授权") {
+                    EditorSoftButton(
+                        title: isAuthorizing ? "取消授权" : "开始 Kimi Code OAuth 授权",
+                        systemImage: isAuthorizing ? "xmark" : "lock.shield",
+                        prominent: !isAuthorizing
+                    ) {
                         if isAuthorizing { onCancelOAuth() } else { onStartOAuth() }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
                     Text("实验性 Device OAuth，令牌不会显示在界面，只保存到 TokenMeter 本地私有文件。")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.textTertiary)
                 }
             case .kimiBrowserSession:
                 VStack(alignment: .leading, spacing: 10) {
-                    Button(isImportingBrowser ? "正在从 Chrome 导入…" : "从 Chrome 导入 Kimi 登录态", action: onImportBrowser)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(isImportingBrowser)
-                    Text("TokenMeter 只读取当前 Kimi 页面 localStorage 中的登录态，不读取 Cookies 或钥匙串。首次使用需要允许 TokenMeter 控制 Chrome。")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    EditorSoftButton(
+                        title: isImportingBrowser ? "正在从 Chrome 导入…" : "从 Chrome 导入 Kimi 登录态",
+                        systemImage: "globe",
+                        prominent: true
+                    ) { onImportBrowser() }
+                    .disabled(isImportingBrowser)
+                    if isImportingBrowser {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("请保持 Kimi 页面处于打开状态")
+                                .font(.system(size: 10))
+                                .foregroundStyle(TM.textSecondary)
+                        }
+                    }
+                    if let oauthStatus, !isImportingBrowser {
+                        Label(oauthStatus, systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.ok)
+                    }
+                    Text("TokenMeter 只读取当前 Kimi 页面 localStorage 中的登录态，不读取 Cookies 或系统钥匙串。首次使用需要允许 TokenMeter 控制 Chrome。")
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+    }
+
+    private var oauthCredentialDone: Bool {
+        oauthStatus?.contains("完成") == true || oauthStatus?.contains("导入") == true
     }
 }
 
@@ -543,21 +764,50 @@ private struct AuthOption: View {
     let title: String
     let detail: String
     let icon: String
+    let tint: Color
     let isSelected: Bool
     let action: () -> Void
 
+    @State private var hovering = false
+
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 7) {
-                Image(systemName: icon).foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                Text(title).font(.subheadline.weight(.medium))
-                Text(detail).font(.caption2).foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isSelected ? tint : TM.textSecondary)
+                    .frame(width: 30, height: 30)
+                    .background((isSelected ? tint : Color.white).opacity(isSelected ? 0.13 : 0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(TM.textPrimary)
+                    Text(detail)
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.textTertiary)
+                }
+                Spacer(minLength: 4)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(tint)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(11)
-            .background(isSelected ? Color.accentColor.opacity(0.09) : Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(isSelected ? Color.accentColor.opacity(0.45) : .clear, lineWidth: 1))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                isSelected ? tint.opacity(0.08) : (hovering ? TM.cardFillHover : TM.cardFill),
+                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(isSelected ? tint.opacity(0.4) : (hovering ? TM.borderStrong : TM.border), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

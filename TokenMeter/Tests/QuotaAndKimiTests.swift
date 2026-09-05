@@ -143,27 +143,10 @@ struct QuotaAndKimiTests {
         let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
 
         let snapshot = try KimiUsageProvider.parseCodingUsage(response, subscription: subscription)
-        #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly, .monthly])
-        #expect(snapshot.quotas.map(\.name) == ["5 小时额度", "每周额度", "月度额度"])
+        #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
+        #expect(snapshot.quotas.map(\.name) == ["5 小时额度", "每周额度"])
         #expect(snapshot.quotas[0].fraction == 0)
         #expect(snapshot.quotas[0].usedText == "0")
-    }
-
-    @Test
-    func kimiMissingMonthlyQuotaRemainsMissing() throws {
-        let data = Data("""
-        {
-          "usage": {"used": 100, "limit": 1000},
-          "limits": [
-            {"window": {"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"}, "detail": {"used": 50, "limit": 100}}
-          ]
-        }
-        """.utf8)
-        let response = try JSONDecoder().decode(KimiUsagesResponse.self, from: data)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
-
-        let snapshot = try KimiUsageProvider.parseCodingUsage(response, subscription: subscription)
-        #expect(!snapshot.quotas.contains { $0.kind == .monthly })
     }
 
     @Test
@@ -210,7 +193,7 @@ struct QuotaAndKimiTests {
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "可用余额", used: 0, limit: 8, resetAt: nil, kind: .balance)
         ])
-        let coreKinds: Set<Quota.Kind> = [.fiveHour, .weekly, .monthly]
+        let coreKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
 
         #expect(!snapshot.quotas.contains { coreKinds.contains($0.kind) })
         #expect(snapshot.quotas.contains { $0.kind == .balance })

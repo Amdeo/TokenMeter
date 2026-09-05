@@ -22,7 +22,15 @@ struct DeepSeekUsageProvider: UsageProvider {
         UsageLogger.logger.info("deepseek response fields isAvailablePresent=\(response.isAvailable != nil, privacy: .public) balanceInfoCount=\(balanceInfos.count, privacy: .public)")
         for balance in balanceInfos {
             let total = balance.totalBalance?.value
-            UsageLogger.logger.info("deepseek balance diagnostics currencyPresent=\(balance.currencyPresent, privacy: .public) totalBalancePresent=\(balance.totalBalanceType != .missing, privacy: .public) totalBalanceType=\(balance.totalBalanceType.rawValue, privacy: .public) parsedFinite=\(total?.isFinite == true, privacy: .public) parsedNegative=\(total.map { $0 < 0 } ?? false, privacy: .public) parsedZero=\(total == 0, privacy: .public)")
+        UsageLogger.logger.info("""
+            deepseek balance diagnostics \
+            currencyPresent=\(balance.currencyPresent, privacy: .public) \
+            totalBalancePresent=\(balance.totalBalanceType != .missing, privacy: .public) \
+            totalBalanceType=\(balance.totalBalanceType.rawValue, privacy: .public) \
+            parsedFinite=\(total?.isFinite == true, privacy: .public) \
+            parsedNegative=\(total.map { $0 < 0 } ?? false, privacy: .public) \
+            parsedZero=\(total == 0, privacy: .public)
+            """)
         }
         let validBalances = balanceInfos.compactMap { balance -> (currency: String, total: Double)? in
             guard let rawCurrency = balance.currency,
@@ -199,13 +207,19 @@ struct KimiUsageProvider: UsageProvider {
         }
         return UsageSnapshot.realtime(subscription: subscription, quotas: balances.compactMap { name, amount in
             guard let value = amount.value, value >= 0 else { return nil }
-            return Quota(name: name, used: 0, limit: value, resetAt: nil, kind: .balance)
+            return Quota(name: name, used: 0, limit: value, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
         })
     }
 
     static func parseCodingUsage(_ response: KimiUsagesResponse, subscription: Subscription) throws -> UsageSnapshot {
         let limits = response.limits ?? []
-        UsageLogger.logger.info("kimi coding response fields usagePresent=\(response.usage != nil, privacy: .public) limitsPresent=\(response.limits != nil, privacy: .public) limitsCount=\(limits.count, privacy: .public) boosterWalletPresent=\(response.boosterWallet != nil, privacy: .public)")
+        UsageLogger.logger.info("""
+            kimi coding response fields \
+            usagePresent=\(response.usage != nil, privacy: .public) \
+            limitsPresent=\(response.limits != nil, privacy: .public) \
+            limitsCount=\(limits.count, privacy: .public) \
+            boosterWalletPresent=\(response.boosterWallet != nil, privacy: .public)
+            """)
 
         let weeklyUsage = response.usage.flatMap { usage -> Quota? in
             guard let values = quotaValues(from: usage) else {
@@ -229,26 +243,10 @@ struct KimiUsageProvider: UsageProvider {
             )
         }
 
-        let monthlyQuota = response.totalQuota.flatMap { detail -> Quota? in
-            guard let values = quotaValues(from: detail) else {
-                return nil
-            }
-            return Quota(
-                name: "月度额度",
-                used: values.used,
-                limit: values.limit,
-                resetAt: date(from: detail.resetTime),
-                kind: .monthly
-            )
-        }
-
         var quotas = deduplicatedSemanticQuotas(windowQuotas)
-        quotas.removeAll { $0.kind == .weekly || $0.kind == .monthly }
+        quotas.removeAll { $0.kind == .weekly }
         if let weeklyUsage {
             quotas.append(weeklyUsage)
-        }
-        if let monthlyQuota {
-            quotas.append(monthlyQuota)
         }
 
         let boosterQuota = response.boosterWallet.flatMap(Self.boosterQuota)
@@ -261,7 +259,15 @@ struct KimiUsageProvider: UsageProvider {
             let rhsRank = quotaRank(rhs)
             return lhsRank == rhsRank ? lhs.name < rhs.name : lhsRank < rhsRank
         }
-        UsageLogger.logger.info("kimi coding quotas parsed usageParsed=\(weeklyUsage != nil, privacy: .public) windowParsedCount=\(windowQuotas.count, privacy: .public) fiveHourParsed=\(windowQuotas.contains { $0.kind == .fiveHour }, privacy: .public) totalQuotaPresent=\(response.totalQuota != nil, privacy: .public) monthlyQuotaParsed=\(monthlyQuota != nil, privacy: .public) boosterBalanceParsed=\(boosterQuota != nil, privacy: .public) monthlyChargeParsed=\(monthlyChargeQuota != nil, privacy: .public) quotaCount=\(quotas.count, privacy: .public)")
+        UsageLogger.logger.info("""
+            kimi coding quotas parsed \
+            usageParsed=\(weeklyUsage != nil, privacy: .public) \
+            windowParsedCount=\(windowQuotas.count, privacy: .public) \
+            fiveHourParsed=\(windowQuotas.contains { $0.kind == .fiveHour }, privacy: .public) \
+            boosterBalanceParsed=\(boosterQuota != nil, privacy: .public) \
+            monthlyChargeParsed=\(monthlyChargeQuota != nil, privacy: .public) \
+            quotaCount=\(quotas.count, privacy: .public)
+            """)
 
         guard !quotas.isEmpty else {
             throw UsageProviderError.invalidResponse(subscription.platform, "Kimi For Coding 返回中没有额度数据")
@@ -354,7 +360,6 @@ struct KimiUsageProvider: UsageProvider {
         switch quota.kind {
         case .fiveHour: return 0
         case .weekly: return 1
-        case .monthly: return 2
         case .generic where quota.unit.isCurrency: return 4
         case .balance: return 4
         case .generic: return 3
@@ -668,7 +673,6 @@ struct KimiUsagesResponse: Decodable {
 
     let usage: QuotaDetail?
     let limits: [LimitWindow]?
-    let totalQuota: QuotaDetail?
     let boosterWallet: BoosterWallet?
 }
 
@@ -865,11 +869,24 @@ private enum APIClient {
         }
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
-            UsageLogger.logger.error("response invalid platform=\(platform.rawValue, privacy: .public) byteCount=\(data.count, privacy: .public) type=\(String(describing: Response.self), privacy: .public) errorClass=nonHTTPResponse")
+            UsageLogger.logger.error("""
+                response invalid \
+                platform=\(platform.rawValue, privacy: .public) \
+                byteCount=\(data.count, privacy: .public) \
+                type=\(String(describing: Response.self), privacy: .public) \
+                errorClass=nonHTTPResponse
+                """)
             throw UsageProviderError.requestFailed(platform, "服务器返回了无效响应")
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            UsageLogger.logger.error("response rejected platform=\(platform.rawValue, privacy: .public) status=\(httpResponse.statusCode, privacy: .public) byteCount=\(data.count, privacy: .public) type=\(String(describing: Response.self), privacy: .public) errorClass=httpStatus")
+            UsageLogger.logger.error("""
+                response rejected \
+                platform=\(platform.rawValue, privacy: .public) \
+                status=\(httpResponse.statusCode, privacy: .public) \
+                byteCount=\(data.count, privacy: .public) \
+                type=\(String(describing: Response.self), privacy: .public) \
+                errorClass=httpStatus
+                """)
             switch (platform, httpResponse.statusCode) {
             case (.deepSeek, 401), (.deepSeek, 403):
                 throw UsageProviderError.authenticationRequired(platform, "API Key 无效或无权访问余额接口")
@@ -883,10 +900,23 @@ private enum APIClient {
         }
         do {
             let decoded = try JSONDecoder().decode(Response.self, from: data)
-            UsageLogger.logger.info("response decoded platform=\(platform.rawValue, privacy: .public) status=\(httpResponse.statusCode, privacy: .public) byteCount=\(data.count, privacy: .public) type=\(String(describing: Response.self), privacy: .public)")
+            UsageLogger.logger.info("""
+                response decoded \
+                platform=\(platform.rawValue, privacy: .public) \
+                status=\(httpResponse.statusCode, privacy: .public) \
+                byteCount=\(data.count, privacy: .public) \
+                type=\(String(describing: Response.self), privacy: .public)
+                """)
             return decoded
         } catch {
-            UsageLogger.logger.error("response decode failed platform=\(platform.rawValue, privacy: .public) status=\(httpResponse.statusCode, privacy: .public) byteCount=\(data.count, privacy: .public) type=\(String(describing: Response.self), privacy: .public) errorClass=decodeFailure")
+            UsageLogger.logger.error("""
+                response decode failed \
+                platform=\(platform.rawValue, privacy: .public) \
+                status=\(httpResponse.statusCode, privacy: .public) \
+                byteCount=\(data.count, privacy: .public) \
+                type=\(String(describing: Response.self), privacy: .public) \
+                errorClass=decodeFailure
+                """)
             throw UsageProviderError.invalidJSON
         }
     }

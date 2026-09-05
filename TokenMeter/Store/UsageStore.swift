@@ -6,6 +6,12 @@ private enum UsageStoreLogger {
     static let logger = Logger(subsystem: "com.tokenmeter.app", category: "usage")
 }
 
+enum RefreshSource: Sendable {
+    case manual
+    case panelOpen
+    case background
+}
+
 @MainActor
 @Observable
 final class UsageStore {
@@ -13,12 +19,17 @@ final class UsageStore {
     private(set) var snapshots: [UUID: UsageSnapshot] = [:]
     private(set) var isRefreshing = false
     private(set) var lastRefreshAt: Date?
-    var autoRefreshEnabled = true
+    let settings: SettingsStore
+    var autoRefreshEnabled: Bool {
+        get { settings.autoRefreshEnabled }
+        set { settings.autoRefreshEnabled = newValue }
+    }
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let credentials = CredentialStore()
     private var refreshTask: Task<Void, Never>?
+    private let alerts: AlertCoordinating
 
     private var metadataURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -26,7 +37,9 @@ final class UsageStore {
             .appendingPathComponent("subscriptions.json")
     }
 
-    init() {
+    init(settings: SettingsStore = SettingsStore(), alerts: AlertCoordinating? = nil) {
+        self.settings = settings
+        self.alerts = alerts ?? NotificationCoordinator(settings: settings)
         loadSubscriptions()
     }
 
@@ -40,6 +53,7 @@ final class UsageStore {
     func remove(_ subscription: Subscription) {
         subscriptions.removeAll { $0.id == subscription.id }
         snapshots.removeValue(forKey: subscription.id)
+        alerts.remove(subscriptionID: subscription.id)
         try? credentials.remove(for: subscription.id)
         saveSubscriptions()
     }
@@ -56,20 +70,20 @@ final class UsageStore {
         saveSubscriptions()
     }
 
-    func refresh(_ subscription: Subscription) async {
+    func refresh(_ subscription: Subscription, source: RefreshSource = .manual) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false; lastRefreshAt = .now }
-        await fetch(subscription)
+        await fetch(subscription, source: source)
     }
 
-    func refreshAll() async {
+    func refreshAll(source: RefreshSource = .manual) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false; lastRefreshAt = .now }
         for subscription in orderedSubscriptions where subscription.isEnabled {
             if Task.isCancelled { return }
-            await fetch(subscription)
+            await fetch(subscription, source: source)
         }
     }
 
@@ -77,11 +91,10 @@ final class UsageStore {
         guard refreshTask == nil else { return }
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            await refreshAll()
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(300))
+                try? await Task.sleep(for: .seconds(120))
                 guard !Task.isCancelled, autoRefreshEnabled else { continue }
-                await refreshAll()
+                await refreshAll(source: .background)
             }
         }
     }
@@ -91,12 +104,13 @@ final class UsageStore {
         refreshTask = nil
     }
 
-    private func fetch(_ subscription: Subscription) async {
+    private func fetch(_ subscription: Subscription, source: RefreshSource) async {
         UsageStoreLogger.logger.debug("fetch started platform=\(subscription.platform.rawValue, privacy: .public)")
         do {
             let snapshot = try await LiveUsageProviders.provider(for: subscription).fetchUsage()
+            let previous = snapshots[subscription.id]
             snapshots[subscription.id] = snapshot
-            UsageStoreLogger.logger.info("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=realtime")
+            alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
         } catch is CancellationError {
             UsageStoreLogger.logger.debug("fetch cancelled platform=\(subscription.platform.rawValue, privacy: .public)")
         } catch {
@@ -104,14 +118,28 @@ final class UsageStore {
                 snapshots[subscription.id] = .unsupported(subscription: subscription, message: error.localizedDescription)
                 UsageStoreLogger.logger.info("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=unsupported")
             } else if case UsageProviderError.notConfigured = error {
-                snapshots[subscription.id] = UsageSnapshot(subscriptionID: subscription.id, platform: subscription.platform, quotas: [], updatedAt: .now, isDemo: false, errorMessage: error.localizedDescription, state: .notConfigured)
+                let snapshot = UsageSnapshot(subscriptionID: subscription.id, platform: subscription.platform, quotas: [], updatedAt: .now, isDemo: false, errorMessage: error.localizedDescription, state: .notConfigured)
+                let previous = snapshots[subscription.id]
+                snapshots[subscription.id] = snapshot
+                alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
                 UsageStoreLogger.logger.info("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=notConfigured")
             } else if case UsageProviderError.authenticationRequired = error {
-                snapshots[subscription.id] = UsageSnapshot(subscriptionID: subscription.id, platform: subscription.platform, quotas: [], updatedAt: .now, isDemo: false, errorMessage: error.localizedDescription, state: .notConfigured)
+                let snapshot = UsageSnapshot(subscriptionID: subscription.id, platform: subscription.platform, quotas: [], updatedAt: .now, isDemo: false, errorMessage: error.localizedDescription, state: .authenticationRequired)
+                let previous = snapshots[subscription.id]
+                snapshots[subscription.id] = snapshot
+                alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
                 UsageStoreLogger.logger.info("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=authenticationRequired")
             } else {
-                snapshots[subscription.id] = .failure(subscription: subscription, message: error.localizedDescription)
-                UsageStoreLogger.logger.error("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=error errorClass=\(Self.errorClass(error), privacy: .public)")
+                let snapshot = UsageSnapshot.failure(subscription: subscription, message: error.localizedDescription)
+                let previous = snapshots[subscription.id]
+                snapshots[subscription.id] = snapshot
+                alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
+                UsageStoreLogger.logger.error("""
+                    snapshot stored \
+                    platform=\(subscription.platform.rawValue, privacy: .public) \
+                    generated=true state=error \
+                    errorClass=\(Self.errorClass(error), privacy: .public)
+                    """)
             }
         }
     }

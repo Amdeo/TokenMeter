@@ -116,7 +116,16 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
     }
 
     static func realtime(subscription: Subscription, quotas: [Quota], updatedAt: Date = .now, overallUsageRatio: Double? = nil) -> Self {
-        .init(subscriptionID: subscription.id, platform: subscription.platform, quotas: quotas, updatedAt: updatedAt, isDemo: false, errorMessage: nil, state: .realtime, overallUsageRatio: overallUsageRatio)
+        .init(
+            subscriptionID: subscription.id,
+            platform: subscription.platform,
+            quotas: quotas,
+            updatedAt: updatedAt,
+            isDemo: false,
+            errorMessage: nil,
+            state: .realtime,
+            overallUsageRatio: overallUsageRatio
+        )
     }
 
     static func failure(subscription: Subscription, message: String, updatedAt: Date = .now) -> Self {
@@ -131,13 +140,15 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
 enum UsageState: String, Codable, Sendable {
     case realtime
     case notConfigured
+    case authenticationRequired
     case unsupported
     case error
 
     var label: String {
         switch self {
         case .realtime: "实时数据"
-        case .notConfigured: "未配置"
+        case .notConfigured: "需要配置"
+        case .authenticationRequired: "认证已失效"
         case .unsupported: "接口不支持"
         case .error: "获取错误"
         }
@@ -146,7 +157,7 @@ enum UsageState: String, Codable, Sendable {
     var tint: SwiftUI.Color {
         switch self {
         case .realtime: .secondary
-        case .notConfigured, .unsupported: .orange
+        case .notConfigured, .authenticationRequired, .unsupported: .orange
         case .error: .red
         }
     }
@@ -230,7 +241,6 @@ struct Quota: Identifiable, Codable, Sendable {
         case balance
         case fiveHour
         case weekly
-        case monthly
     }
 
     let id: UUID
