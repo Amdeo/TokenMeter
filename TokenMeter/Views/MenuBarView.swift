@@ -202,10 +202,7 @@ struct MenuBarView: View {
     private var pushTransition: AnyTransition {
         reduceMotion
             ? .opacity
-            : .asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .trailing).combined(with: .opacity)
-            )
+            : .move(edge: .trailing).combined(with: .opacity)
     }
 
     private func openSettings() {
@@ -242,7 +239,7 @@ struct MenuBarView: View {
                 NavigationRecoveryView(onReturn: navigateBack).transition(pushTransition)
             }
         }
-        .id(routeContentID)
+        .id(navigation.route)
         .padding(.horizontal, TM.panelHorizontal)
         .padding(.top, 8)
         .padding(.bottom, 8)
@@ -308,15 +305,6 @@ struct MenuBarView: View {
         }
     }
 
-    private var routeContentID: String {
-        switch navigation.route {
-        case .overview: "overview"
-        case .settings: "settings"
-        case .addProvider: "add-provider"
-        case .addConfiguration: "add-configuration"
-        case .editConfiguration(let id): "edit-configuration-\(id.uuidString)"
-        }
-    }
     private var dashboardContent: some View {
         return VStack(alignment: .leading, spacing: 0) {
             DashboardHeader(
@@ -764,7 +752,7 @@ private struct ProviderSelectionPage: View {
                     }
                 }
                 .padding(.vertical, 8)
-                .reportsIntrinsicPanelHeight(route: .addProvider, chrome: PanelLayoutMetrics.measuredProviderChrome)
+                .reportsIntrinsicPanelHeight(route: .addProvider, chrome: PanelLayoutMetrics.providerChrome)
             }
             .scrollIndicators(.hidden)
         }
@@ -1043,7 +1031,7 @@ private struct SubscriptionMenuCard: View {
 
     @ViewBuilder
     private var cardBody: some View {
-        if let snapshot, SubscriptionCardPresentation.showsRealtimeUsageBody(for: snapshot) {
+        if let snapshot, snapshot.state == .realtime {
             SubscriptionUsageView(subscription: subscription, snapshot: snapshot)
         } else if let snapshot {
             stateRow(for: snapshot)

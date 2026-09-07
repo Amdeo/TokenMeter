@@ -58,12 +58,6 @@ final class PanelNavigationState {
             guard route != oldValue else { return }
             if route == .overview, let manualOverviewHeight {
                 panelSize = PanelSize(width: PanelSize.compact.width, height: manualOverviewHeight)
-                return
-            }
-            // 自适应路由保持当前高度，等待新页面测量后一次性落到目标高度，
-            // 避免路由切换期间出现不必要的中间尺寸。
-            if !isAdaptiveRoute {
-                panelSize = .compact
             }
         }
     }
@@ -84,14 +78,8 @@ final class PanelNavigationState {
         }
     }
 
-    var isAdaptiveRoute: Bool {
-        switch route {
-        case .overview, .settings, .addProvider, .addConfiguration, .editConfiguration: true
-        }
-    }
-
     func reportMeasuredHeight(_ height: CGFloat, for measuredRoute: Route) {
-        guard measuredRoute == route, isAdaptiveRoute, height.isFinite else { return }
+        guard measuredRoute == route, height.isFinite else { return }
         guard measuredRoute != .overview || manualOverviewHeight == nil else { return }
         let clamped = Self.clampedHeight(Double(height))
         guard abs(clamped - panelSize.height) >= PanelSize.measurementTolerance else { return }

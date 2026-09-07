@@ -24,19 +24,6 @@ struct SettingsAndNotificationTests {
         #expect(secondDisplay)
     }
 
-
-    @Test
-    func panelLayoutMetricsIncludeRootChromeInMeasuredHeights() {
-        #expect(
-            PanelLayoutMetrics.measuredPageChrome
-                == PanelLayoutMetrics.pageChrome + PanelLayoutMetrics.rootVerticalChrome
-        )
-        #expect(
-            PanelLayoutMetrics.measuredProviderChrome
-                == PanelLayoutMetrics.providerChrome + PanelLayoutMetrics.rootVerticalChrome
-        )
-    }
-
     @Test
     func reportedAdaptiveHeightClampsToPanelBounds() {
         let navigation = freshPanelNavigationState()
@@ -48,12 +35,7 @@ struct SettingsAndNotificationTests {
     }
 
     @Test
-    func credentialWriteDecisionPreservesExistingManualCredentialWhenDraftIsEmpty() {
-        #expect(!SubscriptionCredentialRequirement.shouldWriteCredential(
-            original: .manualAPIKey,
-            selected: .manualAPIKey,
-            apiKey: ""
-        ))
+    func newManualCredentialRequiresAPIKey() {
         #expect(!SubscriptionCredentialRequirement.canSave(
             original: nil,
             selected: .manualAPIKey,
@@ -62,10 +44,13 @@ struct SettingsAndNotificationTests {
             hasBrowserCredential: false,
             isImportingBrowser: false
         ))
-        #expect(SubscriptionCredentialRequirement.shouldWriteCredential(
-            original: .kimiOAuth,
+        #expect(SubscriptionCredentialRequirement.canSave(
+            original: nil,
             selected: .manualAPIKey,
-            apiKey: "replacement-key"
+            apiKey: "replacement-key",
+            hasOAuthCredential: false,
+            hasBrowserCredential: false,
+            isImportingBrowser: false
         ))
     }
 
@@ -590,7 +575,7 @@ struct PanelNavigationTests {
     }
 
     @Test
-    func adaptivePanelHeightUsesFallbackThenClampsAndIgnoresOtherRoutes() {
+    func adaptivePanelHeightClampsAndIgnoresOtherRoutes() {
         let navigation = freshPanelNavigationState()
         navigation.beginAdding()
         #expect(navigation.panelSize == .compact)
@@ -605,8 +590,6 @@ struct PanelNavigationTests {
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
         navigation.reportMeasuredHeight(400, for: .addProvider)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        // 当前 Route 全部为自适应 case；非自适应 fallback（recovery 类）在
-        // route.didSet 中保留回退 compact 的兜底分支，暂无直接可测的路由。
     }
 
     @Test

@@ -4,14 +4,6 @@ import Testing
 import UserNotifications
 @testable import TokenMeter
 
-private actor ChromeImportAttemptCounter {
-    private(set) var count = 0
-
-    func recordAttempt() {
-        count += 1
-    }
-}
-
 struct QuotaAndKimiTests {
     @Test
     func credentialStoreSavesReadsAndRemovesAPIKey() throws {
@@ -284,32 +276,6 @@ struct QuotaAndKimiTests {
     }
 
     @Test
-    func chromeSessionRetryStopsAfterCancellation() async {
-        let attempts = ChromeImportAttemptCounter()
-        let task = Task {
-            try await ChromeSessionImporter.retrying(
-                maximumAttempts: 30,
-                retryDelay: .seconds(60)
-            ) { _ in
-                await attempts.recordAttempt()
-                return nil as String?
-            }
-        }
-
-        await Task.yield()
-        task.cancel()
-
-        do {
-            _ = try await task.value
-            #expect(Bool(false), "Cancelled retry unexpectedly completed")
-        } catch is CancellationError {
-            #expect(await attempts.count <= 1)
-        } catch {
-            #expect(Bool(false), "Unexpected error: \(error)")
-        }
-    }
-
-    @Test
     func chromeSessionPayloadRejectsExpiredToken() {
         let token = makeJWT(exp: Date.now.addingTimeInterval(-60).timeIntervalSince1970)
         let raw = "{\"accessToken\":\"\(token)\",\"refreshToken\":\"\(token)\"}"
@@ -439,7 +405,6 @@ extension QuotaAndKimiTests {
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
         #expect(anchor.label == "总使用量")
-        #expect(anchor.status == .normal)
         #expect(anchor.value == 0.41.formatted(.percent.precision(.fractionLength(1))))
         #expect(anchor.accessibilityLabel == "总使用量 \(anchor.value)")
         // 未配置：overall 锚点回退到 ratioStatus 对应的状态色（normal → TM.ok），而非内置默认 indigo。
@@ -458,7 +423,6 @@ extension QuotaAndKimiTests {
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
         #expect(anchor.label == "5 小时额度")
-        #expect(anchor.status == .normal)
         #expect(anchor.value == 0.55.formatted(.percent.precision(.fractionLength(0))))
     }
 
@@ -483,7 +447,6 @@ extension QuotaAndKimiTests {
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
         #expect(anchor.label == "5 小时额度")
-        #expect(anchor.status == .normal)
         #expect(anchor.value == 0.60.formatted(.percent.precision(.fractionLength(0))))
     }
 
@@ -500,7 +463,6 @@ extension QuotaAndKimiTests {
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
         #expect(anchor.label == "每月窗口")
-        #expect(anchor.status == .normal)
         #expect(anchor.value == 0.35.formatted(.percent.precision(.fractionLength(0))))
     }
 
@@ -522,26 +484,11 @@ extension QuotaAndKimiTests {
         #expect(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot) == nil)
     }
 
-    @Test
-    func subscriptionCardAccessibilityReportsAuthenticationRequired() {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiOAuth)
-        let snapshot = UsageSnapshot(
-            subscriptionID: subscription.id,
-            platform: .kimi,
-            quotas: [],
-            updatedAt: .now,
-            isDemo: false,
-            errorMessage: "OAuth 令牌已过期",
-            state: .authenticationRequired
-        )
-
-        let label = SubscriptionCardPresentation.cardAccessibilityLabel(subscription: subscription, snapshot: snapshot, anchor: nil)
-
-        #expect(label == "编辑 Kimi 的配置，认证已失效")
-    }
-
-    @Test
-    func subscriptionCardAccessibilityReportsNotConfigured() {
+    @Test(arguments: zip(
+        [UsageState.authenticationRequired, .notConfigured, .unsupported, .error],
+        ["认证已失效", "需要配置", "暂不支持额度接口", "获取失败"]
+    ))
+    func subscriptionCardAccessibilityReportsState(_ state: UsageState, _ expected: String) {
         let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
         let snapshot = UsageSnapshot(
             subscriptionID: subscription.id,
@@ -550,32 +497,12 @@ extension QuotaAndKimiTests {
             updatedAt: .now,
             isDemo: false,
             errorMessage: nil,
-            state: .notConfigured
+            state: state
         )
 
         let label = SubscriptionCardPresentation.cardAccessibilityLabel(subscription: subscription, snapshot: snapshot, anchor: nil)
 
-        #expect(label == "编辑 Kimi 的配置，需要配置")
-    }
-
-    @Test
-    func subscriptionCardAccessibilityReportsUnsupported() {
-        let subscription = Subscription(platform: .miniMax, name: "MiniMax", authMethod: .manualAPIKey)
-        let snapshot = UsageSnapshot.unsupported(subscription: subscription, message: "接口不支持")
-
-        let label = SubscriptionCardPresentation.cardAccessibilityLabel(subscription: subscription, snapshot: snapshot, anchor: nil)
-
-        #expect(label == "编辑 MiniMax 的配置，暂不支持额度接口")
-    }
-
-    @Test
-    func subscriptionCardAccessibilityReportsError() {
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
-        let snapshot = UsageSnapshot.failure(subscription: subscription, message: "网络错误")
-
-        let label = SubscriptionCardPresentation.cardAccessibilityLabel(subscription: subscription, snapshot: snapshot, anchor: nil)
-
-        #expect(label == "编辑 DeepSeek 的配置，获取失败")
+        #expect(label == "编辑 Kimi 的配置，\(expected)")
     }
 
     @Test
@@ -614,14 +541,11 @@ extension QuotaAndKimiTests {
         #expect(label == "编辑 智谱 AI 的配置，即将用尽，5 小时额度，已用 90%")
     }
 
-    @Test
-    func kimiTotalUsageBodyOnlyShowsWhenHeaderAnchorDoesNot() {
-        #expect(SubscriptionCardPresentation.showsKimiTotalUsageBody(overallUsageRatio: 0.41) == false)
-        #expect(SubscriptionCardPresentation.showsKimiTotalUsageBody(overallUsageRatio: nil) == true)
-    }
-
-    @Test
-    func cardIndicatorStatusMapsNotConfiguredToWarning() {
+    @Test(arguments: zip(
+        [UsageState.notConfigured, .unsupported, .authenticationRequired, .error],
+        [QuotaStatus.warning, .warning, .warning, .error]
+    ))
+    func cardIndicatorStatusMapsState(_ state: UsageState, _ expected: QuotaStatus) {
         let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
         let snapshot = UsageSnapshot(
             subscriptionID: subscription.id,
@@ -629,27 +553,11 @@ extension QuotaAndKimiTests {
             quotas: [],
             updatedAt: .now,
             isDemo: false,
-            errorMessage: "尚未配置 API Key",
-            state: .notConfigured
+            errorMessage: nil,
+            state: state
         )
 
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .warning)
-    }
-
-    @Test
-    func cardIndicatorStatusMapsUnsupportedToWarning() {
-        let subscription = Subscription(platform: .miniMax, name: "MiniMax", authMethod: .manualAPIKey)
-        let snapshot = UsageSnapshot.unsupported(subscription: subscription, message: "接口不支持")
-
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .warning)
-    }
-
-    @Test
-    func cardIndicatorStatusMapsErrorToError() {
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
-        let snapshot = UsageSnapshot.failure(subscription: subscription, message: "网络错误")
-
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .error)
+        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == expected)
     }
 
     @Test
@@ -658,22 +566,6 @@ extension QuotaAndKimiTests {
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "API 余额", used: 90, limit: 100, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
         ])
-
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .warning)
-    }
-
-    @Test
-    func cardIndicatorStatusMapsAuthenticationRequiredToWarning() {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiOAuth)
-        let snapshot = UsageSnapshot(
-            subscriptionID: subscription.id,
-            platform: .kimi,
-            quotas: [],
-            updatedAt: .now,
-            isDemo: false,
-            errorMessage: "OAuth 令牌已过期",
-            state: .authenticationRequired
-        )
 
         #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .warning)
     }
@@ -693,44 +585,8 @@ extension QuotaAndKimiTests {
 
         #expect(snapshot.visibleStatus(for: subscription) == .warning)
         #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .warning)
-
-        let error = UsageSnapshot(
-            subscriptionID: subscription.id,
-            platform: .zhipu,
-            quotas: [],
-            updatedAt: .now,
-            isDemo: false,
-            errorMessage: "网络错误",
-            state: .error
-        )
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: error, subscription: subscription) == .error)
     }
 
-    @Test
-    func cardBodyShowsRealtimeUsageByStateNotErrorMessage() {
-        let subscription = Subscription(platform: .zhipu, name: "智谱 AI", authMethod: .manualAPIKey)
-        let realtime = UsageSnapshot(
-            subscriptionID: subscription.id,
-            platform: .zhipu,
-            quotas: [],
-            updatedAt: .now,
-            isDemo: false,
-            errorMessage: "上游附带错误",
-            state: .realtime
-        )
-        #expect(SubscriptionCardPresentation.showsRealtimeUsageBody(for: realtime) == true)
-
-        let notConfigured = UsageSnapshot(
-            subscriptionID: subscription.id,
-            platform: .zhipu,
-            quotas: [],
-            updatedAt: .now,
-            isDemo: false,
-            errorMessage: nil,
-            state: .notConfigured
-        )
-        #expect(SubscriptionCardPresentation.showsRealtimeUsageBody(for: notConfigured) == false)
-    }
 }
 
 extension QuotaAndKimiTests {
@@ -856,18 +712,16 @@ extension QuotaAndKimiTests {
         let quota = Quota(name: "每月窗口", used: 85, limit: 100, resetAt: nil, kind: .generic)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [quota])
 
-        // 未配置：锚点回退到 status.tint（精确等于 warning 状态色，而非内置默认 teal），状态语义保持 warning。
+        // 未配置：锚点回退到 status.tint（精确等于 warning 状态色，而非内置默认 teal）。
         let unconfigured = SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
-        #expect(unconfigured?.status == .warning)
         #expect(!SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: quota.name, kind: quota.kind))
         #expect(unconfigured?.color.tokenMeterRGB == QuotaStatus.warning.tint.tokenMeterRGB)
         #expect(unconfigured?.color.tokenMeterRGB != SubscriptionQuotaColors.defaultColor(forKind: .generic).tokenMeterRGB)
 
-        // 配置后：百分比使用解析色，但状态仍为 warning（自定义色不破坏状态语义）。
+        // 配置后：百分比使用解析色。
         let custom: UInt32 = 0x123456
         subscription.quotaColors = [SubscriptionQuotaColors.nameKey(quota.name): custom]
         let configured = SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
-        #expect(configured?.status == .warning)
         #expect(configured?.color.tokenMeterRGB == custom)
     }
 

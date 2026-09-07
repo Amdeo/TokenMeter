@@ -15,17 +15,14 @@ struct PanelVisibilityGate {
 
 enum PanelLayoutMetrics {
     static let rootVerticalChrome: CGFloat = 16
-    static let pageChrome: CGFloat = 100
-    static let providerChrome: CGFloat = 50
-    static let settingsChrome: CGFloat = 92
+    static let pageChrome: CGFloat = 116
+    static let providerChrome: CGFloat = 66
+    static let settingsChrome: CGFloat = 108
 
     /// 概览订阅列表的最大可视高度：内容超过后列表内部滚动，
     /// 面板高度仍随内容自适应，但整体不超过默认面板高度量级。
     static let subscriptionListMaxHeight: CGFloat = 480
 
-    static var measuredPageChrome: CGFloat { pageChrome + rootVerticalChrome }
-    static var measuredProviderChrome: CGFloat { providerChrome + rootVerticalChrome }
-    static var measuredSettingsChrome: CGFloat { settingsChrome + rootVerticalChrome }
 }
 
 struct IntrinsicPanelHeightModifier: ViewModifier {
@@ -208,22 +205,16 @@ final class PanelHeightResizeNSView: NSView {
 /// 原生系统玻璃背景：NSVisualEffectView 磨砂材质，透出并模糊窗口背后的内容。
 /// 浅色主题在 macOS 14–25 使用（质感同系统菜单下拉）；深色主题仍用自定义渐变。
 struct NativeGlassBackground: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .menu
-
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = material
+        view.material = .menu
         view.blendingMode = .behindWindow
         view.state = .active
         view.autoresizingMask = [.width, .height]
         return view
     }
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = .behindWindow
-        nsView.state = .active
-    }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 /// macOS 26+ 的 Liquid Glass 面板背景：以覆盖整个面板的透明形状作为唯一的外层玻璃表面，

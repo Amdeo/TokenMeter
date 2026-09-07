@@ -13,7 +13,7 @@ struct SubscriptionUsageView: View {
             BalanceMenuRow(quota: snapshot.quotas.first { $0.kind == .balance })
         case .kimi:
             VStack(alignment: .leading, spacing: 8) {
-                if SubscriptionCardPresentation.showsKimiTotalUsageBody(overallUsageRatio: snapshot.overallUsageRatio) {
+                if snapshot.overallUsageRatio == nil {
                     TotalUsageMenuRow(
                         ratio: snapshot.overallUsageRatio,
                         color: SubscriptionQuotaColors.resolveOverall(subscription.quotaColors)
@@ -85,7 +85,6 @@ struct SubscriptionCardPresentation {
     struct Anchor {
         let label: String
         let value: String
-        let status: QuotaStatus
         let accessibilityLabel: String
         let color: Color
     }
@@ -125,7 +124,6 @@ struct SubscriptionCardPresentation {
                 return Anchor(
                     label: "总使用量",
                     value: percent,
-                    status: status,
                     accessibilityLabel: "总使用量 \(percent)",
                     color: color
                 )
@@ -174,19 +172,6 @@ struct SubscriptionCardPresentation {
         return parts.joined(separator: "，")
     }
 
-    /// Kimi 卡片体是否需要渲染「总使用量」行：头部锚点已显示总使用量
-    /// （overallUsageRatio 存在）时返回 false，避免头部与 body 重复；
-    /// 比例缺失时返回 true，保留原有行（该行在 ratio 为 nil 时渲染为空）。
-    static func showsKimiTotalUsageBody(overallUsageRatio: Double?) -> Bool {
-        overallUsageRatio == nil
-    }
-
-    /// 卡片体是否渲染实时用量：以快照状态而非 errorMessage 判断，
-    /// 避免 realtime+message 落入 stateRow 的 EmptyView，或 notConfigured+nil 误显示用量。
-    static func showsRealtimeUsageBody(for snapshot: UsageSnapshot) -> Bool {
-        snapshot.state == .realtime
-    }
-
     /// 卡片头部状态点颜色：按快照状态派生，避免 notConfigured/unsupported
     /// 携带的错误消息把状态点覆盖成红色；仅 realtime 继续沿用额度状态语义。
     static func cardIndicatorStatus(snapshot: UsageSnapshot, subscription: Subscription) -> QuotaStatus {
@@ -208,7 +193,6 @@ struct SubscriptionCardPresentation {
         return Anchor(
             label: quota.name,
             value: percent,
-            status: quota.status,
             accessibilityLabel: "\(quota.name)，已用 \(percent)",
             color: color
         )

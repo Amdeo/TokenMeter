@@ -33,7 +33,6 @@ final class MenuBarPanelController: NSObject {
     private var globalMouseMonitor: Any?
     private var screenObserver: NSObjectProtocol?
     private var applicationResignObserver: NSObjectProtocol?
-    private var workspaceActivationObserver: NSObjectProtocol?
     private var panelSize: PanelSize
     private var visibilityGate = PanelVisibilityGate()
     private var isStarted = false
@@ -109,12 +108,8 @@ final class MenuBarPanelController: NSObject {
         globalMouseMonitor = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let applicationResignObserver { NotificationCenter.default.removeObserver(applicationResignObserver) }
-        if let workspaceActivationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(workspaceActivationObserver)
-        }
         screenObserver = nil
         applicationResignObserver = nil
-        workspaceActivationObserver = nil
 
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
@@ -162,19 +157,6 @@ final class MenuBarPanelController: NSObject {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.hidePanel() }
-        }
-        workspaceActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let activatedProcessID = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?
-                .processIdentifier
-            MainActor.assumeIsolated {
-                guard let activatedProcessID,
-                      activatedProcessID != ProcessInfo.processInfo.processIdentifier else { return }
-                self?.hidePanel()
-            }
         }
     }
 

@@ -50,21 +50,4 @@ struct ChromeSessionImporter: Sendable {
         return try KimiBrowserCredentialExtractor.credential(from: raw)
     }
 
-    /// 通用有限重试循环，保留协作式取消；供需要轮询/重试的调用方使用。
-    static func retrying<Value: Sendable>(
-        maximumAttempts: Int,
-        retryDelay: Duration,
-        attempt: (Int) async throws -> Value?
-    ) async throws -> Value? {
-        for index in 0..<maximumAttempts {
-            try Task.checkCancellation()
-            if let value = try await attempt(index) {
-                return value
-            }
-            try Task.checkCancellation()
-            guard index + 1 < maximumAttempts else { break }
-            try await Task.sleep(for: retryDelay)
-        }
-        return nil
-    }
 }

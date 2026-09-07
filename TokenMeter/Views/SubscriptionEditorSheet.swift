@@ -2,15 +2,6 @@ import SwiftUI
 import AppKit
 
 enum SubscriptionCredentialRequirement {
-    static func shouldWriteCredential(
-        original: Subscription.AuthMethod?,
-        selected: Subscription.AuthMethod,
-        apiKey: String
-    ) -> Bool {
-        selected == .manualAPIKey
-            && !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     static func canSave(
         original: Subscription.AuthMethod?,
         selected: Subscription.AuthMethod,
@@ -94,7 +85,7 @@ struct SubscriptionEditorSheet: View {
                 .padding(.vertical, 18)
                 .reportsIntrinsicPanelHeight(
                     route: subscription.map { .editConfiguration($0.id) } ?? .addConfiguration,
-                    chrome: PanelLayoutMetrics.measuredPageChrome
+                    chrome: PanelLayoutMetrics.pageChrome
                 )
             }
             HStack(spacing: 10) {
@@ -198,11 +189,7 @@ struct SubscriptionEditorSheet: View {
     private func saveCredential(for id: UUID) throws {
         switch draft.authMethod {
         case .manualAPIKey:
-            guard SubscriptionCredentialRequirement.shouldWriteCredential(
-                original: subscription?.authMethod,
-                selected: draft.authMethod,
-                apiKey: draft.apiKey
-            ) else { return }
+            guard !draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             try CredentialStore().save(apiKey: draft.apiKey, for: id)
         case .kimiOAuth:
             guard let credential = draft.oauthCredential else { return }
@@ -370,66 +357,6 @@ private struct EditorSoftButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-    }
-}
-
-// MARK: - 平台选择
-
-private struct PlatformSelection: View {
-    @Binding var platform: Platform
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            ForEach(Platform.allCases) { item in
-                PlatformCard(item: item, isSelected: item == platform) {
-                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { platform = item }
-                }
-            }
-        }
-    }
-}
-
-private struct PlatformCard: View {
-    let item: Platform
-    let isSelected: Bool
-    let action: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                PlatformLogo(platform: item, size: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.rawValue)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(TM.textPrimary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(item.tint)
-                }
-            }
-            .padding(.horizontal, TM.cardContentHorizontal)
-            .padding(.vertical, 11)
-            .background(
-                isSelected ? item.tint.opacity(0.09) : (hovering ? TM.cardFillHover : TM.cardFill),
-                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .strokeBorder(isSelected ? item.tint.opacity(0.45) : (hovering ? TM.borderStrong : TM.border), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel(item.rawValue)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

@@ -53,7 +53,7 @@ struct SettingsPanel: View {
                         settingsToggle("打开时刷新", isOn: $settings.refreshOnOpen)
                         settingsToggle("后台自动刷新", isOn: $settings.autoRefreshEnabled)
                         appearanceRow()
-                        refreshIntervalRow(isLast: true)
+                        refreshIntervalRow()
                     }
 
                     settingsSection("通知", footer: {
@@ -127,7 +127,7 @@ struct SettingsPanel: View {
                     .foregroundStyle(TM.textTertiary)
                     .padding(.top, 6)
                 }
-                .reportsIntrinsicPanelHeight(route: .settings, chrome: PanelLayoutMetrics.measuredSettingsChrome)
+                .reportsIntrinsicPanelHeight(route: .settings, chrome: PanelLayoutMetrics.settingsChrome)
             }
             .scrollIndicators(.hidden)
         }
@@ -180,7 +180,7 @@ struct SettingsPanel: View {
         }
     }
 
-    private func refreshIntervalRow(isLast: Bool = false) -> some View {
+    private func refreshIntervalRow() -> some View {
         VStack(spacing: 0) {
             HStack {
                 Text("刷新间隔")
@@ -200,9 +200,6 @@ struct SettingsPanel: View {
             }
             .padding(.horizontal, TM.cardContentHorizontal)
             .padding(.vertical, 8)
-            if !isLast {
-                Rectangle().fill(TM.divider).frame(height: 1).padding(.leading, TM.cardContentHorizontal)
-            }
         }
     }
 
