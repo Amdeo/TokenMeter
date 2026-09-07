@@ -1,54 +1,59 @@
 import SwiftUI
 
-// 订阅用量数据的共享展示组件：菜单栏面板（.compact）与订阅编辑窗口（.full）复用同一套渲染逻辑。
+// 订阅用量数据的共享展示组件：菜单栏面板的紧凑卡片行。
 // 视觉统一为深色卡片 + 细描边 + 平台色点缀；不使用大面积渐变或发光。
 struct SubscriptionUsageView: View {
-    enum Style {
-        case compact
-        case full
-    }
-
     let subscription: Subscription
     let snapshot: UsageSnapshot
-    let style: Style
 
     @ViewBuilder
     var body: some View {
         switch subscription.platform {
         case .deepSeek:
-            if style == .compact {
-                BalanceMenuRow(quota: snapshot.quotas.first { $0.kind == .balance })
-            } else {
-                BalanceHeroCard(
-                    quota: snapshot.quotas.first { $0.kind == .balance },
-                    tint: subscription.platform.tint
+            BalanceMenuRow(quota: snapshot.quotas.first { $0.kind == .balance })
+        case .kimi:
+            VStack(alignment: .leading, spacing: 8) {
+                if SubscriptionCardPresentation.showsKimiTotalUsageBody(overallUsageRatio: snapshot.overallUsageRatio) {
+                    TotalUsageMenuRow(
+                        ratio: snapshot.overallUsageRatio,
+                        color: SubscriptionQuotaColors.resolveOverall(subscription.quotaColors)
+                    )
+                }
+                QuotaProgressRow(
+                    title: "5 小时额度",
+                    quota: snapshot.quotas.first { $0.kind == .fiveHour },
+                    tint: SubscriptionQuotaColors.resolve(
+                        subscription.quotaColors, name: "5 小时额度", kind: .fiveHour
+                    )
+                )
+                QuotaProgressRow(
+                    title: "每周额度",
+                    quota: snapshot.quotas.first { $0.kind == .weekly },
+                    tint: SubscriptionQuotaColors.resolve(
+                        subscription.quotaColors, name: "每周额度", kind: .weekly
+                    )
                 )
             }
-        case .kimi:
-            if style == .compact {
-                VStack(alignment: .leading, spacing: 10) {
-                    TotalUsageMenuRow(ratio: snapshot.overallUsageRatio)
-                    QuotaProgressRow(title: "5 小时额度", quota: snapshot.quotas.first { $0.kind == .fiveHour }, tint: .blue)
-                    QuotaProgressRow(title: "每周额度", quota: snapshot.quotas.first { $0.kind == .weekly }, tint: .green)
-                }
-            } else {
-                KimiDetailUsageView(snapshot: snapshot)
-            }
         default:
-            if style == .compact {
-                if snapshot.quotas.isEmpty {
-                    Text("暂无可显示的额度数据")
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.textSecondary)
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(snapshot.quotas) { quota in
-                            QuotaProgressRow(title: quota.name, quota: quota)
-                        }
+            if snapshot.quotas.isEmpty {
+                Text("暂无可显示的额度数据")
+                    .font(.system(size: 11))
+                    .foregroundStyle(TM.textSecondary)
+            } else {
+                // OpenCodeGo 头部锚点已显示「每月窗口」，正文不再重复该配额行。
+                let monthly = subscription.platform == .openCodeGo
+                    ? snapshot.quotas.first { $0.name.contains("月") }
+                    : nil
+                let rows = snapshot.quotas.filter { $0.id != monthly?.id }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(rows) { quota in
+                        QuotaProgressRow(
+                            title: quota.name,
+                            quota: quota,
+                            tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
+                        )
                     }
                 }
-            } else {
-                GenericDetailUsageView(quotas: snapshot.quotas)
             }
         }
     }
@@ -65,16 +70,149 @@ extension UsageSnapshot {
                 ? status(for: coreKinds)
                 : status(for: [.balance])
         default:
-            return overallStatus
+            // realtime 状态的可见额度只按配额派生，避免上游附带的 errorMessage
+            // 把通用平台（zhipu/openCodeGo/miniMax）覆盖成错误状态。
+            return status(for: Set(Quota.Kind.allCases))
         }
     }
 }
 
-// 用量比例 → 状态色：统一 绿 <80% / 橙 ≥80% / 红 =100% 的语义。
-private func levelStatus(for ratio: Double) -> QuotaStatus {
-    if ratio >= 1 { return .exhausted }
-    if ratio >= 0.8 { return .warning }
-    return .normal
+// MARK: - 卡片数值锚点（呈现辅助）
+
+/// 订阅卡片顶部「单一数值锚点」的统一呈现逻辑：
+/// 统一比例阈值、可注入 now 的重置文案，以及按平台/快照派生的锚点。
+struct SubscriptionCardPresentation {
+    struct Anchor {
+        let label: String
+        let value: String
+        let status: QuotaStatus
+        let accessibilityLabel: String
+        let color: Color
+    }
+
+    /// 用量比例 → 状态色：统一 绿 <80% / 橙 ≥80% / 红 =100% 的语义。
+    static func ratioStatus(for ratio: Double) -> QuotaStatus {
+        if ratio >= 1 { return .exhausted }
+        if ratio >= 0.8 { return .warning }
+        return .normal
+    }
+
+    /// 把重置时间转成用户可读的「X 小时后刷新额度」文案；now 供测试注入。
+    static func resetHintText(for resetAt: Date, now: Date = .now) -> String {
+        let seconds = resetAt.timeIntervalSince(now)
+        guard seconds > 0 else { return "即将刷新额度" }
+        if seconds < 3600 {
+            return "\(max(1, Int(seconds / 60))) 分钟后刷新额度"
+        }
+        if seconds < 86400 {
+            return "\(max(1, Int(seconds / 3600))) 小时后刷新额度"
+        }
+        return "\(max(1, Int(seconds / 86400))) 天后刷新额度"
+    }
+
+    static func anchor(subscription: Subscription, snapshot: UsageSnapshot) -> Anchor? {
+        switch subscription.platform {
+        case .deepSeek:
+            return nil
+        case .kimi:
+            guard subscription.authMethod != .manualAPIKey else { return nil }
+            if let ratio = snapshot.overallUsageRatio {
+                let percent = ratio.formatted(.percent.precision(.fractionLength(1)))
+                let status = ratioStatus(for: ratio)
+                let color = SubscriptionQuotaColors.hasOverallConfiguration(subscription.quotaColors)
+                    ? SubscriptionQuotaColors.resolveOverall(subscription.quotaColors)
+                    : status.tint
+                return Anchor(
+                    label: "总使用量",
+                    value: percent,
+                    status: status,
+                    accessibilityLabel: "总使用量 \(percent)",
+                    color: color
+                )
+            }
+            if let quota = snapshot.quotas.first(where: { $0.kind == .fiveHour || $0.kind == .weekly }) {
+                return quotaAnchor(quota, colors: subscription.quotaColors)
+            }
+            return nil
+        default:
+            // 通用平台：优先取「每月」窗口作为锚点（更有信息量的周期值），
+            // 没有每月窗口再回退到第一个配额。
+            let monthly = snapshot.quotas.first { $0.name.contains("月") }
+            guard let quota = monthly ?? snapshot.quotas.first else { return nil }
+            return quotaAnchor(quota, colors: subscription.quotaColors)
+        }
+    }
+
+    /// 卡片整体的无障碍朗读文案：按快照状态派生状态文案，仅在 realtime 追加额度状态与锚点数值。
+    static func cardAccessibilityLabel(
+        subscription: Subscription,
+        snapshot: UsageSnapshot?,
+        anchor: Anchor?
+    ) -> String {
+        var parts: [String] = ["编辑 \(subscription.name) 的配置"]
+        guard let snapshot else {
+            parts.append("等待首次刷新…")
+            return parts.joined(separator: "，")
+        }
+
+        switch snapshot.state {
+        case .notConfigured:
+            parts.append("需要配置")
+        case .authenticationRequired:
+            parts.append("认证已失效")
+        case .unsupported:
+            parts.append("暂不支持额度接口")
+        case .error:
+            parts.append("获取失败")
+        case .realtime:
+            parts.append(snapshot.visibleStatus(for: subscription).label)
+            if let anchor {
+                parts.append(anchor.accessibilityLabel)
+            }
+        }
+
+        return parts.joined(separator: "，")
+    }
+
+    /// Kimi 卡片体是否需要渲染「总使用量」行：头部锚点已显示总使用量
+    /// （overallUsageRatio 存在）时返回 false，避免头部与 body 重复；
+    /// 比例缺失时返回 true，保留原有行（该行在 ratio 为 nil 时渲染为空）。
+    static func showsKimiTotalUsageBody(overallUsageRatio: Double?) -> Bool {
+        overallUsageRatio == nil
+    }
+
+    /// 卡片体是否渲染实时用量：以快照状态而非 errorMessage 判断，
+    /// 避免 realtime+message 落入 stateRow 的 EmptyView，或 notConfigured+nil 误显示用量。
+    static func showsRealtimeUsageBody(for snapshot: UsageSnapshot) -> Bool {
+        snapshot.state == .realtime
+    }
+
+    /// 卡片头部状态点颜色：按快照状态派生，避免 notConfigured/unsupported
+    /// 携带的错误消息把状态点覆盖成红色；仅 realtime 继续沿用额度状态语义。
+    static func cardIndicatorStatus(snapshot: UsageSnapshot, subscription: Subscription) -> QuotaStatus {
+        switch snapshot.state {
+        case .authenticationRequired, .notConfigured, .unsupported:
+            return .warning
+        case .error:
+            return .error
+        case .realtime:
+            return snapshot.visibleStatus(for: subscription)
+        }
+    }
+
+    private static func quotaAnchor(_ quota: Quota, colors: [String: UInt32]) -> Anchor {
+        let percent = quota.fraction.formatted(.percent.precision(.fractionLength(0)))
+        let color = SubscriptionQuotaColors.hasConfiguration(colors, name: quota.name, kind: quota.kind)
+            ? SubscriptionQuotaColors.resolve(colors, quota: quota)
+            : quota.status.tint
+        return Anchor(
+            label: quota.name,
+            value: percent,
+            status: quota.status,
+            accessibilityLabel: "\(quota.name)，已用 \(percent)",
+            color: color
+        )
+    }
 }
 
 // MARK: - 基础图形
@@ -92,7 +230,7 @@ private struct MeterBar: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.09))
+                Capsule().fill(TM.meterTrack)
                 Capsule()
                     .fill(tint)
                     .frame(width: max(height, proxy.size.width * clamped))
@@ -103,55 +241,26 @@ private struct MeterBar: View {
     }
 }
 
-/// 环形用量仪表：编辑窗口 hero 视觉焦点。
-private struct UsageRing: View {
-    let ratio: Double
-    let tint: Color
-    var size: CGFloat = 96
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var clamped: Double { min(max(ratio, 0), 1) }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.white.opacity(0.1), lineWidth: 9)
-            Circle()
-                .trim(from: 0, to: clamped)
-                .stroke(tint, style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Text(ratio, format: .percent.precision(.fractionLength(1)))
-                .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(TM.textPrimary)
-        }
-        .frame(width: size, height: size)
-        .animation(reduceMotion ? .none : .easeOut(duration: 0.4), value: ratio)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("总使用量已用比例")
-        .accessibilityValue(ratio.formatted(.percent.precision(.fractionLength(1))))
-    }
-}
-
 // MARK: - 紧凑行（菜单栏面板）
 
 private struct TotalUsageMenuRow: View {
     let ratio: Double?
+    let color: Color
 
     var body: some View {
         if let ratio {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("总使用量")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(TM.textSecondary)
                         .lineLimit(1)
                     Spacer(minLength: 6)
                     Text(ratio, format: .percent.precision(.fractionLength(1)))
-                        .font(.system(size: 15, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(levelStatus(for: ratio) == .normal ? TM.textPrimary : levelStatus(for: ratio).tint)
+                        .font(.system(size: 14, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(color)
                 }
-                MeterBar(fraction: ratio, tint: .indigo)
+                MeterBar(fraction: ratio, tint: color, height: 4)
                     .accessibilityLabel("总使用量已用比例")
                     .accessibilityValue(ratio.formatted(.percent.precision(.fractionLength(1))))
             }
@@ -164,20 +273,13 @@ private struct BalanceMenuRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("可用余额")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(0.6)
-                    .foregroundStyle(TM.textTertiary)
-                Text(quota?.remainingText ?? "—")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded).monospacedDigit())
-                    .tracking(-0.8)
-                    .foregroundStyle(quota.map { $0.status == .normal ? TM.textPrimary : $0.status.tint } ?? TM.textSecondary)
-            }
-            Spacer()
-            if let quota, quota.status != .normal {
-                StatusBadge(status: quota.status)
-            }
+            Text("可用余额")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(TM.textSecondary)
+            Spacer(minLength: 8)
+            Text(quota?.remainingText ?? "—")
+                .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(quota.map { $0.status == .normal ? TM.textPrimary : $0.status.tint } ?? TM.textSecondary)
         }
         .accessibilityElement(children: .combine)
     }
@@ -186,37 +288,37 @@ private struct BalanceMenuRow: View {
 private struct QuotaProgressRow: View {
     let title: String
     let quota: Quota?
-    var tint: Color? = nil
-
-    private var resolvedTint: Color { tint ?? quota?.status.tint ?? .secondary }
+    let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(TM.textSecondary)
                     .lineLimit(1)
+                    .layoutPriority(1)
                 Spacer(minLength: 6)
                 if let quota {
-                    Text(quota.fraction, format: .percent.precision(.fractionLength(0)))
-                        .font(.system(size: 12, weight: .bold).monospacedDigit())
-                        .foregroundStyle(quota.status == .normal ? TM.textPrimary : resolvedTint)
+                    Text(quota.fraction, format: .percent.precision(.fractionLength(1)))
+                        .font(.system(size: 11, weight: .bold).monospacedDigit())
+                        .foregroundStyle(tint)
+                        .layoutPriority(1)
                 } else {
                     Text("—")
-                        .font(.system(size: 12).monospacedDigit())
+                        .font(.system(size: 11).monospacedDigit())
                         .foregroundStyle(TM.textSecondary)
                 }
             }
             if let quota {
-                MeterBar(fraction: quota.fraction, tint: resolvedTint, height: 5)
+                MeterBar(fraction: quota.fraction, tint: tint, height: 4)
                     .accessibilityLabel("\(title)已用比例")
-                    .accessibilityValue(quota.fraction.formatted(.percent.precision(.fractionLength(0))))
+                    .accessibilityValue(quota.fraction.formatted(.percent.precision(.fractionLength(1))))
                 HStack {
                     Text(quota.status == .normal ? "正常" : quota.status.label)
                         .foregroundStyle(quota.status == .normal ? TM.textTertiary : quota.status.tint)
                     Spacer()
-                    Text(quota.resetAt.map(resetHintText) ?? "")
+                    Text(quota.resetAt.map { SubscriptionCardPresentation.resetHintText(for: $0) } ?? "")
                         .foregroundStyle(TM.textTertiary)
                 }
                 .font(.system(size: 9))
@@ -227,283 +329,6 @@ private struct QuotaProgressRow: View {
                     .foregroundStyle(TM.textTertiary)
             }
         }
-    }
-}
-
-/// 把重置时间转成用户可读的「X 小时后刷新额度」文案。
-private func resetHintText(for resetAt: Date) -> String {
-    let seconds = resetAt.timeIntervalSinceNow
-    guard seconds > 0 else { return "即将刷新额度" }
-    if seconds < 3600 {
-        return "\(max(1, Int(seconds / 60))) 分钟后刷新额度"
-    }
-    if seconds < 86400 {
-        return "\(max(1, Int(seconds / 3600))) 小时后刷新额度"
-    }
-    return "\(max(1, Int(seconds / 86400))) 天后刷新额度"
-}
-
-// MARK: - 完整展示（编辑窗口）
-
-private struct KimiDetailUsageView: View {
-    let snapshot: UsageSnapshot
-
-    private var coreKinds: Set<Quota.Kind> { [.fiveHour, .weekly] }
-    private var hasCoreQuota: Bool { snapshot.quotas.contains { coreKinds.contains($0.kind) } }
-    private func quota(_ kind: Quota.Kind) -> Quota? { snapshot.quotas.first { $0.kind == kind } }
-
-    @ViewBuilder
-    var body: some View {
-        if !hasCoreQuota, let balance = quota(.balance) {
-            BalanceHeroCard(
-                quota: balance,
-                tint: .orange,
-                eyebrow: "余额模式",
-                note: "当前使用 Moonshot 余额接口，Coding 额度暂不可用"
-            )
-        } else {
-            VStack(spacing: 12) {
-                if let ratio = snapshot.overallUsageRatio {
-                    TotalUsageHero(ratio: ratio)
-                    HStack(alignment: .top, spacing: 10) {
-                        QuotaTile(title: "5 小时额度", quota: quota(.fiveHour), tint: .blue)
-                        QuotaTile(title: "每周额度", quota: quota(.weekly), tint: .green)
-                    }
-                } else if let weekly = quota(.weekly) {
-                    QuotaTile(title: "每周额度", quota: weekly, tint: .green, hero: true)
-                    QuotaTile(title: "5 小时额度", quota: quota(.fiveHour), tint: .blue)
-                }
-            }
-        }
-    }
-}
-
-/// 总使用量 hero 卡：环形仪表 + 状态徽章，编辑窗口的视觉焦点。
-private struct TotalUsageHero: View {
-    let ratio: Double
-
-    var body: some View {
-        let status = levelStatus(for: ratio)
-        HStack(spacing: 18) {
-            UsageRing(ratio: ratio, tint: .indigo)
-            VStack(alignment: .leading, spacing: 7) {
-                Text("总使用量")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(TM.textPrimary)
-                StatusBadge(status: status)
-                Text("来自 Kimi 网页订阅统计")
-                    .font(.system(size: 10))
-                    .foregroundStyle(TM.textSecondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .tmCard()
-    }
-}
-
-/// 配额瓷砖卡：大数字 + 计量条 + 刷新时间，两张并排构成 bento 布局；
-/// hero 变体用于每周额度升为主卡的场景。
-private struct QuotaTile: View {
-    let title: String
-    let quota: Quota?
-    var tint: Color? = nil
-    var hero: Bool = false
-
-    private var resolvedTint: Color { tint ?? quota?.status.tint ?? .gray }
-    private var padding: CGFloat { hero ? 18 : 14 }
-    private var numberSize: CGFloat { hero ? 32 : 24 }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(hero ? .system(size: 14, weight: .semibold) : .system(size: 12, weight: .medium))
-                    .foregroundStyle(TM.textPrimary)
-                if hero, let quota, quota.status != .normal {
-                    StatusBadge(status: quota.status)
-                }
-            }
-            if let quota {
-                Text(quota.fraction, format: .percent.precision(.fractionLength(0)))
-                    .font(.system(size: numberSize, weight: .bold, design: .rounded).monospacedDigit())
-                    .tracking(-1)
-                    .foregroundStyle(quota.status == .normal ? TM.textPrimary : resolvedTint)
-                MeterBar(fraction: quota.fraction, tint: resolvedTint)
-                    .accessibilityLabel("\(title)已用比例")
-                    .accessibilityValue(quota.fraction.formatted(.percent.precision(.fractionLength(0))))
-                Text(quota.resetAt.map(resetHintText) ?? " ")
-                    .font(.system(size: 10))
-                    .foregroundStyle(TM.textSecondary)
-                    .accessibilityHidden(quota.resetAt == nil)
-            } else {
-                Text("—")
-                    .font(.system(size: numberSize, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(TM.textSecondary)
-                Text("接口未返回")
-                    .font(.system(size: 10))
-                    .foregroundStyle(TM.textSecondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(padding)
-        .tmCard()
-    }
-}
-
-/// 余额 hero 卡：DeepSeek 余额与 Kimi 余额回退共用。
-private struct BalanceHeroCard: View {
-    let quota: Quota?
-    var tint: Color = .blue
-    var eyebrow: String = "可用余额"
-    var note: String? = nil
-
-    var body: some View {
-        if let quota {
-            HStack(spacing: 16) {
-                Image(systemName: "creditcard.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 46, height: 46)
-                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tint.opacity(0.3), lineWidth: 1))
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(eyebrow)
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.6)
-                        .foregroundStyle(TM.textTertiary)
-                    Text(quota.remainingText)
-                        .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
-                        .tracking(-1)
-                        .foregroundStyle(quota.status == .normal ? TM.textPrimary : quota.status.tint)
-                    if quota.status != .normal {
-                        StatusBadge(status: quota.status)
-                    }
-                    if let note {
-                        Text(note)
-                            .font(.system(size: 10))
-                            .foregroundStyle(TM.textSecondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .tmCard()
-        } else {
-            Text("暂无可显示的余额数据")
-                .font(.system(size: 12))
-                .foregroundStyle(TM.textSecondary)
-        }
-    }
-}
-
-private struct GenericDetailUsageView: View {
-    let quotas: [Quota]
-
-    var body: some View {
-        if let primary = quotas.first {
-            VStack(alignment: .leading, spacing: 12) {
-                QuotaTile(title: primary.name, quota: primary)
-                if quotas.count > 1 {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("其他额度")
-                            .font(.system(size: 10, weight: .bold))
-                            .tracking(0.6)
-                            .foregroundStyle(TM.textTertiary)
-                        ForEach(quotas.dropFirst()) { quota in
-                            SecondaryQuotaRow(quota: quota)
-                        }
-                    }
-                    .padding(14)
-                    .tmCard()
-                }
-            }
-        } else {
-            Text("暂无可显示的额度数据")
-                .font(.system(size: 12))
-                .foregroundStyle(TM.textSecondary)
-        }
-    }
-}
-
-private struct SecondaryQuotaRow: View {
-    let quota: Quota
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(quota.name)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(TM.textSecondary)
-                Spacer()
-                Text(quota.fraction, format: .percent.precision(.fractionLength(0)))
-                    .font(.system(size: 11, weight: .bold).monospacedDigit())
-                    .foregroundStyle(quota.status == .normal ? TM.textPrimary : quota.status.tint)
-            }
-            MeterBar(fraction: quota.fraction, tint: quota.status.tint, height: 5)
-                .accessibilityLabel("\(quota.name)已用比例")
-                .accessibilityValue(quota.fraction.formatted(.percent.precision(.fractionLength(0))))
-        }
-    }
-}
-
-struct SnapshotStatePanel: View {
-    let snapshot: UsageSnapshot
-    let message: String
-
-    private var iconName: String {
-        switch snapshot.state {
-        case .unsupported: "questionmark.circle"
-        case .authenticationRequired: "person.crop.circle.badge.exclamationmark"
-        case .notConfigured: "lock.trianglebadge.exclamationmark"
-        default: "exclamationmark.triangle"
-        }
-    }
-
-    private var title: String {
-        switch snapshot.state {
-        case .unsupported: "暂不支持额度接口"
-        case .authenticationRequired: "认证已失效"
-        case .notConfigured: "需要配置"
-        default: "额度暂时不可用"
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 11) {
-            Image(systemName: iconName)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(snapshot.state.tint)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(TM.textPrimary)
-                Text(message)
-                    .font(.system(size: 10))
-                    .foregroundStyle(TM.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(snapshot.state.tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(snapshot.state.tint.opacity(0.2), lineWidth: 1))
-    }
-}
-
-struct StatusBadge: View {
-    let status: QuotaStatus
-
-    var body: some View {
-        Text(status.label)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(status.tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(status.tint.opacity(0.13), in: Capsule())
     }
 }
 

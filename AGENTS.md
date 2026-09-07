@@ -61,3 +61,18 @@ should explain behavior changes, identify affected providers or views, include
 verification commands, and attach screenshots for visible UI changes. Never
 commit API keys, OAuth tokens, or other credentials; credentials belong in the
 private `Application Support/TokenMeter/credentials.json` file managed by the app.
+
+## Page Index
+
+Use the following stable page IDs when referring to screens in tasks, issues, reviews, or implementation notes. These IDs describe user-facing screens, not reusable SwiftUI components.
+
+| ID | Page name | SwiftUI entry point | How to open / notes |
+| --- | --- | --- | --- |
+| TM-01 | 概览面板（菜单栏） | `MenuBarView` | Click the TokenMeter menu-bar item. Shows all subscriptions, usage summaries, refresh status, and the add-subscription action. |
+| TM-02 | 设置面板 | `SettingsPanel` | From TM-01, click the settings icon. This is an in-panel page; use “返回概览” to return to TM-01. |
+| TM-03 | 选择供应商页面 | `MenuBarView` → `ProviderSelectionPage` | From TM-01, click “添加订阅”. Shows five provider cards in the menu panel. |
+| TM-04 | 添加订阅配置页面 | `MenuBarView` → `SubscriptionEditorSheet` | Select a provider in TM-03, then configure its name and authentication inside the panel. |
+| TM-05 | 编辑订阅配置页面 | `MenuBarView` → `SubscriptionEditorSheet` | From a subscription card in TM-01, click the card to edit its configuration directly. `SubscriptionEditorDraft` preserves unsaved configuration while the panel is hidden. |
+| TM-06 | 状态预览覆盖层（仅 Debug） | `StatusPreviewOverlay` | From TM-02 → “预览状态” in Debug builds. This is an overlay for previewing normal, loading, authentication, error, low-balance, and empty states—not a production page. |
+
+When a request names a page ID, first inspect the corresponding entry point above. `SubscriptionUsageView`, `PlatformLogo`, `StatusBadge`, and other smaller `View` types are shared components, not separate pages.

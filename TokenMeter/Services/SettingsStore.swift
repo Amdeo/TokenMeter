@@ -4,6 +4,20 @@ import UserNotifications
 import Observation
 import AppKit
 
+enum AppearanceMode: String, CaseIterable, Identifiable, Sendable {
+    case system, light, dark
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: "跟随系统"
+        case .light: "浅色"
+        case .dark: "深色"
+        }
+    }
+}
+
 enum LoginItemStatus: Sendable, Equatable {
     case enabled
     case requiresApproval
@@ -67,8 +81,10 @@ final class SettingsStore {
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     private(set) var launchAtLogin: Bool
+    var appearanceMode: AppearanceMode { didSet { defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode) } }
     var refreshOnOpen: Bool { didSet { defaults.set(refreshOnOpen, forKey: Keys.refreshOnOpen) } }
     var autoRefreshEnabled: Bool { didSet { defaults.set(autoRefreshEnabled, forKey: Keys.autoRefreshEnabled) } }
+    var refreshInterval: TimeInterval { didSet { defaults.set(refreshInterval, forKey: Keys.refreshInterval) } }
     var lowBalanceAlerts: Bool {
         didSet {
             defaults.set(lowBalanceAlerts, forKey: Keys.lowBalanceAlerts)
@@ -87,16 +103,22 @@ final class SettingsStore {
             if serviceErrorAlerts && !oldValue { requestNotificationsIfNeeded() }
         }
     }
+    private var cnyThresholdStorage = 0.0
+    private var usdThresholdStorage = 0.0
+
     var cnyBalanceThreshold: Double {
-        didSet {
-            if cnyBalanceThreshold < 0 { cnyBalanceThreshold = 0 }
-            defaults.set(cnyBalanceThreshold, forKey: Keys.cnyThreshold)
+        get { cnyThresholdStorage }
+        set {
+            cnyThresholdStorage = max(0, newValue)
+            defaults.set(cnyThresholdStorage, forKey: Keys.cnyThreshold)
         }
     }
+
     var usdBalanceThreshold: Double {
-        didSet {
-            if usdBalanceThreshold < 0 { usdBalanceThreshold = 0 }
-            defaults.set(usdBalanceThreshold, forKey: Keys.usdThreshold)
+        get { usdThresholdStorage }
+        set {
+            usdThresholdStorage = max(0, newValue)
+            defaults.set(usdThresholdStorage, forKey: Keys.usdThreshold)
         }
     }
 
@@ -120,8 +142,10 @@ final class SettingsStore {
         self.loginItemManager = loginItemManager ?? SystemLoginItemManager()
         self.notificationManager = notificationManager ?? SystemNotificationAuthorizationManager()
         launchAtLogin = false
+        appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ?? .system
         refreshOnOpen = defaults.object(forKey: Keys.refreshOnOpen) as? Bool ?? true
         autoRefreshEnabled = defaults.object(forKey: Keys.autoRefreshEnabled) as? Bool ?? true
+        refreshInterval = Self.clampedRefreshInterval(defaults.object(forKey: Keys.refreshInterval) as? TimeInterval ?? 120)
         lowBalanceAlerts = defaults.object(forKey: Keys.lowBalanceAlerts) as? Bool ?? true
         authenticationAlerts = defaults.object(forKey: Keys.authenticationAlerts) as? Bool ?? true
         serviceErrorAlerts = defaults.object(forKey: Keys.serviceErrorAlerts) as? Bool ?? false
@@ -173,10 +197,18 @@ final class SettingsStore {
         defaults.set(launchAtLogin, forKey: Keys.launchAtLogin)
     }
 
+    static let refreshIntervalPresets: [TimeInterval] = [60, 120, 300, 600, 1800]
+
+    private static func clampedRefreshInterval(_ value: TimeInterval) -> TimeInterval {
+        refreshIntervalPresets.contains(value) ? value : 120
+    }
+
     private enum Keys {
         static let launchAtLogin = "settings.launchAtLogin"
+        static let appearanceMode = "settings.appearanceMode"
         static let refreshOnOpen = "settings.refreshOnOpen"
         static let autoRefreshEnabled = "settings.autoRefreshEnabled"
+        static let refreshInterval = "settings.refreshInterval"
         static let lowBalanceAlerts = "settings.lowBalanceAlerts"
         static let authenticationAlerts = "settings.authenticationAlerts"
         static let serviceErrorAlerts = "settings.serviceErrorAlerts"

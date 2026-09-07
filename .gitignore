@@ -19,3 +19,4 @@ xcuserdata/
 
 # 调试会话导出（可能包含敏感信息，勿提交）
 kimi-export-session*.md
+.local/agent-work/

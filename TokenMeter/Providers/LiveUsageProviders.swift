@@ -123,17 +123,7 @@ struct KimiUsageProvider: UsageProvider {
             }
             return try await fetchOAuthUsage(credential: activeCredential, didRefresh: didRefresh)
         case .kimiBrowserSession:
-            guard let credential = credentials.browserCredential(for: subscription.id) else {
-                throw UsageProviderError.notConfigured(subscription.platform)
-            }
-            guard credential.expiresAt > .now else {
-                throw UsageProviderError.authenticationRequired(subscription.platform, "Kimi 网页登录态已过期，请从 Chrome 重新导入")
-            }
-            do {
-                return try await fetchBrowserUsage(credential: credential)
-            } catch UsageProviderError.httpStatus(let status) where [401, 403].contains(status) {
-                throw UsageProviderError.authenticationRequired(subscription.platform, "Kimi 网页登录态已过期，请从 Chrome 重新导入")
-            }
+            return try await fetchBrowserSessionUsage()
         }
     }
 
@@ -281,18 +271,32 @@ struct KimiUsageProvider: UsageProvider {
         fiveHourQuota: Quota? = nil
     ) throws -> UsageSnapshot {
         var quotas: [Quota] = []
-        if let ratio = normalizedRatio(response.ratelimitCode7d?.ratio?.value) {
-            quotas.append(Quota(name: "每周额度", used: ratio, limit: 1, resetAt: date(from: response.ratelimitCode7d?.resetTime), kind: .weekly))
+        let weeklyRatio = normalizedRatio(response.ratelimitCode7d?.ratio?.value)
+        if let weeklyRatio {
+            quotas.append(Quota(name: "每周额度", used: weeklyRatio, limit: 1, resetAt: date(from: response.ratelimitCode7d?.resetTime), kind: .weekly))
+        } else if response.ratelimitCode7d?.enabled == true {
+            // 服务器在额度恰好为 0 时省略 ratio 字段（proto3 JSON 零值省略），
+            // 此时窗口仍启用，按 0% 处理，与 5 小时额度分支保持一致。
+            quotas.append(Quota(name: "每周额度", used: 0, limit: 1, resetAt: date(from: response.ratelimitCode7d?.resetTime), kind: .weekly))
         }
         if let fiveHourQuota {
             quotas.append(fiveHourQuota)
         } else if response.ratelimitCode5h?.enabled == true {
-            quotas.append(Quota(name: "5 小时额度", used: 0, limit: 1, resetAt: date(from: response.ratelimitCode5h?.resetTime), kind: .fiveHour))
+            let ratio = normalizedRatio(response.ratelimitCode5h?.ratio?.value) ?? 0
+            quotas.append(Quota(name: "5 小时额度", used: ratio, limit: 1, resetAt: date(from: response.ratelimitCode5h?.resetTime), kind: .fiveHour))
         }
         let overallUsageRatio = normalizedRatio(response.subscriptionBalance?.amountUsedRatio?.value)
         guard !quotas.isEmpty || overallUsageRatio != nil else {
             throw UsageProviderError.invalidResponse(subscription.platform, "Kimi 网页订阅接口返回中没有可用数据")
         }
+        UsageLogger.logger.info("""
+            kimi subscription stats parsed \
+            weeklyEnabled=\(response.ratelimitCode7d?.enabled == true, privacy: .public) \
+            weeklyRatioPresent=\(response.ratelimitCode7d?.ratio?.value != nil, privacy: .public) \
+            weeklyParsed=\(quotas.contains { $0.kind == .weekly }, privacy: .public) \
+            fiveHourParsed=\(quotas.contains { $0.kind == .fiveHour }, privacy: .public) \
+            overallUsageRatioPresent=\(overallUsageRatio != nil, privacy: .public)
+            """)
         quotas.sort { lhs, rhs in
             let lhsRank = quotaRank(lhs)
             let rhsRank = quotaRank(rhs)
@@ -415,6 +419,48 @@ struct KimiUsageProvider: UsageProvider {
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = fractional.date(from: string) { return date }
         return ISO8601DateFormatter().date(from: string)
+    }
+}
+
+extension KimiUsageProvider {
+    /// 网页登录态：access_token 有效期短（约一小时），临近/已过期时先用
+    /// refresh_token 换新；401/403 时再刷新一次兑底（防止本地过期时间与实际不同步）。
+    private func fetchBrowserSessionUsage() async throws -> UsageSnapshot {
+        var credential: KimiBrowserCredential
+        var didRefresh = false
+        if let stored = credentials.browserCredential(for: subscription.id),
+           stored.expiresAt.timeIntervalSinceNow > 300 {
+            credential = stored
+        } else {
+            guard let stored = credentials.browserCredential(for: subscription.id) else {
+                throw UsageProviderError.notConfigured(subscription.platform)
+            }
+            do {
+                credential = try await ChromeSessionImporter.refresh(stored)
+                try credentials.save(browserCredential: credential, for: subscription.id)
+                didRefresh = true
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw UsageProviderError.authenticationRequired(subscription.platform, "Kimi 网页登录态已过期，请在订阅设置中重新登录")
+            }
+        }
+        do {
+            return try await fetchBrowserUsage(credential: credential)
+        } catch UsageProviderError.httpStatus(let status) where [401, 403].contains(status) {
+            guard !didRefresh else {
+                throw UsageProviderError.authenticationRequired(subscription.platform, "Kimi 网页登录态已过期，请在订阅设置中重新登录")
+            }
+            do {
+                let refreshed = try await ChromeSessionImporter.refresh(credential)
+                try credentials.save(browserCredential: refreshed, for: subscription.id)
+                return try await fetchBrowserUsage(credential: refreshed)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw UsageProviderError.authenticationRequired(subscription.platform, "Kimi 网页登录态已过期，请在订阅设置中重新登录")
+            }
+        }
     }
 }
 

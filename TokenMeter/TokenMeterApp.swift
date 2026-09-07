@@ -1,85 +1,30 @@
 import SwiftUI
-import AppKit
 
 @main
 struct TokenMeterApp: App {
-    @State private var store: UsageStore
+    @NSApplicationDelegateAdaptor(TokenMeterAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarView()
-                .environment(store)
-        } label: {
-            Label("TokenMeter", systemImage: "gauge.with.dots.needle.67percent")
-        }
-        .menuBarExtraStyle(.window)
-    }
-
-    init() {
-        let settings = SettingsStore()
-        let store = UsageStore(settings: settings)
-        _store = State(initialValue: store)
-        if settings.autoRefreshEnabled { store.start() }
+        Settings { EmptyView() }
     }
 }
 
 @MainActor
-enum SubscriptionEditorWindow {
-    private static var window: NSWindow?
-    private static var delegate: SubscriptionEditorWindowDelegate?
+final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
+    private var panelController: MenuBarPanelController?
 
-    static func show(store: UsageStore, subscription: Subscription? = nil) {
-        let title = subscription.map { "编辑订阅 · \($0.name)" } ?? "添加订阅"
-        let content = AnyView(
-            SubscriptionEditorSheet(subscription: subscription, onClose: { close() })
-                .environment(store)
-        )
-        if let window {
-            if let controller = window.contentViewController as? NSHostingController<AnyView> {
-                controller.rootView = content
-            }
-            window.title = title
-            window.center()
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let settings = SettingsStore()
+        let store = UsageStore(settings: settings)
+        let navigation = PanelNavigationState()
+        if settings.autoRefreshEnabled { store.start() }
 
-        let controller = NSHostingController(rootView: content)
-
-        let window = NSWindow(contentViewController: controller)
-        window.title = title
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 600, height: 680))
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = NSColor(TM.editorBackground)
-
-        let delegate = SubscriptionEditorWindowDelegate()
-        window.delegate = delegate
-        self.window = window
-        self.delegate = delegate
-
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.async { window.center() }
+        let controller = MenuBarPanelController(store: store, navigation: navigation)
+        controller.start()
+        panelController = controller
     }
 
-    static func close() {
-        window?.close()
-        window = nil
-        delegate = nil
-    }
-
-    fileprivate static func handleWindowClosed() {
-        window = nil
-        delegate = nil
-    }
-}
-
-private final class SubscriptionEditorWindowDelegate: NSObject, NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        SubscriptionEditorWindow.handleWindowClosed()
+    func applicationWillTerminate(_ notification: Notification) {
+        panelController?.stop()
     }
 }

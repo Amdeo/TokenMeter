@@ -54,6 +54,7 @@ struct CredentialStore: Sendable {
         var entry = file.entries[subscriptionID.uuidString] ?? Entry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
         entry.apiKey = value
         entry.oauthCredential = nil
+        entry.browserCredential = nil
         file.entries[subscriptionID.uuidString] = entry
         try write(file)
     }
@@ -63,6 +64,7 @@ struct CredentialStore: Sendable {
         var entry = file.entries[subscriptionID.uuidString] ?? Entry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
         entry.apiKey = nil
         entry.oauthCredential = oauthCredential
+        entry.browserCredential = nil
         file.entries[subscriptionID.uuidString] = entry
         try write(file)
     }
@@ -70,6 +72,8 @@ struct CredentialStore: Sendable {
     func save(browserCredential: KimiBrowserCredential, for subscriptionID: UUID) throws {
         var file = try load()
         var entry = file.entries[subscriptionID.uuidString] ?? Entry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+        entry.apiKey = nil
+        entry.oauthCredential = nil
         entry.browserCredential = browserCredential
         file.entries[subscriptionID.uuidString] = entry
         try write(file)

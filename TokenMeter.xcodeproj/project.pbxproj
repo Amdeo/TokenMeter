@@ -14,8 +14,13 @@
 		A10000010000000000000005 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* CredentialStore.swift */; };
 			A10000010000000000000021 /* KimiOAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* KimiOAuthService.swift */; };
 		A10000010000000000000022 /* ChromeSessionImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000022 /* ChromeSessionImporter.swift */; };
+		A10000010000000000000029 /* KimiBrowserCredentialExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000029 /* KimiBrowserCredentialExtractor.swift */; };
+		A10000010000000000000030 /* EmbeddedKimiLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000030 /* EmbeddedKimiLoginController.swift */; };
+		A10000010000000000000032 /* MenuBarPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000032 /* MenuBarPanelController.swift */; };
 		A10000010000000000000006 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* UsageStore.swift */; };
 		A10000010000000000000007 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* MenuBarView.swift */; };
+		A10000010000000000000028 /* PanelLayoutSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000028 /* PanelLayoutSupport.swift */; };
+		A10000010000000000000031 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000031 /* SettingsPanel.swift */; };
 
 			A10000010000000000000009 /* LiveUsageProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000011 /* LiveUsageProviders.swift */; };
 		A10000010000000000000014 /* PlatformLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000014 /* PlatformLogo.swift */; };
@@ -23,6 +28,7 @@
 			A10000010000000000000024 /* SubscriptionEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000024 /* SubscriptionEditorSheet.swift */; };
 			A10000010000000000000025 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000025 /* SettingsStore.swift */; };
 			A10000010000000000000026 /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000026 /* NotificationCoordinator.swift */; };
+			A10000010000000000000027 /* PanelNavigationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000027 /* PanelNavigationState.swift */; };
 			A10000010000000000000015 /* icon-deepseek.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* icon-deepseek.png */; };
 			A10000010000000000000016 /* icon-zhipu.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000016 /* icon-zhipu.png */; };
 			A10000010000000000000017 /* icon-kimi.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000017 /* icon-kimi.png */; };
@@ -40,12 +46,18 @@
 		A20000010000000000000005 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 			A20000010000000000000021 /* KimiOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiOAuthService.swift; sourceTree = "<group>"; };
 		A20000010000000000000022 /* ChromeSessionImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeSessionImporter.swift; sourceTree = "<group>"; };
+		A20000010000000000000029 /* KimiBrowserCredentialExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiBrowserCredentialExtractor.swift; sourceTree = "<group>"; };
+		A20000010000000000000030 /* EmbeddedKimiLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedKimiLoginController.swift; sourceTree = "<group>"; };
+		A20000010000000000000032 /* MenuBarPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelController.swift; sourceTree = "<group>"; };
 		A20000010000000000000006 /* UsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStore.swift; sourceTree = "<group>"; };
 		A20000010000000000000007 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		A20000010000000000000028 /* PanelLayoutSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelLayoutSupport.swift; sourceTree = "<group>"; };
+		A20000010000000000000031 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 			A20000010000000000000023 /* SubscriptionUsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionUsageView.swift; sourceTree = "<group>"; };
 			A20000010000000000000024 /* SubscriptionEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionEditorSheet.swift; sourceTree = "<group>"; };
 			A20000010000000000000025 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 			A20000010000000000000026 /* NotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
+			A20000010000000000000027 /* PanelNavigationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelNavigationState.swift; sourceTree = "<group>"; };
 			A20000010000000000000011 /* LiveUsageProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveUsageProviders.swift; sourceTree = "<group>"; };
 			A20000010000000000000014 /* PlatformLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformLogo.swift; sourceTree = "<group>"; };
 			A20000010000000000000015 /* icon-deepseek.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-deepseek.png"; sourceTree = "<group>"; };
@@ -64,9 +76,9 @@
 		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000003, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A30000010000000000000008, A20000010000000000000009, A20000010000000000000001, B30000010000000000000001, ); path = TokenMeter; sourceTree = "<group>"; };
 		A30000010000000000000002 = {isa = PBXGroup; children = (A20000010000000000000002, ); name = Models; path = Models; sourceTree = "<group>"; };
 		A30000010000000000000003 = {isa = PBXGroup; children = (A20000010000000000000003, A20000010000000000000004, A20000010000000000000011, ); name = Providers; path = Providers; sourceTree = "<group>"; };
-		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000021, A20000010000000000000022, A20000010000000000000025, A20000010000000000000026, ); name = Services; path = Services; sourceTree = "<group>"; };
+		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000021, A20000010000000000000022, A20000010000000000000025, A20000010000000000000026, A20000010000000000000027, A20000010000000000000029, A20000010000000000000030, A20000010000000000000032, ); name = Services; path = Services; sourceTree = "<group>"; };
 		A30000010000000000000005 = {isa = PBXGroup; children = (A20000010000000000000006, ); name = Store; path = Store; sourceTree = "<group>"; };
-		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000023, A20000010000000000000024, A20000010000000000000014, ); name = Views; path = Views; sourceTree = "<group>"; };
+		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000028, A20000010000000000000023, A20000010000000000000024, A20000010000000000000014, A20000010000000000000031, ); name = Views; path = Views; sourceTree = "<group>"; };
 			A30000010000000000000010 = {isa = PBXGroup; children = (A30000010000000000000011, ); name = Resources; path = Resources; sourceTree = "<group>"; };
 			A30000010000000000000011 = {isa = PBXGroup; children = (A20000010000000000000015, A20000010000000000000016, A20000010000000000000017, A20000010000000000000018, A20000010000000000000019, ); name = PlatformIcons; path = PlatformIcons; sourceTree = "<group>"; };
 		A30000010000000000000007 = {isa = PBXGroup; children = (A20000010000000000000010, B20000010000000000000002, ); name = Products; sourceTree = "<group>"; };
@@ -87,7 +99,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000003, A10000010000000000000004, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000009, A10000010000000000000014, A10000010000000000000021, A10000010000000000000022, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000003, A10000010000000000000004, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000028, A10000010000000000000009, A10000010000000000000014, A10000010000000000000021, A10000010000000000000022, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, A10000010000000000000027, A10000010000000000000029, A10000010000000000000030, A10000010000000000000031, A10000010000000000000032, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */

@@ -4,6 +4,13 @@ import UserNotifications
 @testable import TokenMeter
 
 @MainActor
+private func freshPanelNavigationState() -> PanelNavigationState {
+    let suite = "TokenMeterTests.PanelNavigation.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    return PanelNavigationState(defaults: defaults)
+}
+
+@MainActor
 struct SettingsAndNotificationTests {
     @Test
     func panelVisibilityGateFiresOncePerDisplay() {
@@ -17,13 +24,93 @@ struct SettingsAndNotificationTests {
         #expect(secondDisplay)
     }
 
+
+    @Test
+    func panelLayoutMetricsIncludeRootChromeInMeasuredHeights() {
+        #expect(
+            PanelLayoutMetrics.measuredPageChrome
+                == PanelLayoutMetrics.pageChrome + PanelLayoutMetrics.rootVerticalChrome
+        )
+        #expect(
+            PanelLayoutMetrics.measuredProviderChrome
+                == PanelLayoutMetrics.providerChrome + PanelLayoutMetrics.rootVerticalChrome
+        )
+    }
+
+    @Test
+    func reportedAdaptiveHeightClampsToPanelBounds() {
+        let navigation = freshPanelNavigationState()
+        navigation.beginAdding()
+        navigation.reportMeasuredHeight(PanelSize.minimumAdaptiveHeight - 1, for: .addProvider)
+        #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
+        navigation.reportMeasuredHeight(PanelSize.maximumAdaptiveHeight + 1, for: .addProvider)
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+    }
+
+    @Test
+    func credentialWriteDecisionPreservesExistingManualCredentialWhenDraftIsEmpty() {
+        #expect(!SubscriptionCredentialRequirement.shouldWriteCredential(
+            original: .manualAPIKey,
+            selected: .manualAPIKey,
+            apiKey: ""
+        ))
+        #expect(!SubscriptionCredentialRequirement.canSave(
+            original: nil,
+            selected: .manualAPIKey,
+            apiKey: "",
+            hasOAuthCredential: false,
+            hasBrowserCredential: false,
+            isImportingBrowser: false
+        ))
+        #expect(SubscriptionCredentialRequirement.shouldWriteCredential(
+            original: .kimiOAuth,
+            selected: .manualAPIKey,
+            apiKey: "replacement-key"
+        ))
+    }
+
     @Test
     func editingAuthenticationMethodRequiresNewMatchingCredential() {
-        #expect(SubscriptionCredentialRequirement.canSave(original: .manualAPIKey, selected: .manualAPIKey, apiKey: "", hasOAuthCredential: false, hasBrowserCredential: false, isImportingBrowser: false))
-        #expect(!SubscriptionCredentialRequirement.canSave(original: .manualAPIKey, selected: .kimiOAuth, apiKey: "", hasOAuthCredential: false, hasBrowserCredential: false, isImportingBrowser: false))
-        #expect(SubscriptionCredentialRequirement.canSave(original: .manualAPIKey, selected: .kimiOAuth, apiKey: "", hasOAuthCredential: true, hasBrowserCredential: false, isImportingBrowser: false))
-        #expect(!SubscriptionCredentialRequirement.canSave(original: .manualAPIKey, selected: .kimiBrowserSession, apiKey: "", hasOAuthCredential: false, hasBrowserCredential: true, isImportingBrowser: true))
-        #expect(SubscriptionCredentialRequirement.canSave(original: .manualAPIKey, selected: .kimiBrowserSession, apiKey: "", hasOAuthCredential: false, hasBrowserCredential: true, isImportingBrowser: false))
+        #expect(SubscriptionCredentialRequirement.canSave(
+            original: .manualAPIKey,
+            selected: .manualAPIKey,
+            apiKey: "",
+            hasOAuthCredential: false,
+            hasBrowserCredential: false,
+            isImportingBrowser: false
+        ))
+        #expect(!SubscriptionCredentialRequirement.canSave(
+            original: .manualAPIKey,
+            selected: .kimiOAuth,
+            apiKey: "",
+            hasOAuthCredential: false,
+            hasBrowserCredential: false,
+            isImportingBrowser: false
+        ))
+        #expect(SubscriptionCredentialRequirement.canSave(
+            original: .manualAPIKey,
+            selected: .kimiOAuth,
+            apiKey: "",
+            hasOAuthCredential: true,
+            hasBrowserCredential: false,
+            isImportingBrowser: false
+        ))
+        #expect(!SubscriptionCredentialRequirement.canSave(
+            original: .manualAPIKey,
+            selected: .kimiBrowserSession,
+            apiKey: "",
+            hasOAuthCredential: false,
+            hasBrowserCredential: true,
+            isImportingBrowser: true
+        ))
+        #expect(SubscriptionCredentialRequirement.canSave(
+            original: .manualAPIKey,
+            selected: .kimiBrowserSession,
+            apiKey: "",
+            hasOAuthCredential: false,
+            hasBrowserCredential: true,
+            isImportingBrowser: false
+        ))
     }
 
     @Test
@@ -101,13 +188,21 @@ struct SettingsAndNotificationTests {
     }
 
     @Test
-    func lowBalanceAlertDoesNotExposeAccountOrExactBalance() {
+    func lowBalanceAlertDoesNotExposeAccountOrExactBalance() throws {
         let suite = "TokenMeterTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
         let subscription = Subscription(platform: .deepSeek, name: "私人工作账号", authMethod: .manualAPIKey)
-        let alert = try! #require(evaluator.evaluate(previous: nil, current: balanceSnapshot(subscription, remaining: 4.25, currency: "CNY"), subscription: subscription, source: .manual, settings: AlertSettings()).first)
+        let alert = try #require(
+            evaluator.evaluate(
+                previous: nil,
+                current: balanceSnapshot(subscription, remaining: 4.25, currency: "CNY"),
+                subscription: subscription,
+                source: .manual,
+                settings: AlertSettings()
+            ).first
+        )
         #expect(!alert.title.contains(subscription.name))
         #expect(!alert.body.contains(subscription.name))
         #expect(!alert.body.contains("4.25"))
@@ -125,6 +220,7 @@ struct SettingsAndNotificationTests {
         #expect(first.refreshOnOpen)
         #expect(first.autoRefreshEnabled)
         #expect(first.lowBalanceAlerts)
+        #expect(first.appearanceMode == .system)
         #expect(first.cnyBalanceThreshold == 5)
         #expect(first.usdBalanceThreshold == 1)
 
@@ -135,6 +231,30 @@ struct SettingsAndNotificationTests {
         #expect(!second.refreshOnOpen)
         #expect(!second.autoRefreshEnabled)
         #expect(second.cnyBalanceThreshold == 8.5)
+    }
+
+    @Test
+    func appearanceModePersistsAcrossSettingsInstances() {
+        let suite = "TokenMeterTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let first = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: FakeNotificationAuthorizationManager())
+        first.appearanceMode = .light
+        let second = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: FakeNotificationAuthorizationManager())
+        #expect(second.appearanceMode == .light)
+        second.appearanceMode = .dark
+        let third = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: FakeNotificationAuthorizationManager())
+        #expect(third.appearanceMode == .dark)
+    }
+
+    @Test
+    func appearanceModeFallsBackToSystemForInvalidRawValue() {
+        let suite = "TokenMeterTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("not-a-mode", forKey: "settings.appearanceMode")
+        let settings = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: FakeNotificationAuthorizationManager())
+        #expect(settings.appearanceMode == .system)
     }
 
     @Test
@@ -190,6 +310,10 @@ struct SettingsAndNotificationTests {
         #expect(decoded.state != .notConfigured)
     }
 
+}
+
+@MainActor
+struct AlertEvaluationTests {
     @Test
     func lowBalanceAlertsCrossEachCurrencyThresholdOnceAndCanRecover() {
         let suite = "TokenMeterTests.\(UUID().uuidString)"
@@ -287,9 +411,10 @@ struct SettingsAndNotificationTests {
         #expect(evaluator.evaluate(previous: nil, current: lowFirst, subscription: first, source: .manual, settings: AlertSettings()).count == 1)
     }
 
-    private func balanceSnapshot(_ subscription: Subscription, remaining: Double, currency: String) -> UsageSnapshot {
-        UsageSnapshot.realtime(subscription: subscription, quotas: [Quota(name: "余额", used: 0, limit: remaining, resetAt: nil, unit: .currency(code: currency, scale: 1), kind: .balance)])
-    }
+}
+
+private func balanceSnapshot(_ subscription: Subscription, remaining: Double, currency: String) -> UsageSnapshot {
+    UsageSnapshot.realtime(subscription: subscription, quotas: [Quota(name: "余额", used: 0, limit: remaining, resetAt: nil, unit: .currency(code: currency, scale: 1), kind: .balance)])
 }
 
 private enum TestError: Error { case failed }
@@ -318,4 +443,337 @@ private final class FakeNotificationAuthorizationManager: NotificationAuthorizat
     var requestCount = 0
     func requestAuthorization(completion: @escaping @Sendable (Bool) -> Void) { requestCount += 1; completion(true) }
     func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void) { completion(.authorized) }
+}
+
+@MainActor
+struct PanelNavigationTests {
+    @Test
+    func manualOverviewHeightPersistsOnlyWhenCommitted() {
+        let suite = "TokenMeterTests.PanelHeight.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let navigation = PanelNavigationState(defaults: defaults)
+        navigation.setUserOverviewHeight(710, persist: false)
+        #expect(navigation.panelSize.height == 710)
+        #expect(PanelNavigationState(defaults: defaults).panelSize == .compact)
+
+        navigation.setUserOverviewHeight(710, persist: true)
+        let restored = PanelNavigationState(defaults: defaults)
+        #expect(restored.hasManualOverviewHeight)
+        #expect(restored.panelSize.height == 710)
+    }
+
+    @Test
+    func manualOverviewHeightIsClampedAndDoesNotDisableOtherRouteMeasurements() {
+        let suite = "TokenMeterTests.PanelHeight.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let navigation = PanelNavigationState(defaults: defaults)
+        navigation.setUserOverviewHeight(100, persist: false)
+        #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
+        navigation.setUserOverviewHeight(1_000, persist: false)
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+
+        navigation.reportMeasuredHeight(420, for: .overview)
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+        navigation.route = .settings
+        navigation.reportMeasuredHeight(420, for: .settings)
+        #expect(navigation.panelSize.height == 420)
+        navigation.route = .overview
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+    }
+
+    @Test
+    func panelFrameCentersBelowAnchorWhenSpaceAllows() {
+        let frame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 398, height: 420),
+            screenFrame: NSRect(x: 0, y: 0, width: 1728, height: 1117),
+            anchorX: 1000,
+            anchorTop: 1080
+        )
+        #expect(frame.midX == 1000)
+        #expect(frame.maxY == 1080)
+    }
+
+    @Test
+    func panelFrameClampsNearScreenEdges() {
+        let screen = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        // 图标靠近左边缘：居中位置（-179）被钳制到屏幕边距
+        let leftFrame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 398, height: 420),
+            screenFrame: screen,
+            anchorX: 20,
+            anchorTop: 780
+        )
+        // 图标靠近右边缘：居中位置（781）超出上限，同样钳制
+        let rightFrame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 398, height: 420),
+            screenFrame: screen,
+            anchorX: 980,
+            anchorTop: 780
+        )
+        #expect(leftFrame.minX == PanelFramePositioner.screenMargin)
+        #expect(rightFrame.maxX == screen.maxX - PanelFramePositioner.screenMargin)
+        // 纵向锚点仍保持
+        #expect(leftFrame.maxY == 780)
+    }
+
+    @Test
+    func panelFrameCentersNormallyWhenNotClamped() {
+        // anchorX=400：居中值 201 在屏幕边距内（不触发钳制），保持居中
+        let frame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 398, height: 420),
+            screenFrame: NSRect(x: 0, y: 0, width: 1728, height: 1117),
+            anchorX: 400,
+            anchorTop: 1080
+        )
+        #expect(frame.midX == 400)
+    }
+
+    @Test
+    func panelFrameFallsBackToScreenCenterOnNarrowScreen() {
+        // 屏幕窄到连边距都容不下（maximumX < minimumX），保持原兜底：屏幕正中
+        let screen = NSRect(x: 0, y: 0, width: 300, height: 600)
+        let frame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 398, height: 420),
+            screenFrame: screen,
+            anchorX: 150,
+            anchorTop: 580
+        )
+        #expect(frame.minX == screen.midX - 398 / 2)
+        #expect(frame.maxY == 580)
+    }
+
+    @Test
+    func panelFrameKeepsTopEdgeWhileHeightChanges() {
+        let shortFrame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 398, height: 320),
+            screenFrame: NSRect(x: 0, y: 0, width: 1200, height: 900),
+            anchorX: 900,
+            anchorTop: 870
+        )
+        let tallFrame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 398, height: 680),
+            screenFrame: NSRect(x: 0, y: 0, width: 1200, height: 900),
+            anchorX: 900,
+            anchorTop: 870
+        )
+        #expect(shortFrame.maxY == tallFrame.maxY)
+        #expect(shortFrame.midX == tallFrame.midX)
+    }
+
+    @Test
+    func panelFrameClampsBottomToScreenMargin() {
+        let screen = NSRect(x: 0, y: 0, width: 800, height: 600)
+        let frame = PanelFramePositioner.frame(
+            contentSize: NSSize(width: 340, height: 300),
+            screenFrame: screen,
+            anchorX: 400,
+            anchorTop: 100
+        )
+        #expect(frame.minY == PanelFramePositioner.screenMargin)
+    }
+
+    @Test
+    func panelUsesCompactWidthForEveryRoute() {
+        let navigation = freshPanelNavigationState()
+        #expect(navigation.panelSize == .compact)
+        navigation.beginAdding()
+        #expect(navigation.panelSize == .compact)
+        navigation.selectProvider(.kimi)
+        #expect(navigation.panelSize == .compact)
+        navigation.returnToOverview()
+        navigation.route = .settings
+        #expect(navigation.panelSize == .compact)
+    }
+
+    @Test
+    func adaptivePanelHeightUsesFallbackThenClampsAndIgnoresOtherRoutes() {
+        let navigation = freshPanelNavigationState()
+        navigation.beginAdding()
+        #expect(navigation.panelSize == .compact)
+        navigation.reportMeasuredHeight(100, for: .addProvider)
+        #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
+        navigation.reportMeasuredHeight(900, for: .addProvider)
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+        navigation.reportMeasuredHeight(500, for: .settings)
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+        navigation.route = .settings
+        // 自适应路由保持当前高度直到新页面测量（不再强制回 compact）
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+        navigation.reportMeasuredHeight(400, for: .addProvider)
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+        // 当前 Route 全部为自适应 case；非自适应 fallback（recovery 类）在
+        // route.didSet 中保留回退 compact 的兜底分支，暂无直接可测的路由。
+    }
+
+    @Test
+    func adaptivePanelMeasurementPreservesFixedWidthAndDeduplicatesTolerance() {
+        let navigation = freshPanelNavigationState()
+        navigation.route = .addProvider
+        navigation.reportMeasuredHeight(400, for: .addProvider)
+        #expect(navigation.panelSize.width == 340)
+        let measured = navigation.panelSize
+        navigation.reportMeasuredHeight(400.5, for: .addProvider)
+        #expect(navigation.panelSize == measured)
+        navigation.reportMeasuredHeight(402, for: .addProvider)
+        #expect(navigation.panelSize.height == 402)
+    }
+    @Test
+    func overviewRouteGrowsWithSubscriptionContent() {
+        // 概览页随订阅列表增高：上报内容高度，钳制到最小/最大区间内
+        let navigation = freshPanelNavigationState()
+        navigation.route = .overview
+        navigation.reportMeasuredHeight(PanelSize.minimumAdaptiveHeight - 1, for: .overview)
+        #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
+        navigation.reportMeasuredHeight(420, for: .overview)
+        #expect(navigation.panelSize.height == 420)
+        navigation.reportMeasuredHeight(PanelSize.maximumAdaptiveHeight + 1, for: .overview)
+        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+    }
+
+    @Test
+    func subscriptionListCapKeepsOverviewBoundedBelowPanelMaximum() {
+        // 列表滚动上限为正且低于全局面板最大高度：概览最多长到上限+固定 chrome
+        #expect(PanelLayoutMetrics.subscriptionListMaxHeight > 0)
+        #expect(PanelLayoutMetrics.subscriptionListMaxHeight < PanelSize.maximumAdaptiveHeight)
+        // 内容远超列表上限时，面板高度依然被全局钳制在最大高度内
+        let navigation = freshPanelNavigationState()
+        navigation.route = .overview
+        navigation.reportMeasuredHeight(
+            PanelLayoutMetrics.subscriptionListMaxHeight + PanelLayoutMetrics.rootVerticalChrome + 200,
+            for: .overview
+        )
+        #expect(navigation.panelSize.height <= PanelSize.maximumAdaptiveHeight)
+    }
+
+    @Test
+    func addingSelectionCreatesCleanDraftAndConfigurationRoute() {
+        let navigation = freshPanelNavigationState()
+        navigation.beginAdding()
+        #expect(navigation.draft == nil)
+        #expect(navigation.route == .addProvider)
+
+        navigation.selectProvider(.kimi)
+        let draft = navigation.draft
+        #expect(draft?.platform == .kimi)
+        #expect(draft?.isDirty == false)
+        #expect(navigation.route == .addConfiguration)
+        if case .addConfiguration = navigation.content(for: []) {
+        } else { Issue.record("Provider selection did not resolve to add configuration") }
+    }
+
+    @Test
+    func editingFromCardCreatesDraftAndResolvesConfigurationRoute() {
+        let navigation = freshPanelNavigationState()
+        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        navigation.beginEditingConfiguration(subscription)
+        #expect(navigation.draft != nil)
+        #expect(navigation.route == .editConfiguration(subscription.id))
+        if case .editConfiguration(let draft, let resolved) = navigation.content(for: [subscription]) {
+            #expect(draft.original?.id == subscription.id)
+            #expect(resolved.id == subscription.id)
+            #expect(!draft.isDirty)
+        } else { Issue.record("Edit configuration route did not resolve") }
+    }
+
+    @Test
+    func invalidRouteStatesRecoverWithoutCreatingAddConfiguration() {
+        let navigation = freshPanelNavigationState()
+        navigation.route = .addConfiguration
+        #expect(isRecovery(navigation.content(for: [])))
+        navigation.route = .editConfiguration(UUID())
+        #expect(isRecovery(navigation.content(for: [])))
+    }
+
+    @Test
+    func editorDraftDirtyStateTracksEveryEditableInputAndReturnsToBaseline() {
+        let subscription = Subscription(platform: .kimi, name: "Original", authMethod: .manualAPIKey)
+        let draft = SubscriptionEditorDraft(subscription: subscription)
+        #expect(!draft.isDirty)
+        draft.name = "Renamed"
+        #expect(draft.isDirty)
+        draft.name = "Original"
+        #expect(!draft.isDirty)
+        draft.platform = .deepSeek
+        #expect(draft.isDirty)
+        draft.platform = .kimi
+        #expect(!draft.isDirty)
+        draft.apiKey = "new-key"
+        #expect(draft.isDirty)
+        draft.apiKey = ""
+        #expect(!draft.isDirty)
+        draft.authMethod = .kimiOAuth
+        #expect(draft.isDirty)
+        draft.authMethod = .manualAPIKey
+        #expect(!draft.isDirty)
+        draft.oauthCredential = testOAuthCredential
+        #expect(draft.isDirty)
+        draft.oauthCredential = nil
+        draft.browserCredential = testBrowserCredential
+        #expect(draft.isDirty)
+        draft.browserCredential = nil
+        draft.oauthTask = Task {}
+        #expect(draft.isDirty)
+        draft.cancelTasks()
+        #expect(!draft.isDirty)
+        draft.browserImportTask = Task {}
+        #expect(draft.isDirty)
+        draft.cancelTasks()
+        #expect(!draft.isDirty)
+    }
+
+    @Test
+    func newEditorDraftStartsCleanAndBecomesDirtyForInputs() {
+        let draft = SubscriptionEditorDraft(platform: .kimi)
+        #expect(!draft.isDirty)
+        draft.name = "New subscription"
+        #expect(draft.isDirty)
+        draft.name = ""
+        #expect(!draft.isDirty)
+        draft.apiKey = "key"
+        #expect(draft.isDirty)
+    }
+
+    @Test
+    func leavingBrowserAuthenticationCancelsAndClearsImportTask() {
+        let draft = SubscriptionEditorDraft(platform: .kimi)
+        let originalGeneration = draft.browserImportSessionID
+        draft.browserImportTask = Task {}
+        draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+
+        draft.leaveBrowserAuthentication()
+
+        #expect(draft.browserImportTask == nil)
+        #expect(draft.browserCredential == nil)
+        #expect(draft.browserImportSessionID != originalGeneration)
+        #expect(!draft.isDirty)
+    }
+    @Test
+    func returnToOverviewClearsDraftAndInvalidatesTasks() throws {
+        let navigation = freshPanelNavigationState()
+        navigation.beginAdding()
+        navigation.selectProvider(.deepSeek)
+        let draft = try #require(navigation.draft)
+        let generation = draft.oauthSessionID
+        navigation.returnToOverview()
+        #expect(navigation.draft == nil)
+        #expect(navigation.route == .overview)
+        #expect(draft.oauthSessionID != generation)
+    }
+
+    private var testOAuthCredential: OAuthCredential {
+        OAuthCredential(accessToken: "oauth", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+    }
+
+    private var testBrowserCredential: KimiBrowserCredential {
+        KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+    }
+
+    private func isRecovery(_ content: PanelNavigationState.Content) -> Bool {
+        if case .recovery = content { return true }
+        return false
+    }
 }

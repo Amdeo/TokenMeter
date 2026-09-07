@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import SwiftUI
 
 struct Subscription: Identifiable, Codable, Hashable, Sendable {
@@ -8,6 +9,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
     var authMethod: AuthMethod
     let createdAt: Date
     var isEnabled: Bool
+    var quotaColors: [String: UInt32]
 
     init(
         id: UUID = UUID(),
@@ -15,7 +17,8 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         name: String,
         authMethod: AuthMethod,
         createdAt: Date = .now,
-        isEnabled: Bool = true
+        isEnabled: Bool = true,
+        quotaColors: [String: UInt32] = [:]
     ) {
         self.id = id
         self.platform = platform
@@ -23,6 +26,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         self.authMethod = authMethod
         self.createdAt = createdAt
         self.isEnabled = isEnabled
+        self.quotaColors = quotaColors
     }
 
     enum AuthMethod: String, Codable, Sendable {
@@ -40,7 +44,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, platform, name, authMethod, createdAt, isEnabled
+        case id, platform, name, authMethod, createdAt, isEnabled, quotaColors
     }
 
     init(from decoder: Decoder) throws {
@@ -57,6 +61,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         }
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        quotaColors = try container.decodeIfPresent([String: UInt32].self, forKey: .quotaColors) ?? [:]
     }
 
     func encode(to encoder: Encoder) throws {
@@ -67,6 +72,100 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         try container.encode(authMethod, forKey: .authMethod)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(quotaColors, forKey: .quotaColors)
+    }
+}
+
+// MARK: - 额度颜色配置
+
+/// 订阅额度进度条颜色的键定义与解析逻辑。
+/// 值统一使用不透明的 6 位 sRGB（0xRRGGBB），避免直接持久化 SwiftUI `Color`。
+enum SubscriptionQuotaColors: Sendable {
+    /// Kimi「总使用量」聚合比例的键。
+    static let overallKey = "overall"
+    /// 未配置额度的回退键。
+    static let genericKey = "generic"
+    /// 语义稳定的额度窗口键。
+    static let fiveHourKey = "kind.fiveHour"
+    static let weeklyKey = "kind.weekly"
+
+    /// Kimi 总使用量的内置默认色。
+    static let overallDefault: Color = .indigo
+
+    /// 八个适配明暗主题的高对比预设色（避开橙/红，保留给状态语义）。
+    static let presets: [UInt32] = [
+        0x6366F1, 0x3B82F6, 0x06B6D4, 0x14B8A6,
+        0x22C55E, 0xA855F7, 0xEC4899, 0x64748B
+    ]
+
+    /// 把额度名称规范化为 `name.<...>` 专属键：去首尾空白、小写、压缩连续空白。
+    static func nameKey(_ name: String) -> String {
+        let normalized = name
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .lowercased()
+        return "name.\(normalized)"
+    }
+
+    /// 语义类型键；没有对应类型的额度返回 nil。
+    static func kindKey(for kind: Quota.Kind) -> String? {
+        switch kind {
+        case .fiveHour: fiveHourKey
+        case .weekly: weeklyKey
+        case .generic, .balance: nil
+        }
+    }
+
+    /// 内置默认色：5 小时蓝、每周绿，其余额度使用协调的青色。
+    static func defaultColor(forKind kind: Quota.Kind) -> Color {
+        switch kind {
+        case .fiveHour: .blue
+        case .weekly: .green
+        case .generic, .balance: .teal
+        }
+    }
+
+    /// 解析单个额度窗口的颜色：名称专属 → 语义类型 → generic 回退 → 内置默认。
+    static func resolve(_ colors: [String: UInt32], quota: Quota) -> Color {
+        resolve(colors, name: quota.name, kind: quota.kind)
+    }
+
+    /// 按名称与类型解析（编辑页在没有完整 Quota 时也能得到正确默认色）。
+    static func resolve(_ colors: [String: UInt32], name: String, kind: Quota.Kind) -> Color {
+        if let rgb = colors[nameKey(name)] { return Color(hex: rgb) }
+        if let key = kindKey(for: kind), let rgb = colors[key] { return Color(hex: rgb) }
+        if let rgb = colors[genericKey] { return Color(hex: rgb) }
+        return defaultColor(forKind: kind)
+    }
+
+    /// 解析 Kimi「总使用量」聚合比例的颜色：overall → generic 回退 → 内置默认。
+    static func resolveOverall(_ colors: [String: UInt32]) -> Color {
+        if let rgb = colors[overallKey] { return Color(hex: rgb) }
+        if let rgb = colors[genericKey] { return Color(hex: rgb) }
+        return overallDefault
+    }
+
+    /// 判断某个额度窗口是否存在有效的用户配置（解析链与 `resolve` 一致）。
+    static func hasConfiguration(_ colors: [String: UInt32], name: String, kind: Quota.Kind) -> Bool {
+        if colors[nameKey(name)] != nil { return true }
+        if let key = kindKey(for: kind), colors[key] != nil { return true }
+        return colors[genericKey] != nil
+    }
+
+    /// 判断 Kimi「总使用量」是否存在有效的用户配置（解析链与 `resolveOverall` 一致）。
+    static func hasOverallConfiguration(_ colors: [String: UInt32]) -> Bool {
+        colors[overallKey] != nil || colors[genericKey] != nil
+    }
+}
+
+extension Color {
+    /// 把颜色量化为不透明的 6 位 sRGB（0xRRGGBB），忽略透明度；无法解析时返回 0。
+    var tokenMeterRGB: UInt32 {
+        guard let resolved = NSColor(self).usingColorSpace(.sRGB) else { return 0 }
+        let red = Int(round(min(max(resolved.redComponent, 0), 1) * 255))
+        let green = Int(round(min(max(resolved.greenComponent, 0), 1) * 255))
+        let blue = Int(round(min(max(resolved.blueComponent, 0), 1) * 255))
+        return UInt32((red << 16) | (green << 8) | blue)
     }
 }
 
