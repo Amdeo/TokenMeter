@@ -145,12 +145,12 @@ struct SubscriptionMenuCard: View {
                     .layoutPriority(1)
                 }
 
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(TM.textTertiary)
-                    .frame(width: isReordering ? 18 : 0)
-                    .opacity(isReordering ? 1 : 0)
-                    .accessibilityHidden(true)
+                if isReordering {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(TM.textTertiary)
+                        .accessibilityHidden(true)
+                }
             }
 
             cardBody

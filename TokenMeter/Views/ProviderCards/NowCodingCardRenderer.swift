@@ -19,13 +19,19 @@ struct NowCodingCardRenderer: ProviderCardRenderer {
                                 title: quota.name,
                                 quota: quota,
                                 tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota),
-                                valueOverride: "剩余 \(quota.remainingText)"
+                                valueOverride: Self.amountText(quota),
+                                hideResetHint: true
                             )
                         }
                     }
                 }
             }
         )
+    }
+
+    /// “¥已用 / ¥总量”格式（两位小数）。
+    private static func amountText(_ quota: Quota) -> String {
+        "¥\(String(format: "%.2f", quota.used / quota.unit.displayScale)) / ¥\(String(format: "%.2f", quota.limit / quota.unit.displayScale))"
     }
 
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary? {

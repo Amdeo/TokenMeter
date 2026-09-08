@@ -1,16 +1,11 @@
 import SwiftUI
 
-/// Kimi 订阅卡：总使用量锚点 + 5 小时/每周额度行的特殊布局。
+/// Kimi 订阅卡：5 小时/每周额度行布局。总用量百分比由顶部摘要锚点呈现，
+/// 正文不再独占一行（避免与锚点重复）。
 struct KimiCardRenderer: ProviderCardRenderer {
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
         AnyView(
             VStack(alignment: .leading, spacing: 8) {
-                if let ratio = snapshot.overallUsageRatio {
-                    TotalUsageMenuRow(
-                        ratio: ratio,
-                        color: SubscriptionQuotaColors.resolveOverall(subscription.quotaColors)
-                    )
-                }
                 QuotaProgressRow(
                     title: "5 小时额度",
                     quota: snapshot.quotas.first { $0.kind == .fiveHour },

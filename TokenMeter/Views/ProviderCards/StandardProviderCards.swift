@@ -44,32 +44,6 @@ struct BalanceMenuRow: View {
     }
 }
 
-/// 总使用量比例行（如 Kimi 的 overallUsageRatio）。
-struct TotalUsageMenuRow: View {
-    let ratio: Double?
-    let color: Color
-
-    var body: some View {
-        if let ratio {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("总使用量")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(TM.textSecondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 6)
-                    Text(ratio, format: .percent.precision(.fractionLength(1)))
-                        .font(.system(size: 14, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(color)
-                }
-                MeterBar(fraction: ratio, tint: color, height: 4)
-                    .accessibilityLabel("总使用量已用比例")
-                    .accessibilityValue(ratio.formatted(.percent.precision(.fractionLength(1))))
-            }
-        }
-    }
-}
-
 /// 通用额度进度行。
 struct QuotaProgressRow: View {
     let title: String
@@ -77,6 +51,8 @@ struct QuotaProgressRow: View {
     let tint: Color
     /// 右侧主数值：nil 显示百分比，非 nil（如“剩余 $0.03”）显示金额。
     var valueOverride: String? = nil
+    /// 隐藏每日重置提示（如订阅型额度已带到期日，避免两行时间信息重复）。
+    var hideResetHint: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -112,7 +88,7 @@ struct QuotaProgressRow: View {
                             .foregroundStyle(TM.textTertiary)
                             .lineLimit(1)
                     }
-                    if let resetAt = quota.resetAt {
+                    if let resetAt = quota.resetAt, !hideResetHint {
                         Text(SubscriptionCardPresentation.resetHintText(for: resetAt))
                             .foregroundStyle(TM.textTertiary)
                             .lineLimit(1)

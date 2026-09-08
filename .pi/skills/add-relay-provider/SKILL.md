@@ -55,6 +55,60 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 - **没有/待定**：`iconResourceName: nil`，用 `fallbackSystemImage` 占位，并在完成报告中说明“待补图标”。
 - 若平台上明确有 logo 资源（如顶部导航栏 `<img src>`），也可探测页面的 logo URL 主动提议，仍以用户确认为准。
 
+### 卡片样式可视化（生成前先让用户看效果）
+
+探测确认接口能力后、生成模块之前，**必须把候选卡片样式用 ASCII 预览展示给用户**，
+确认是 TA 想要的样子再生成——避免做完整套才发现卡片布局不对。
+
+根据探测到的接口能力**先自动选型**，再展示预览：
+
+| 接口能力 | 默认卡片 | 说明 |
+| --- | --- | --- |
+| 仅有余额字段（`data.balance` / `data.quota` 无订阅接口） | **余额卡**（`BalanceCardRenderer`） | 单行可用余额，最简 |
+| 余额 + 订阅/额度窗口（有 `/subscription/self` 或额度 reset） | **混合卡**（自定义 `NowCodingCardRenderer` 型） | 顶部摘要余额 + 正文多个额度行 |
+| 无余额、纯月/周额度窗口 | **额度列表卡**（`QuotaListCardRenderer`） | 多个“已用/限额”进度行 |
+
+按上面的选型给出对应 ASCII 预览（替换为真实站名与探测到的数值），放在生成前的回复里，
+并用 `ask_user_question`（带 preview）让用户确认或改选。示例：
+
+```text
+余额卡：
+┌──────────────────────────────────────────┐
+│ [icon] NowCoding · 网页登录态      余额   │
+│         NowCoding                  ¥19.39 │
+│  ──────────────────────────────────────  │
+│  可用余额                    ¥19.39       │
+└──────────────────────────────────────────┘
+
+混合卡（余额 + 订阅）：
+┌──────────────────────────────────────────┐
+│ [icon] NowCoding · 网页登录态      余额   │
+│         NowCoding                  ¥19.39 │
+│  ──────────────────────────────────────  │
+│  Codex 月卡 1500$     ¥10.58 / ¥50.00    │
+│  [██████████░░░░░░░░]                    │
+│  正常 · 剩 26 天到期                     │
+│  Codex 月卡 900$      ¥29.97 / ¥30.00    │
+│  [██████████████████]                    │
+│  即将用尽 · 剩 20 天到期                 │
+└──────────────────────────────────────────┘
+
+额度列表卡：
+┌──────────────────────────────────────────┐
+│ [icon] 某站 · 网页登录态          每月   │
+│        某站                      72.1%   │
+│  ──────────────────────────────────────  │
+│  每月窗口              72.1%             │
+│  [███████████░░░░░░]                    │
+│  正常 · 3 天后刷新额度                    │
+└──────────────────────────────────────────┘
+```
+
+确认/改选后按选择生成 3.1 中的 `cardRenderer` 与 `makeDemoSnapshot`。
+混合卡需额外：探测订阅接口（如 `/api/subscription/self`）的字段
+（`amount_total`/`amount_used`/`end_time`/`next_reset_time`/`plan_title`），
+并把订阅映射为 `Quota` 行（`kind: .generic`，`resetAt` 填日重置、`expiresAt` 填到期日）。
+
 ## 1. 问答收集参数
 
 向用户提问，收集以下信息。**每项给出推荐默认值**，用户可接受默认或改值。
@@ -87,7 +141,7 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 | 12 | 主题色 tintRGB | `0x2DD4BF`（青绿）或按品牌色 |
 | 13 | 官方图标来源（文件路径或 URL） | 无 → 先问；有 → 按 3.5 接入；探测到页面 logo 可主动提议 |
 | 14 | SF Symbol 占位图标 | `bus.fill`（无官方图标时用） |
-| 15 | 特殊卡片需求 | 默认 `BalanceCardRenderer`（单行余额）；若站点有额度窗口/订阅信息再评估 |
+| 15 | 卡片样式（见 0.5 卡片样式可视化） | 按接口能力自动选型后，用 ASCII 预览让用户确认 |
 
 ## 2. 探测确认（推荐）
 
@@ -140,7 +194,9 @@ struct <Name>ProviderDefinition: ProviderDefinition {
         )]
     }
 
-    let cardRenderer: any ProviderCardRenderer = BalanceCardRenderer()
+    let cardRenderer: any ProviderCardRenderer = BalanceCardRenderer()   // 按 0.5 卡片样式确认结果选择：
+    // 余额卡 → BalanceCardRenderer；额度列表卡 → QuotaListCardRenderer(anchorHint: 可选)；
+    // 混合卡（余额+订阅）→ 自定义 <Name>CardRenderer（见 TokenMeter/Views/ProviderCards/NowCodingCardRenderer.swift）
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         <Name>UsageProvider(subscription: subscription)

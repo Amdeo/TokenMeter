@@ -62,6 +62,7 @@ struct <Name>ProviderDefinition: ProviderDefinition {
 ```
 
 `<Name>UsageProvider` 实现 `UsageProvider.fetchUsage()`：
+
 - `credentials.apiKey(for: subscription.id)` 取 key，空则抛 `.notConfigured`。
 - 用 `APIClient.get`（数字字符串混用用 `FlexibleNumber`；字段多变用 `JSONValue`
   别名查询）。
@@ -74,11 +75,47 @@ struct <Name>ProviderDefinition: ProviderDefinition {
 
 ## 4. 卡片
 
-- 通用额度列表 → `QuotaListCardRenderer()`。
-- 某额度窗口优先做顶部摘要 → `QuotaListCardRenderer(anchorHint: "月")`。
-- 布局明显不同 → 新建 `<Name>CardRenderer` 实现 `ProviderCardRenderer`
-  （参考 `KimiCardRenderer.swift`），在定义中替换 `cardRenderer`。
-  特殊数据放 `snapshot.providerData`（Codable JSON 值树），标准卡片不消费它。
+**先用 ASCII 预览把候选卡片样式展示给用户确认，再做实现**（避免做完整套才发现布局不对）。
+按接口能力选型：
+
+| 接口能力 | 默认卡片 |
+| --- | --- |
+| 余额型（仅 balance 字段） | `BalanceCardRenderer`（单行可用余额） |
+| 额度窗口型（月/周/小时，多窗口） | `QuotaListCardRenderer()` |
+| 某额度窗口优先做顶部摘要 | `QuotaListCardRenderer(anchorHint: "月")` |
+| 余额 + 订阅/多额度混合 | 自定义 `<Name>CardRenderer`（参考 `NowCodingCardRenderer.swift`：顶部摘要余额 + 正文额度行） |
+| 布局明显不同 | 新建 `<Name>CardRenderer` 实现 `ProviderCardRenderer`（参考 `KimiCardRenderer.swift`），特殊数据放 `snapshot.providerData` |
+
+预览示意（用真实站名/数值替换，`ask_user_question` 带 preview 展示）：
+
+```text
+余额卡：
+┌──────────────────────────────────────┐
+│ [icon] XX站 · 网页登录态      余额    │
+│         可用余额             ¥19.39   │
+└──────────────────────────────────────┘
+
+额度列表卡：
+┌──────────────────────────────────────┐
+│ [icon] XX站 · 网页登录态      每周    │
+│         每周额度              64%    │
+│  ──────────────────────────────────  │
+│  每周窗口             64%             │
+│  [████████░░░░]                      │
+│  正常 · 2 天后刷新额度                │
+└──────────────────────────────────────┘
+
+混合卡（余额+订阅）：
+┌──────────────────────────────────────┐
+│ [icon] XX站 · 网页登录态      余额    │
+│         可用余额             ¥19.39   │
+│  ──────────────────────────────────  │
+│  套餐 A                ¥10.58/¥50    │
+│  [██████████░░]                      │
+│  正常 · 剩 26 天到期                  │
+└──────────────────────────────────────┘
+```
+
 - **禁止**在共享 View 中新增按供应商的 `switch`。
 
 ## 5. 图标
@@ -102,6 +139,7 @@ struct <Name>ProviderDefinition: ProviderDefinition {
 ## 7. 测试
 
 在 `TokenMeter/Tests/` 下（新文件则加入 TokenMeterTests target）：
+
 - **解析 fixture**：最小 JSON → decode → 断言额度字段。
 - **失败响应**：空/缺字段/非 2xx → 断言抛出对应错误。
 - 新增测试文件时同步 pbxproj 的 Tests group / Sources phase。
