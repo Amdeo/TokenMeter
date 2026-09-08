@@ -11,6 +11,8 @@ final class EmbeddedNowCodingLoginController: NSObject, NSWindowDelegate, Browse
     private static let pollInterval: Duration = .seconds(1)
     private static let timeout: TimeInterval = 5 * 60
 
+    let sessionDomains = ["nowcoding.ai"]
+
     private var panel: NSPanel?
     private var webView: WKWebView?
     private var closedByUser = false

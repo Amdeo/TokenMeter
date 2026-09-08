@@ -77,7 +77,8 @@ struct SubscriptionEditorSheet: View {
                             onStartOAuth: startOAuth,
                             onCancelOAuth: cancelOAuth,
                             isImportingBrowser: draft.browserImportTask != nil,
-                            onStartEmbeddedLogin: startEmbeddedLogin,
+                            onStartEmbeddedLogin: { startEmbeddedLogin() },
+                            onSwitchBrowserAccount: { startEmbeddedLogin(switchingAccount: true) },
                             onOpenURL: { openURL($0) },
                             onCopy: copy
                         )
@@ -220,11 +221,16 @@ struct SubscriptionEditorSheet: View {
         }
     }
 
-    private func startEmbeddedLogin() {
+    private func startEmbeddedLogin(switchingAccount: Bool = false) {
         resetOAuthState(); draft.leaveBrowserAuthentication(); let sessionID = draft.browserImportSessionID; draft.message = nil
         draft.browserImportTask = Task { @MainActor in
             do {
-                let credential = try await Self.makeBrowserLoginController(for: draft.providerID).login()
+                let controller = Self.makeBrowserLoginController(for: draft.providerID)
+                // 切换账号：先清除该供应商域名的内置浏览器会话，登录页回到未登录态。
+                if switchingAccount {
+                    await BrowserSessionSiteData.clear(domains: controller.sessionDomains)
+                }
+                let credential = try await controller.login()
                 let isBrowserFlow = draft.authMethodID == .kimiBrowserSession
                     || draft.authMethodID == .ccbusBrowserSession
                     || draft.authMethodID == .apikeyFunBrowserSession
@@ -390,6 +396,7 @@ private struct AuthMethodSelection: View {
     let onCancelOAuth: () -> Void
     let isImportingBrowser: Bool
     let onStartEmbeddedLogin: () -> Void
+    let onSwitchBrowserAccount: () -> Void
     let onOpenURL: (URL) -> Void
     let onCopy: (String) -> Void
 
@@ -501,12 +508,19 @@ private struct AuthMethodSelection: View {
     @ViewBuilder
     private var browserSessionForm: some View {
         VStack(alignment: .leading, spacing: 10) {
-            EditorSoftButton(
-                title: isImportingBrowser ? "正在登录…" : "登录账号",
-                systemImage: "person.crop.circle",
-                prominent: true
-            ) { onStartEmbeddedLogin() }
-            .disabled(isImportingBrowser)
+            HStack(spacing: 8) {
+                EditorSoftButton(
+                    title: isImportingBrowser ? "正在登录…" : "登录账号",
+                    systemImage: "person.crop.circle",
+                    prominent: true
+                ) { onStartEmbeddedLogin() }
+                .disabled(isImportingBrowser)
+                EditorSoftButton(
+                    title: "切换账号",
+                    systemImage: "person.2"
+                ) { onSwitchBrowserAccount() }
+                .disabled(isImportingBrowser)
+            }
             if isImportingBrowser {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -520,7 +534,7 @@ private struct AuthMethodSelection: View {
                     .font(.system(size: 11))
                     .foregroundStyle(TM.ok)
             }
-            Text("在内置窗口的官方页面完成登录，TokenMeter 只读取登录态。")
+            Text("在内置窗口的官方页面完成登录，TokenMeter 只读取登录态。已登录时窗口会自动完成；如需换号，点「切换账号」先清除已保存的网页登录。")
                 .font(.system(size: 10))
                 .foregroundStyle(TM.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

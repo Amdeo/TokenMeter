@@ -13,6 +13,17 @@ private func freshPanelNavigationState() -> PanelNavigationState {
 @MainActor
 struct SettingsAndNotificationTests {
     @Test
+    func browserSessionSiteDataMatchesExactDomainAndSubdomainsOnly() {
+        #expect(BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: "kimi.com"))
+        #expect(BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: "www.kimi.com"))
+        #expect(BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: ".kimi.com"))
+        #expect(BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: "AUTH.KIMI.COM"))
+        #expect(!BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: "notkimi.com"))
+        #expect(!BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: "kimi.com.evil.cn"))
+        #expect(!BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: "ccbus.top"))
+    }
+
+    @Test
     func panelVisibilityGateFiresOncePerDisplay() {
         var gate = PanelVisibilityGate()
         let firstDisplay = gate.didReceiveDisplayEvent()

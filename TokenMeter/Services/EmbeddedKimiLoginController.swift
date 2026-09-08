@@ -5,7 +5,34 @@ import WebKit
 /// 各供应商实现自己的登录页加载与 localStorage 提取逻辑。
 @MainActor
 protocol BrowserSessionLogining {
+    /// 内置浏览器会话覆盖的目标域（含子域），切换账号时用于清除站点数据。
+    var sessionDomains: [String] { get }
     func login() async throws -> BrowserLoginResult
+}
+
+/// 内置浏览器会话的站点数据：按域清除 WKWebView 持久化数据，使登录页回到未登录态。
+/// 只影响内嵌登录窗口的免登录会话，不影响已保存到凭证文件的网页登录态凭证。
+enum BrowserSessionSiteData {
+    /// WKWebsiteDataRecord.displayName 是否属于目标域（含子域；忽略大小写与前导点）。
+    static func matches(domain: String, recordDisplayName: String) -> Bool {
+        var host = recordDisplayName.lowercased()
+        if host.hasPrefix(".") { host.removeFirst() }
+        let domain = domain.lowercased()
+        return host == domain || host.hasSuffix("." + domain)
+    }
+
+    /// 清除默认数据存储中属于目标域的全部站点数据；无匹配记录时不做任何事。
+    @MainActor
+    static func clear(domains: [String]) async {
+        let dataStore = WKWebsiteDataStore.default()
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        let records = await dataStore.dataRecords(ofTypes: types)
+        let targets = records.filter { record in
+            domains.contains { matches(domain: $0, recordDisplayName: record.displayName) }
+        }
+        guard !targets.isEmpty else { return }
+        await dataStore.removeData(ofTypes: types, for: targets)
+    }
 }
 
 /// 内嵌 WKWebView 的 Kimi 账号登录窗口：会话由 App 自持，
@@ -16,6 +43,9 @@ final class EmbeddedKimiLoginController: NSObject, NSWindowDelegate, BrowserSess
     private static let windowSize = NSSize(width: 920, height: 700)
     private static let pollInterval: Duration = .seconds(1)
     private static let timeout: TimeInterval = 5 * 60
+
+    /// Kimi 登录页在 kimi.com 域内（含 auth/www 等子域）。
+    let sessionDomains = ["kimi.com"]
 
     private var panel: NSPanel?
     private var webView: WKWebView?

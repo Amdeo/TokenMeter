@@ -10,6 +10,8 @@ final class EmbeddedAPIKeyFunLoginController: NSObject, NSWindowDelegate, Browse
     private static let pollInterval: Duration = .seconds(1)
     private static let timeout: TimeInterval = 5 * 60
 
+    let sessionDomains = ["apikey.fun"]
+
     private var panel: NSPanel?
     private var webView: WKWebView?
     private var closedByUser = false
