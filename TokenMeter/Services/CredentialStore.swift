@@ -27,7 +27,7 @@ enum BrowserLoginResult: Sendable, Equatable {
 }
 
 /// 凭证文件中的单条订阅条目（互斥字段：一次只保存一种认证方式的凭据）。
-struct CredentialEntry: Codable, Sendable {
+struct CredentialEntry: Codable, Sendable, Equatable {
     var apiKey: String?
     var oauthCredential: OAuthCredential?
     var browserCredential: KimiBrowserCredential?
@@ -81,45 +81,88 @@ enum StoredCredential: Sendable, Equatable {
 }
 
 struct CredentialStore: Sendable {
-    private struct CredentialFile: Codable, Sendable {
+    struct CredentialFile: Codable, Sendable {
         var entries: [String: CredentialEntry] = [:]
     }
 
+    /// 所有实例共享同一把锁：Provider 可能各自创建 store，实例锁无法保护同一文件。
+    private static let fileLock = NSRecursiveLock()
     private let fileURL: URL
 
     init(fileURL: URL = CredentialStore.defaultFileURL) {
         self.fileURL = fileURL
     }
 
+    var storageURL: URL { fileURL }
+
+    static func withExclusiveAccess<T>(_ operation: () throws -> T) rethrows -> T {
+        try fileLock.withLock(operation)
+    }
+
+    func snapshot() throws -> CredentialFile {
+        try Self.withExclusiveAccess { try load() }
+    }
+
+    func encodedSnapshot() throws -> Data {
+        try Self.withExclusiveAccess { try JSONEncoder().encode(load()) }
+    }
+
+    func replace(with file: CredentialFile) throws {
+        try Self.withExclusiveAccess { try write(file) }
+    }
+
+    /// 迁移事务写入预先编码并已校验的完整凭据文件，保留字节哈希以供 journal 恢复判断。
+    func replace(withEncoded data: Data) throws {
+        try Self.withExclusiveAccess {
+            guard !data.isEmpty, (try? JSONDecoder().decode(CredentialFile.self, from: data)) != nil else {
+                throw CredentialStoreError.invalidFile
+            }
+            try writeEncoded(data)
+        }
+    }
+
     func apiKey(for subscriptionID: UUID) -> String? {
-        try? load().entries[subscriptionID.uuidString]?.apiKey
+        Self.fileLock.withLock {
+            try? load().entries[subscriptionID.uuidString]?.apiKey
+        }
     }
 
     func oauthCredential(for subscriptionID: UUID) -> OAuthCredential? {
-        try? load().entries[subscriptionID.uuidString]?.oauthCredential
+        Self.fileLock.withLock {
+            try? load().entries[subscriptionID.uuidString]?.oauthCredential
+        }
     }
 
     func browserCredential(for subscriptionID: UUID) -> KimiBrowserCredential? {
-        try? load().entries[subscriptionID.uuidString]?.browserCredential
+        Self.fileLock.withLock {
+            try? load().entries[subscriptionID.uuidString]?.browserCredential
+        }
     }
 
     func cookieSession(for subscriptionID: UUID) -> CookieSessionCredential? {
-        try? load().entries[subscriptionID.uuidString]?.cookieCredential
+        Self.fileLock.withLock {
+            try? load().entries[subscriptionID.uuidString]?.cookieCredential
+        }
     }
 
     /// 按认证流程读取通用凭据（新认证方式接入的统一入口）。
     func credential(for subscriptionID: UUID, flowID: AuthFlowID) -> StoredCredential? {
-        guard let entry = try? load().entries[subscriptionID.uuidString] else { return nil }
-        return StoredCredential.from(entry: entry, flowID: flowID)
+        Self.fileLock.withLock {
+            guard let entry = try? load().entries[subscriptionID.uuidString] else { return nil }
+            return StoredCredential.from(entry: entry, flowID: flowID)
+        }
     }
 
     /// 保存通用凭据（互斥：同一订阅只保留当前认证方式的凭据）。
     func save(_ credential: StoredCredential, for subscriptionID: UUID) throws {
-        var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
-        credential.apply(to: &entry)
-        file.entries[subscriptionID.uuidString] = entry
-        try write(file)
+        try Self.fileLock.withLock {
+            var file = try load()
+            var entry = file.entries[subscriptionID.uuidString] ??
+                    CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+            credential.apply(to: &entry)
+            file.entries[subscriptionID.uuidString] = entry
+            try write(file)
+        }
     }
 
     func isExpiringSoon(_ credential: OAuthCredential, now: Date = .now) -> Bool {
@@ -129,51 +172,55 @@ struct CredentialStore: Sendable {
     func save(apiKey: String, for subscriptionID: UUID) throws {
         let value = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { throw CredentialStoreError.emptyCredential }
-        var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
-        entry.apiKey = value
-        entry.oauthCredential = nil
-        entry.browserCredential = nil
-        file.entries[subscriptionID.uuidString] = entry
-        try write(file)
+        try Self.fileLock.withLock {
+            var file = try load()
+            var entry = file.entries[subscriptionID.uuidString] ??
+                    CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+            StoredCredential.apiKey(value).apply(to: &entry)
+            file.entries[subscriptionID.uuidString] = entry
+            try write(file)
+        }
     }
 
     func save(oauthCredential: OAuthCredential, for subscriptionID: UUID) throws {
-        var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
-        entry.apiKey = nil
-        entry.oauthCredential = oauthCredential
-        entry.browserCredential = nil
-        file.entries[subscriptionID.uuidString] = entry
-        try write(file)
+        try Self.fileLock.withLock {
+            var file = try load()
+            var entry = file.entries[subscriptionID.uuidString] ??
+                    CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+            StoredCredential.oauth(oauthCredential).apply(to: &entry)
+            file.entries[subscriptionID.uuidString] = entry
+            try write(file)
+        }
     }
 
     func save(browserCredential: KimiBrowserCredential, for subscriptionID: UUID) throws {
-        var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
-        entry.apiKey = nil
-        entry.oauthCredential = nil
-        entry.browserCredential = browserCredential
-        entry.cookieCredential = nil
-        file.entries[subscriptionID.uuidString] = entry
-        try write(file)
+        try Self.fileLock.withLock {
+            var file = try load()
+            var entry = file.entries[subscriptionID.uuidString] ??
+                    CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+            StoredCredential.browserSession(browserCredential).apply(to: &entry)
+            file.entries[subscriptionID.uuidString] = entry
+            try write(file)
+        }
     }
 
     func save(cookieSession: CookieSessionCredential, for subscriptionID: UUID) throws {
-        var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
-        entry.apiKey = nil
-        entry.oauthCredential = nil
-        entry.browserCredential = nil
-        entry.cookieCredential = cookieSession
-        file.entries[subscriptionID.uuidString] = entry
-        try write(file)
+        try Self.fileLock.withLock {
+            var file = try load()
+            var entry = file.entries[subscriptionID.uuidString] ??
+                    CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+            StoredCredential.cookieSession(cookieSession).apply(to: &entry)
+            file.entries[subscriptionID.uuidString] = entry
+            try write(file)
+        }
     }
 
     func remove(for subscriptionID: UUID) throws {
-        var file = try load()
-        guard file.entries.removeValue(forKey: subscriptionID.uuidString) != nil else { return }
-        try write(file)
+        try Self.fileLock.withLock {
+            var file = try load()
+            guard file.entries.removeValue(forKey: subscriptionID.uuidString) != nil else { return }
+            try write(file)
+        }
     }
 
     private func load() throws -> CredentialFile {
@@ -188,10 +235,13 @@ struct CredentialStore: Sendable {
     }
 
     private func write(_ file: CredentialFile) throws {
+        try writeEncoded(JSONEncoder().encode(file))
+    }
+
+    private func writeEncoded(_ data: Data) throws {
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-        let data = try JSONEncoder().encode(file)
         try data.write(to: fileURL, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
     }

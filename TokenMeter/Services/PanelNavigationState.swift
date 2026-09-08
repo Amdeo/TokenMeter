@@ -39,6 +39,7 @@ final class PanelNavigationState {
     enum Route: Equatable, Hashable {
         case overview
         case settings
+        case migration
         case addProvider
         case addConfiguration
         case editConfiguration(UUID)
@@ -47,6 +48,7 @@ final class PanelNavigationState {
     enum Content {
         case overview
         case settings
+        case migration
         case addProvider
         case addConfiguration(SubscriptionEditorDraft)
         case editConfiguration(draft: SubscriptionEditorDraft, subscription: Subscription)
@@ -123,6 +125,7 @@ final class PanelNavigationState {
         switch route {
         case .overview: return .overview
         case .settings: return .settings
+        case .migration: return .migration
         case .addProvider: return .addProvider
         case .addConfiguration:
             guard let draft, draft.original == nil else { return .recovery }
@@ -133,6 +136,12 @@ final class PanelNavigationState {
             else { return .recovery }
             return .editConfiguration(draft: draft, subscription: subscription)
         }
+    }
+
+    func returnToSettings() {
+        draft?.cancelTasks()
+        draft = nil
+        route = .settings
     }
 
     func returnToOverview() {

@@ -36,10 +36,15 @@ struct APIKeyFunSessionRefresher: Sendable {
         request.httpBody = try JSONEncoder().encode(["refresh_token": credential.refreshToken])
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw APIKeyFunBrowserCredentialError.expired
+            throw APIKeyFunBrowserCredentialError.refreshFailed("无效响应")
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw APIKeyFunBrowserCredentialError.expired
+            // 401/403/400 表示 refresh_token 被拒绝（登录态真失效）；
+            // 其余状态码（5xx/429）是服务问题，不应让调用方误判为需要重新登录。
+            if [400, 401, 403].contains(http.statusCode) {
+                throw APIKeyFunBrowserCredentialError.expired
+            }
+            throw APIKeyFunBrowserCredentialError.refreshFailed("HTTP \(http.statusCode)")
         }
         guard let payload = try? JSONDecoder().decode(RefreshResponse.self, from: data),
               payload.code == 0,
@@ -48,7 +53,7 @@ struct APIKeyFunSessionRefresher: Sendable {
               !accessToken.isEmpty,
               let refreshToken = data.refreshToken?.trimmingCharacters(in: .whitespacesAndNewlines),
               !refreshToken.isEmpty else {
-            throw APIKeyFunBrowserCredentialError.expired
+            throw APIKeyFunBrowserCredentialError.invalidCredentials
         }
         let expiresAt: Date
         if let expiresIn = data.expiresIn, expiresIn > 0 {

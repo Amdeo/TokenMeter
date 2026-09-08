@@ -7,6 +7,8 @@ import SwiftUI
 struct SettingsPanel: View {
     @Bindable var settings: SettingsStore
     let onBack: () -> Void
+    let onMigration: () -> Void
+    let migrationRecoveryError: String?
     let onPreview: () -> Void
 
     var body: some View {
@@ -94,6 +96,35 @@ struct SettingsPanel: View {
                     settingsSection("余额阈值") {
                         thresholdRow("CNY", value: $settings.cnyBalanceThreshold)
                         thresholdRow("USD", value: $settings.usdBalanceThreshold, isLast: true)
+                    }
+
+                    settingsSection("数据迁移", footer: {
+                        if let migrationRecoveryError {
+                            Label(migrationRecoveryError, systemImage: "exclamationmark.triangle.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(TM.danger)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }) {
+                        Button(action: onMigration) {
+                            HStack {
+                                Image(systemName: "arrow.left.arrow.right")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(TM.accent)
+                                Text("导入或导出凭据迁移包")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(TM.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(TM.textTertiary)
+                            }
+                            .padding(.horizontal, TM.cardContentHorizontal)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("导入或导出订阅配置和私有凭据")
                     }
 
                     #if DEBUG

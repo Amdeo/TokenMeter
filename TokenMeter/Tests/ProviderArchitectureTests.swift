@@ -190,6 +190,27 @@ struct StoredCredentialTests {
         try store.save(apiKey: "legacy-key", for: id)
         #expect(store.credential(for: id, flowID: .apiKey) == .apiKey("legacy-key"))
     }
+
+    @Test
+    func typedSavesClearEveryOtherCredentialField() throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        let cookie = CookieSessionCredential(sessionCookie: "s", userID: "u")
+
+        // cookie 会话先写入，随后保存 API Key 必须清空 cookie。
+        try store.save(cookieSession: cookie, for: id)
+        #expect(store.cookieSession(for: id) == cookie)
+        try store.save(apiKey: "key-1", for: id)
+        #expect(store.cookieSession(for: id) == nil)
+        #expect(store.apiKey(for: id) == "key-1")
+
+        // API Key 已存在时保存 OAuth 凭证，必须清空 API Key。
+        let oauth = OAuthCredential(accessToken: "a", refreshToken: "r", expiresAt: .distantFuture, tokenType: "Bearer")
+        try store.save(oauthCredential: oauth, for: id)
+        #expect(store.apiKey(for: id) == nil)
+        #expect(store.oauthCredential(for: id) == oauth)
+    }
 }
 
 // MARK: - 卡片渲染器
@@ -264,6 +285,31 @@ struct CardRendererTests {
         let summary = try #require(renderer.summary(subscription: subscription, snapshot: snapshot))
         #expect(summary.label == "5 小时额度")
         #expect(renderer.status(subscription: subscription, snapshot: snapshot) == .warning)
+    }
+
+    @Test
+    func kimiCardBalanceFallbackBodyAndStatusUseBalance() throws {
+        // API Key 回退余额：没有 5 小时/每周额度，状态只看余额，正文渲染余额行。
+        let renderer = KimiCardRenderer()
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
+        let fallback = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(
+                name: "可用余额", used: 0, limit: 3.5, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            )
+        ])
+
+        #expect(renderer.summary(subscription: subscription, snapshot: fallback) == nil)
+        #expect(renderer.status(subscription: subscription, snapshot: fallback) == .normal)
+        // makeBody 必须能渲染回退余额；余额被扣超时状态为 exhausted。
+        _ = renderer.makeBody(subscription: subscription, snapshot: fallback)
+        let overspent = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(
+                name: "可用余额", used: 1, limit: 0.5, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            )
+        ])
+        #expect(renderer.status(subscription: subscription, snapshot: overspent) == .exhausted)
     }
 
     @Test
@@ -527,5 +573,189 @@ struct NowCodingTests {
         // PlanDisplay 的标题清洗逻辑在类型内；直接验证期望结果（全角】分隔）。
         let core = title.split(separator: "】").last.map(String.init) ?? title
         #expect(core == "Codex 月卡 1500$")
+    }
+}
+
+// MARK: - BrowserSessionFlow 通用会话流程
+
+struct BrowserSessionFlowTests {
+    private func makeStore() -> (CredentialStore, URL) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TokenMeterTests-\(UUID().uuidString)")
+            .appendingPathComponent("credentials.json")
+        return (CredentialStore(fileURL: url), url)
+    }
+
+    private func makeCredential(expiresIn: TimeInterval) -> KimiBrowserCredential {
+        KimiBrowserCredential(
+            accessToken: "access", refreshToken: "refresh",
+            expiresAt: Date.now.addingTimeInterval(expiresIn), tokenType: "Bearer"
+        )
+    }
+
+    private func makeConfiguration(
+        store: CredentialStore,
+        id: UUID,
+        refresh: @escaping (KimiBrowserCredential) async throws -> KimiBrowserCredential
+    ) -> BrowserSessionFlow.Configuration {
+        BrowserSessionFlow.Configuration(
+            providerID: .ccbus,
+            subscriptionID: id,
+            credentials: store,
+            isUsable: { $0.expiresAt > .now },
+            refresh: refresh,
+            isInvalid: { ($0 as? CCBusBrowserCredentialError)?.indicatesInvalidCredential ?? false },
+            invalidMessage: "CCBus 网页登录态已过期，请在订阅设置中重新登录"
+        )
+    }
+
+    @Test
+    func usableCredentialSkipsRefresh() async throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        var refreshCount = 0
+        let configuration = makeConfiguration(store: store, id: id) { credential in
+            refreshCount += 1
+            return credential
+        }
+        let credential = makeCredential(expiresIn: 3_600)
+        let result = try await BrowserSessionFlow.fetchWithRetry(
+            configuration, stored: credential
+        ) { _ in "ok" }
+        #expect(result == "ok")
+        #expect(refreshCount == 0)
+    }
+
+    @Test
+    func expiredCredentialRefreshesAndPersistsBeforeFetch() async throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        var fetchedToken: String?
+        let configuration = makeConfiguration(store: store, id: id) { _ in
+            makeCredential(expiresIn: 3_600)
+        }
+        let result = try await BrowserSessionFlow.fetchWithRetry(
+            configuration, stored: makeCredential(expiresIn: -60)
+        ) { credential in
+            fetchedToken = credential.accessToken
+            return credential.expiresAt
+        }
+        #expect(result != nil)
+        // 刷新结果已回写凭证文件，业务请求使用的是新凭证。
+        #expect(fetchedToken == "access")
+        let persisted = try #require(store.browserCredential(for: id))
+        #expect(persisted.expiresAt.timeIntervalSinceNow > 3_000)
+    }
+
+    @Test
+    func unauthorizedFetchRetriesOnceWithForcedRefresh() async throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        var refreshCount = 0
+        let configuration = makeConfiguration(store: store, id: id) { _ in
+            refreshCount += 1
+            return makeCredential(expiresIn: 3_600)
+        }
+        var attempts = 0
+        let result = try await BrowserSessionFlow.fetchWithRetry(
+            configuration, stored: makeCredential(expiresIn: 3_600)
+        ) { _ in
+            attempts += 1
+            if attempts == 1 {
+                throw UsageProviderError.httpStatus(401)
+            }
+            return "recovered"
+        }
+        #expect(result == "recovered")
+        #expect(attempts == 2)
+        #expect(refreshCount == 1)
+    }
+
+    @Test
+    func unauthorizedAfterPriorRefreshReportsAuthenticationRequired() async throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        let configuration = makeConfiguration(store: store, id: id) { _ in
+            makeCredential(expiresIn: 3600)
+        }
+        do {
+            _ = try await BrowserSessionFlow.fetchWithRetry(
+                configuration, stored: makeCredential(expiresIn: -60)
+            ) { _ in throw UsageProviderError.httpStatus(401) }
+            #expect(Bool(false))
+        } catch UsageProviderError.authenticationRequired {
+            #expect(Bool(true))
+        } catch {
+            #expect(Bool(false))
+        }
+    }
+
+    @Test
+    func invalidRefreshCredentialMapsToAuthenticationRequired() async throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        let configuration = makeConfiguration(store: store, id: id) { _ in
+            throw CCBusBrowserCredentialError.expired
+        }
+        do {
+            _ = try await BrowserSessionFlow.fetchWithRetry(
+                configuration, stored: makeCredential(expiresIn: -60)
+            ) { _ in "never" }
+            #expect(Bool(false))
+        } catch UsageProviderError.authenticationRequired {
+            #expect(Bool(true))
+        } catch {
+            #expect(Bool(false))
+        }
+    }
+
+    @Test
+    func refreshNetworkFailureMapsToRequestFailedNotAuth() async throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        let configuration = makeConfiguration(store: store, id: id) { _ in
+            throw CCBusBrowserCredentialError.refreshFailed("HTTP 502")
+        }
+        do {
+            _ = try await BrowserSessionFlow.fetchWithRetry(
+                configuration, stored: makeCredential(expiresIn: -60)
+            ) { _ in "never" }
+            #expect(Bool(false))
+        } catch UsageProviderError.requestFailed {
+            #expect(Bool(true))
+        } catch UsageProviderError.authenticationRequired {
+            #expect(Bool(false))
+        } catch {
+            #expect(Bool(false))
+        }
+    }
+
+    @Test
+    func retryRefreshFailureMapsToRequestFailed() async throws {
+        let (store, url) = makeStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let id = UUID()
+        var refreshCount = 0
+        let configuration = makeConfiguration(store: store, id: id) { _ in
+            refreshCount += 1
+            throw CCBusBrowserCredentialError.refreshFailed("HTTP 503")
+        }
+        do {
+            _ = try await BrowserSessionFlow.fetchWithRetry(
+                configuration, stored: makeCredential(expiresIn: 3_600)
+            ) { _ in throw UsageProviderError.httpStatus(403) }
+            #expect(Bool(false))
+        } catch UsageProviderError.requestFailed {
+            #expect(Bool(true))
+        } catch {
+            #expect(Bool(false))
+        }
+        #expect(refreshCount == 1)
     }
 }

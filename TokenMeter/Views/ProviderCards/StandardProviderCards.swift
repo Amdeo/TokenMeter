@@ -29,10 +29,11 @@ struct MeterBar: View {
 /// 余额单行展示（无进度条）。
 struct BalanceMenuRow: View {
     let quota: Quota?
+    var title: String = "可用余额"
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("可用余额")
+            Text(title)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(TM.textSecondary)
             Spacer(minLength: 8)

@@ -52,6 +52,8 @@ struct KimiUsageProvider: UsageProvider {
     let subscription: Subscription
     private let credentials = CredentialStore()
 
+    // Coding API（API Key / Kimi Code OAuth）使用 kimi_cli 平台头；
+    // 网页登录态不能复用这组头或这个接口，实测会被 API 以 401 拒绝。
     private static let commonHeaders: [String: String] = [
         "User-Agent": "KimiCLI/\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")",
         "X-Msh-Platform": "kimi_cli",
@@ -62,6 +64,8 @@ struct KimiUsageProvider: UsageProvider {
         "X-Msh-Device-Id": UUID().uuidString.replacingOccurrences(of: "-", with: "")
     ]
 
+    // 网页登录态只调用 www.kimi.com 的订阅统计接口，认证依赖网页登录态
+    // token 与 web 平台头；该接口同时返回 5 小时、7 天和总使用量。
     private static let browserHeaders: [String: String] = [
         "X-Msh-Platform": "web",
         "X-Msh-Version": "2.1.0",
@@ -72,8 +76,11 @@ struct KimiUsageProvider: UsageProvider {
     ]
 
     func fetchUsage() async throws -> UsageSnapshot {
+        // 认证方式决定上游数据源：API Key / OAuth 走 Coding API，
+        // 网页登录态走 kimi.com 的订阅统计 API，二者不能混用凭证或请求头。
         switch subscription.authMethodID {
         case .apiKey:
+            // Coding API 是 API Key 的主数据源；接口拒绝时才回退到余额接口。
             guard let key = credentials.apiKey(for: subscription.id), !key.isEmpty else {
                 throw UsageProviderError.notConfigured(subscription.providerID)
             }
@@ -83,6 +90,7 @@ struct KimiUsageProvider: UsageProvider {
                 return try await fetchBalance(key: key)
             }
         case .kimiDeviceOAuth:
+            // OAuth 凭证只用于 Coding API；过期时先刷新，再请求 Coding 用量。
             guard let credential = credentials.oauthCredential(for: subscription.id) else {
                 throw UsageProviderError.notConfigured(subscription.providerID)
             }
@@ -94,10 +102,20 @@ struct KimiUsageProvider: UsageProvider {
                 }
                 do {
                     activeCredential = try await KimiOAuthService().refresh(credential)
+                    // 订阅可能已被删除/切换认证：写入前检查取消状态，防止回写陈旧凭证。
+                    try Task.checkCancellation()
                     try credentials.save(oauthCredential: activeCredential, for: subscription.id)
                     didRefresh = true
                 } catch is CancellationError {
                     throw CancellationError()
+                } catch KimiOAuthError.requestFailed, KimiOAuthError.timedOut {
+                    throw UsageProviderError.requestFailed(
+                        subscription.providerID, "Kimi Code OAuth 刷新失败，请检查网络后重试"
+                    )
+                } catch KimiOAuthError.httpStatus(let status) where status >= 500 {
+                    throw UsageProviderError.requestFailed(
+                        subscription.providerID, "Kimi OAuth 服务暂时不可用（HTTP \(status)）"
+                    )
                 } catch {
                     throw UsageProviderError.authenticationRequired(subscription.providerID, "Kimi Code OAuth 凭证已失效，请重新授权")
                 }
@@ -107,6 +125,7 @@ struct KimiUsageProvider: UsageProvider {
             }
             return try await fetchOAuthUsage(credential: activeCredential, didRefresh: didRefresh)
         case .kimiBrowserSession:
+            // 浏览器 token 只用于网页订阅统计接口，不调用 Coding API。
             return try await fetchBrowserSessionUsage()
         default:
             throw UsageProviderError.notConfigured(subscription.providerID)
@@ -122,16 +141,29 @@ struct KimiUsageProvider: UsageProvider {
             }
             do {
                 let refreshed = try await KimiOAuthService().refresh(credential)
+                // 写入前检查取消状态：订阅可能已被删除或切换认证方式。
+                try Task.checkCancellation()
                 try credentials.save(oauthCredential: refreshed, for: subscription.id)
                 return try await fetchOAuthUsage(credential: refreshed, didRefresh: true)
             } catch is CancellationError {
                 throw CancellationError()
+            } catch KimiOAuthError.requestFailed, KimiOAuthError.timedOut {
+                throw UsageProviderError.requestFailed(
+                    subscription.providerID, "Kimi Code OAuth 刷新失败，请检查网络后重试"
+                )
+            } catch KimiOAuthError.httpStatus(let status) where status >= 500 {
+                throw UsageProviderError.requestFailed(
+                    subscription.providerID, "Kimi OAuth 服务暂时不可用（HTTP \(status)）"
+                )
             } catch {
                 throw UsageProviderError.authenticationRequired(subscription.providerID, "Kimi Code OAuth 凭证已失效，请重新授权")
             }
         }
     }
 
+    /// API Key / Kimi Code OAuth 共用的 Coding API 请求。
+    /// `limits`/`usage` 提供 Coding 窗口额度，`boosterWallet` 提供加油包数据；
+    /// 网页登录态不调用此接口，因为网页 token 对该端点没有访问权限。
     private func fetchCodingUsage(authorization: String) async throws -> UsageSnapshot {
         let response: KimiUsagesResponse = try await APIClient.get(
             URL(string: "https://api.kimi.com/coding/v1/usages")!,
@@ -142,6 +174,8 @@ struct KimiUsageProvider: UsageProvider {
         return try Self.parseCodingUsage(response, subscription: subscription)
     }
 
+    /// 对应 kimi.com/settings/subscription?tab=quota 的业务请求。
+    /// GetSubscriptionStats 是网页登录态的唯一数据源，直接提供 5 小时、7 天和总使用量。
     private func fetchBrowserUsage(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
         let authorization = "\(credential.tokenType) \(credential.accessToken)"
         let response: KimiSubscriptionStatsResponse = try await APIClient.post(
@@ -150,21 +184,9 @@ struct KimiUsageProvider: UsageProvider {
             authorization: authorization,
             headers: Self.browserHeaders
         )
-        var fiveHourQuota: Quota?
-        do {
-            let codingResponse: KimiUsagesResponse = try await APIClient.get(
-                URL(string: "https://api.kimi.com/coding/v1/usages")!,
-                providerID: subscription.providerID,
-                authorization: authorization,
-                headers: Self.commonHeaders
-            )
-            fiveHourQuota = try Self.parseCodingUsage(codingResponse, subscription: subscription).quotas.first { $0.kind == .fiveHour }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            fiveHourQuota = nil
-        }
-        return try Self.parseSubscriptionStats(response, subscription: subscription, fiveHourQuota: fiveHourQuota)
+        // 网页额度页只请求 GetSubscriptionStats；5 小时窗口的零值由该响应的
+        // ratelimitCode5h.enabled=true + 缺省 ratio 表示，不能再用 coding 接口覆盖它。
+        return try Self.parseSubscriptionStats(response, subscription: subscription)
     }
 
     private func fetchBalance(key: String) async throws -> UsageSnapshot {
@@ -187,6 +209,8 @@ struct KimiUsageProvider: UsageProvider {
         })
     }
 
+    /// Coding API 响应映射：`usage` 为每周额度，`limits` 按时间窗口识别额度，
+    /// `boosterWallet` 映射加油包余额与月消费。
     static func parseCodingUsage(_ response: KimiUsagesResponse, subscription: Subscription) throws -> UsageSnapshot {
         let limits = response.limits ?? []
         let weeklyUsage = response.usage.flatMap { usage -> Quota? in
@@ -234,10 +258,12 @@ struct KimiUsageProvider: UsageProvider {
         return UsageSnapshot.realtime(subscription: subscription, quotas: quotas)
     }
 
+    /// 网页订阅接口字段映射：
+    /// `ratelimitCode5h` → 5 小时额度，`ratelimitCode7d` → 每周额度，
+    /// `subscriptionBalance.amountUsedRatio` → 顶部总使用量。
     static func parseSubscriptionStats(
         _ response: KimiSubscriptionStatsResponse,
-        subscription: Subscription,
-        fiveHourQuota: Quota? = nil
+        subscription: Subscription
     ) throws -> UsageSnapshot {
         var quotas: [Quota] = []
         let weeklyRatio = normalizedRatio(response.ratelimitCode7d?.ratio?.value)
@@ -246,11 +272,13 @@ struct KimiUsageProvider: UsageProvider {
         } else if response.ratelimitCode7d?.enabled == true {
             quotas.append(Quota(name: "每周额度", used: 0, limit: 1, resetAt: date(from: response.ratelimitCode7d?.resetTime), kind: .weekly))
         }
-        if let fiveHourQuota {
-            quotas.append(fiveHourQuota)
-        } else if response.ratelimitCode5h?.enabled == true {
-            let ratio = normalizedRatio(response.ratelimitCode5h?.ratio?.value) ?? 0
-            quotas.append(Quota(name: "5 小时额度", used: ratio, limit: 1, resetAt: date(from: response.ratelimitCode5h?.resetTime), kind: .fiveHour))
+        if let fiveHourWindow = response.ratelimitCode5h,
+           fiveHourWindow.enabled != false {
+            // Kimi 会省略 proto3 零值：窗口对象存在但 ratio/enabled 均缺失时，视为 0%。
+            let ratio = normalizedRatio(fiveHourWindow.ratio?.value)
+            if fiveHourWindow.ratio?.value == nil || ratio != nil {
+                quotas.append(Quota(name: "5 小时额度", used: ratio ?? 0, limit: 1, resetAt: date(from: fiveHourWindow.resetTime), kind: .fiveHour))
+            }
         }
         let overallUsageRatio = normalizedRatio(response.subscriptionBalance?.amountUsedRatio?.value)
         guard !quotas.isEmpty || overallUsageRatio != nil else {
@@ -383,48 +411,30 @@ struct KimiUsageProvider: UsageProvider {
 
 extension KimiUsageProvider {
     /// 网页登录态：access_token 有效期短（约一小时），临近/已过期时先用
-    /// refresh_token 换新；401/403 时再刷新一次兑底。
+    /// refresh_token 换新；401/403 时再刷新一次兑底（通用流程见 BrowserSessionFlow）。
     private func fetchBrowserSessionUsage() async throws -> UsageSnapshot {
-        var credential: KimiBrowserCredential
-        var didRefresh = false
-        if let stored = credentials.browserCredential(for: subscription.id),
-           stored.expiresAt.timeIntervalSinceNow > 300 {
-            credential = stored
-        } else {
-            guard let stored = credentials.browserCredential(for: subscription.id) else {
-                throw UsageProviderError.notConfigured(subscription.providerID)
-            }
-            do {
-                credential = try await ChromeSessionImporter.refresh(stored)
-                try credentials.save(browserCredential: credential, for: subscription.id)
-                didRefresh = true
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "Kimi 网页登录态已过期，请在订阅设置中重新登录")
-            }
+        guard let stored = credentials.browserCredential(for: subscription.id) else {
+            throw UsageProviderError.notConfigured(subscription.providerID)
         }
-        do {
-            return try await fetchBrowserUsage(credential: credential)
-        } catch UsageProviderError.httpStatus(let status) where [401, 403].contains(status) {
-            guard !didRefresh else {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "Kimi 网页登录态已过期，请在订阅设置中重新登录")
-            }
-            do {
-                let refreshed = try await ChromeSessionImporter.refresh(credential)
-                try credentials.save(browserCredential: refreshed, for: subscription.id)
-                return try await fetchBrowserUsage(credential: refreshed)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "Kimi 网页登录态已过期，请在订阅设置中重新登录")
-            }
-        }
+        let configuration = BrowserSessionFlow.Configuration(
+            providerID: subscription.providerID,
+            subscriptionID: subscription.id,
+            credentials: credentials,
+            isUsable: { $0.expiresAt.timeIntervalSinceNow > 300 },
+            refresh: ChromeSessionImporter.refresh,
+            isInvalid: { ($0 as? KimiBrowserCredentialError)?.indicatesInvalidCredential ?? false },
+            invalidMessage: "Kimi 网页登录态已过期，请在订阅设置中重新登录"
+        )
+        return try await BrowserSessionFlow.fetchWithRetry(
+            configuration, stored: stored,
+            fetch: { try await fetchBrowserUsage(credential: $0) }
+        )
     }
 }
 
 // MARK: - 响应类型
 
+/// `GET https://api.kimi.com/coding/v1/usages` 的响应。
 struct KimiUsagesResponse: Decodable {
     struct QuotaDetail: Decodable {
         let limit: FlexibleNumber?
@@ -489,6 +499,8 @@ struct KimiUsagesResponse: Decodable {
     let boosterWallet: BoosterWallet?
 }
 
+/// `POST https://www.kimi.com/.../MembershipService/GetSubscriptionStats` 的响应；
+/// 网页额度页的 5 小时、7 天和总使用量都从这里读取。
 struct KimiSubscriptionStatsResponse: Decodable {
     struct RateLimit: Decodable {
         let ratio: FlexibleNumber?

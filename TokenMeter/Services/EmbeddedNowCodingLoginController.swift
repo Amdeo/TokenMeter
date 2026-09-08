@@ -77,9 +77,18 @@ final class EmbeddedNowCodingLoginController: NSObject, NSWindowDelegate, Browse
               let host = webView.url?.host?.lowercased(),
               host == "nowcoding.ai" || host.hasSuffix(".nowcoding.ai") else { return nil }
         let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
-        guard let session = cookies.first(where: { $0.name == NowCodingSite.sessionCookieName }) else { return nil }
+        // 共享 Cookie Store 可能含其它站点的同名 session cookie，必须按域名过滤。
+        guard let session = cookies.first(where: {
+            $0.name == NowCodingSite.sessionCookieName && Self.isSessionDomain($0.domain)
+        }) else { return nil }
         let userID = await readUserID(from: webView)
         return try? NowCodingBrowserCredentialExtractor.credential(cookie: session, userID: userID)
+    }
+
+    /// cookie 的 domain 形如 ".nowcoding.ai"（带前导点），匹配主域与子域。
+    private static func isSessionDomain(_ domain: String) -> Bool {
+        let lower = domain.lowercased()
+        return lower == "nowcoding.ai" || lower.hasSuffix(".nowcoding.ai")
     }
 
     private func readUserID(from webView: WKWebView) async -> String? {

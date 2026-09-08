@@ -117,9 +117,9 @@ struct SubscriptionEditorSheet: View {
             .font(.system(size: 12)).padding(.top, 10).padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onChange(of: draft.authMethodID) { _, method in
-            if method != .kimiDeviceOAuth { resetOAuthState() }
-            if method != .kimiBrowserSession, method != .ccbusBrowserSession, method != .apikeyFunBrowserSession, method != .nowCodingBrowserSession { draft.leaveBrowserAuthentication() }
+        .onChange(of: draft.authMethodID) { _, _ in
+            if authFlowID != .deviceOAuth { resetOAuthState() }
+            if authFlowID != .browserSession { draft.leaveBrowserAuthentication() }
         }
         .overlay {
             if showDiscardConfirmation {
@@ -178,7 +178,7 @@ struct SubscriptionEditorSheet: View {
             try saveCredential(for: subscription.id)
             store.add(subscription)
             onClose()
-            Task { await store.refresh(subscription) }
+            store.refresh(subscription)
         } catch { draft.message = error.localizedDescription }
     }
 
@@ -195,7 +195,7 @@ struct SubscriptionEditorSheet: View {
                 updated.quotaColors = draft.quotaColors
             }
             onClose()
-            Task { await store.refresh(updated) }
+            store.refresh(updated)
         } catch { draft.message = error.localizedDescription }
     }
 
@@ -235,10 +235,9 @@ struct SubscriptionEditorSheet: View {
                     await BrowserSessionSiteData.clear(domains: controller.sessionDomains)
                 }
                 let credential = try await controller.login()
-                let isBrowserFlow = draft.authMethodID == .kimiBrowserSession
-                    || draft.authMethodID == .ccbusBrowserSession
-                    || draft.authMethodID == .apikeyFunBrowserSession
-                    || draft.authMethodID == .nowCodingBrowserSession
+                // 以 Provider 定义驱动：凡是 flowID 为 browserSession 的认证方式
+                // 都走内置浏览器登录，新增浏览器型供应商时无需改这里。
+                let isBrowserFlow = authFlowID == .browserSession
                 guard sessionID == draft.browserImportSessionID, isBrowserFlow else { return }
                 switch credential {
                 case .token(let tokenCredential): draft.browserCredential = tokenCredential

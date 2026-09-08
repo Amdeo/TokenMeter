@@ -389,6 +389,56 @@ struct AlertEvaluationTests {
     }
 
     @Test
+    func sameCurrencyBalancesWithDifferentNamesKeepIndependentLedgers() {
+        // Kimi 回退余额：同一订阅可同时有可用/代金券/现金三个 CNY 余额。
+        // ledger 若不区分额度名，高余额窗口每次评估都会重置 low-balance 状态，
+        // 导致低余额窗口重复提醒。
+        let suite = "TokenMeterTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let evaluator = AlertEvaluator(defaults: defaults)
+        let settings = AlertSettings()
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
+        let mixed = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(
+                name: "可用余额", used: 0, limit: 4, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            ),
+            Quota(
+                name: "代金券余额", used: 0, limit: 100, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            )
+        ])
+        // 只有低余额的「可用余额」触发提醒；同一快照重复评估不得重复提醒。
+        let firstRound = evaluator.evaluate(
+            previous: nil, current: mixed, subscription: subscription,
+            source: .manual, settings: settings
+        )
+        #expect(firstRound.count == 1)
+        let secondRound = evaluator.evaluate(
+            previous: mixed, current: mixed, subscription: subscription,
+            source: .manual, settings: settings
+        )
+        #expect(secondRound.isEmpty)
+        // 可用余额恢复、代金券余额跌破阈值：应各自独立发一次提醒。
+        let swapped = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(
+                name: "可用余额", used: 0, limit: 50, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            ),
+            Quota(
+                name: "代金券余额", used: 0, limit: 2, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            )
+        ])
+        let swappedRound = evaluator.evaluate(
+            previous: mixed, current: swapped, subscription: subscription,
+            source: .manual, settings: settings
+        )
+        #expect(swappedRound.count == 1)
+    }
+
+    @Test
     func notificationLedgerIsolatedAndClearAllowsReminderAgain() {
         let suite = "TokenMeterTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

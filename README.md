@@ -50,22 +50,24 @@ authentication expires, or a service errors out — without opening each provide
 | **OpenCode Go** | 用量窗口 Usage windows | API Key |
 | **MiniMax** | MiniMax Coding Plan 套餐额度 | API Key |
 | **CCBus（AI 巴士）** | 账户余额 Balance | 网页登录态 |
+| **APIKEY.FUN** | 账户余额 Balance | 网页登录态 |
+| **NowCoding** | 账户余额 + 订阅额度 Balance & quotas | 网页登录态 |
 
 > 需要接入新的供应商？请阅读
 > [Adding a provider / 添加供应商](docs/provider-development.md)
 > 与 `.pi/skills/add-provider/SKILL.md` 中的扩展契约；
 > API 中转站（new-api/one-api 系）可参考 `.pi/skills/add-relay-provider/SKILL.md`
 > 通过问答生成对应厂商。
->
 > New provider? Read the [provider development guide](docs/provider-development.md)
 > and the `add-provider` skill; relay/gateway sites (new-api/one-api family) can be
 > scaffolded via the `add-relay-provider` skill.
-
-> Kimi 网页登录态支持从 Chrome 会话导入，或在内嵌登录页完成授权
-> （实验性），令牌不会显示在界面中。
 >
-> Kimi's web-session auth can be imported from a Chrome session or completed in an
-> embedded login page (experimental); tokens never appear in the UI.
+> Kimi 网页登录态支持在内嵌登录页完成授权（实验性），令牌不会显示在界面中。
+> 会话到期后由应用自动续期；README 不再宣称可从 Chrome 会话导入
+> （`ChromeSessionImporter` 仅承担 token 续期，登录本身在内嵌页完成）。
+> Kimi's web-session auth can be completed in an embedded login page
+> (experimental); tokens never appear in the UI. Sessions are renewed
+> automatically; Chrome session import is no longer claimed.
 
 ---
 
@@ -126,7 +128,7 @@ xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
   （私有权限文件），不经过任何第三方服务器。
 - 应用只访问你配置的供应商官方 API；无遥测、无崩溃上报、无广告。
 - 调试期导出的 Kimi 会话文件（`kimi-export-session*.md`）已被 `.gitignore`
-  排除，切勿提交。
+  排除，切勿提交；这类文件含会话令牌，本地也应删除并轮换对应凭证。
 
 ---
 

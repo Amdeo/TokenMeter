@@ -224,6 +224,55 @@ struct QuotaAndKimiTests {
     }
 
     @Test
+    func kimiSubscriptionStatsTreatsWindowWithoutZeroValueFieldsAsFiveHourQuota() throws {
+        let data = Data("""
+        {
+          "ratelimitCode5h": {"resetTime": "2030-01-01T00:00:00Z"},
+          "ratelimitCode7d": {"ratio": 0.558, "resetTime": "2030-01-07T00:00:00Z"}
+        }
+        """.utf8)
+        let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
+
+        let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
+
+        #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
+        #expect(snapshot.quotas[0].fraction == 0)
+        #expect(snapshot.quotas[0].resetAt != nil)
+    }
+
+    @Test
+    func kimiSubscriptionStatsDoesNotInventMissingFiveHourWindow() throws {
+        let data = Data("""
+        {
+          "ratelimitCode7d": {"ratio": 0.558, "resetTime": "2030-01-07T00:00:00Z"}
+        }
+        """.utf8)
+        let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
+
+        let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
+
+        #expect(snapshot.quotas.map(\.kind) == [.weekly])
+    }
+
+    @Test
+    func kimiSubscriptionStatsSkipsExplicitlyDisabledFiveHourWindow() throws {
+        let data = Data("""
+        {
+          "ratelimitCode5h": {"enabled": false, "resetTime": "2030-01-01T00:00:00Z"},
+          "ratelimitCode7d": {"ratio": 0.558, "resetTime": "2030-01-07T00:00:00Z"}
+        }
+        """.utf8)
+        let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
+
+        let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
+
+        #expect(snapshot.quotas.map(\.kind) == [.weekly])
+    }
+
+    @Test
     func kimiSubscriptionStatsUsesFiveHourRatioWhenPresent() throws {
         let data = Data("""
         {
@@ -261,6 +310,22 @@ struct QuotaAndKimiTests {
         #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
         #expect(snapshot.quotas[1].fraction == 0)
         #expect(snapshot.quotas[1].resetAt != nil)
+    }
+
+    @Test
+    func kimiSubscriptionStatsSkipsInvalidFiveHourRatio() throws {
+        let data = Data("""
+        {
+          "ratelimitCode5h": {"ratio": -1, "enabled": true},
+          "ratelimitCode7d": {"ratio": 0.558, "resetTime": "2030-01-07T00:00:00Z"}
+        }
+        """.utf8)
+        let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
+
+        let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
+
+        #expect(snapshot.quotas.map(\.kind) == [.weekly])
     }
 
     @Test
@@ -836,6 +901,32 @@ extension QuotaAndKimiTests {
 
         let reloaded = UsageStore(settings: settings, metadataURL: fileURL)
         #expect(reloaded.subscriptions.map(\.name) == ["First", "Second", "Third"])
+    }
+
+    @Test @MainActor
+    func usageStoreSurfacesMetadataWriteFailuresInsteadOfSilentlyDropping() throws {
+        let suite = "TokenMeterTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = SettingsStore(
+            defaults: defaults,
+            loginItemManager: QuotaColorLoginItemManager(),
+            notificationManager: QuotaColorNotificationManager()
+        )
+        let block = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TokenMeterTests-block-\(UUID().uuidString)", isDirectory: false)
+        try Data("block".utf8).write(to: block)
+        defer { try? FileManager.default.removeItem(at: block) }
+        // 父路径是一个普通文件：createDirectory/写盘必然失败。
+        let fileURL = block.appendingPathComponent("subscriptions.json")
+
+        let store = UsageStore(settings: settings, metadataURL: fileURL)
+        #expect(store.lastPersistenceError == nil)
+        store.add(Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey))
+
+        // 内存仍保留订阅（会话内可用），但写盘失败必须可见。
+        #expect(store.subscriptions.count == 1)
+        #expect(store.lastPersistenceError != nil)
     }
 }
 

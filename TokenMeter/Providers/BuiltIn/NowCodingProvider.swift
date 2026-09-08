@@ -120,15 +120,18 @@ struct NowCodingUsageProvider: UsageProvider {
         )
 
         var quotas: [Quota] = []
-        let balance = (me.data?.quota ?? 0) / NowCodingSite.quotaPerUnit
-        quotas.append(Quota(
-            name: "可用余额",
-            used: 0,
-            limit: balance,
-            resetAt: nil,
-            unit: .currency(code: "CNY", scale: 1),
-            kind: .balance
-        ))
+        // me.data 缺失表示余额未知：不应把未知数据显示成 0 余额。
+        if let quotaValue = me.data?.quota {
+            let balance = quotaValue / NowCodingSite.quotaPerUnit
+            quotas.append(Quota(
+                name: "可用余额",
+                used: 0,
+                limit: balance,
+                resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1),
+                kind: .balance
+            ))
+        }
 
         for item in subscriptions.data?.activeSubscriptions ?? [] {
             let limit = item.amountTotal / NowCodingSite.quotaPerUnit
@@ -142,6 +145,9 @@ struct NowCodingUsageProvider: UsageProvider {
                 unit: .currency(code: "CNY", scale: 1),
                 kind: .generic
             ))
+        }
+        guard !quotas.isEmpty else {
+            throw UsageProviderError.invalidResponse(subscription.providerID, "NowCoding 返回中没有可用数据")
         }
         return .realtime(subscription: subscription, quotas: quotas)
     }

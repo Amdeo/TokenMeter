@@ -50,41 +50,22 @@ struct CCBusUsageProvider: UsageProvider {
     private let credentials = CredentialStore()
 
     func fetchUsage() async throws -> UsageSnapshot {
-        var credential: KimiBrowserCredential
-        var didRefresh = false
-        if let stored = credentials.browserCredential(for: subscription.id),
-           stored.expiresAt.timeIntervalSinceNow > 300 {
-            credential = stored
-        } else {
-            guard let stored = credentials.browserCredential(for: subscription.id) else {
-                throw UsageProviderError.notConfigured(subscription.providerID)
-            }
-            do {
-                credential = try await CCBusSessionRefresher.refresh(stored)
-                try credentials.save(browserCredential: credential, for: subscription.id)
-                didRefresh = true
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "CCBus 网页登录态已过期，请在订阅设置中重新登录")
-            }
+        guard let stored = credentials.browserCredential(for: subscription.id) else {
+            throw UsageProviderError.notConfigured(subscription.providerID)
         }
-        do {
-            return try await fetchBalance(credential: credential)
-        } catch UsageProviderError.httpStatus(let status) where [401, 403].contains(status) {
-            guard !didRefresh else {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "CCBus 网页登录态已过期，请在订阅设置中重新登录")
-            }
-            do {
-                let refreshed = try await CCBusSessionRefresher.refresh(credential)
-                try credentials.save(browserCredential: refreshed, for: subscription.id)
-                return try await fetchBalance(credential: refreshed)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "CCBus 网页登录态已过期，请在订阅设置中重新登录")
-            }
-        }
+        let configuration = BrowserSessionFlow.Configuration(
+            providerID: subscription.providerID,
+            subscriptionID: subscription.id,
+            credentials: credentials,
+            isUsable: { $0.expiresAt.timeIntervalSinceNow > 300 },
+            refresh: CCBusSessionRefresher.refresh,
+            isInvalid: { ($0 as? CCBusBrowserCredentialError)?.indicatesInvalidCredential ?? false },
+            invalidMessage: "CCBus 网页登录态已过期，请在订阅设置中重新登录"
+        )
+        return try await BrowserSessionFlow.fetchWithRetry(
+            configuration, stored: stored,
+            fetch: { try await fetchBalance(credential: $0) }
+        )
     }
 
     private func fetchBalance(credential: KimiBrowserCredential) async throws -> UsageSnapshot {

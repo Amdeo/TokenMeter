@@ -18,6 +18,14 @@ enum KimiBrowserCredentialError: LocalizedError, Sendable {
             return "刷新 Kimi 登录态失败：\(message)。请重新登录 Kimi 账号。"
         }
     }
+
+    /// 该错误是否表示登录态本身失效（而非网络/服务端暂时问题）。
+    var indicatesInvalidCredential: Bool {
+        switch self {
+        case .expired, .invalidCredentials: true
+        case .credentialsMissing, .refreshFailed: false
+        }
+    }
 }
 
 /// Kimi 网页登录态的续期服务与共享页面地址。
@@ -36,18 +44,31 @@ struct ChromeSessionImporter: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(["refresh_token": credential.refreshToken])
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw KimiBrowserCredentialError.refreshFailed("无效响应")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw KimiBrowserCredentialError.refreshFailed("无效响应")
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                // 401/403/400 表示 refresh_token 被拒绝（登录态真失效）；
+                // 其余状态码（5xx/429）是服务问题，不应让调用方误判为需要重新登录。
+                if [400, 401, 403].contains(http.statusCode) {
+                    throw KimiBrowserCredentialError.expired
+                }
+                throw KimiBrowserCredentialError.refreshFailed("HTTP \(http.statusCode)")
+            }
+            guard let raw = String(data: data, encoding: .utf8) else {
+                throw KimiBrowserCredentialError.refreshFailed("响应不可读")
+            }
+            // 刷新响应字段为 camelCase（accessToken/refreshToken），与提取解析复用同一入口。
+            return try KimiBrowserCredentialExtractor.credential(from: raw)
+        } catch let error as KimiBrowserCredentialError {
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw KimiBrowserCredentialError.refreshFailed(error.localizedDescription)
         }
-        guard (200..<300).contains(http.statusCode) else {
-            throw KimiBrowserCredentialError.refreshFailed("HTTP \(http.statusCode)")
-        }
-        guard let raw = String(data: data, encoding: .utf8) else {
-            throw KimiBrowserCredentialError.refreshFailed("响应不可读")
-        }
-        // 刷新响应字段为 camelCase（accessToken/refreshToken），与提取解析复用同一入口。
-        return try KimiBrowserCredentialExtractor.credential(from: raw)
     }
 
 }

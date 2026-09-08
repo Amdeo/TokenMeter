@@ -72,7 +72,9 @@ final class AlertEvaluator {
         for quota in balanceQuotas {
             let currency = quota.unit.label ?? ""
             guard let threshold = threshold(for: currency, settings: settings) else { continue }
-            let key = ledgerKey(subscription.id, "lowBalance", currency)
+            // 同一订阅可能同时有多个同币种余额（如 Kimi 回退的可用/代金券/现金余额），
+            // key 必须带上额度名，否则各余额会互相覆盖 ledger 状态，导致提醒重复或漏发。
+            let key = ledgerKey(subscription.id, "lowBalance", "\(currency)#\(quota.name)")
             var item = read(key)
             if realtime && quota.remaining / quota.unit.displayScale <= threshold {
                 if !item.active && settings.lowBalanceAlerts {

@@ -39,8 +39,10 @@ struct KimiOAuthService: Sendable {
     private static let tokenEndpoint = host.appendingPathComponent("/api/oauth/token")
 
     func authorize(onDeviceAuthorization: @escaping @Sendable (KimiDeviceAuthorization) async -> Void = { _ in }) async throws -> OAuthCredential {
-        let deadline = Date.now.addingTimeInterval(15 * 60)
+        let hardDeadline = Date.now.addingTimeInterval(15 * 60)
         var device = try await requestDeviceAuthorization()
+        // 以服务端 expires_in 为准：更早到期时不应继续轮询已失效的设备码。
+        var deadline = min(hardDeadline, device.publicValue.expiresAt)
         await onDeviceAuthorization(device.publicValue)
         while true {
             try await wait(seconds: device.interval, until: deadline)
@@ -52,8 +54,11 @@ struct KimiOAuthService: Sendable {
             } catch KimiOAuthError.slowDown {
                 device.interval = min(device.interval + 5, 60)
             } catch KimiOAuthError.authorizationExpired {
-                guard Date.now < deadline else { throw KimiOAuthError.timedOut }
+                // 服务端已拒绝旧设备码：若仍在 15 分钟硬期限内，
+                // 重新申请一个新的设备授权。
+                guard Date.now < hardDeadline else { throw KimiOAuthError.timedOut }
                 device = try await requestDeviceAuthorization()
+                deadline = min(hardDeadline, device.publicValue.expiresAt)
                 await onDeviceAuthorization(device.publicValue)
             } catch KimiOAuthError.authorizationDenied {
                 throw KimiOAuthError.authorizationDenied

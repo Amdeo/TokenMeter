@@ -1,9 +1,11 @@
 import Foundation
 
-enum APIKeyFunBrowserCredentialError: LocalizedError, Sendable {
+enum APIKeyFunBrowserCredentialError: LocalizedError, Sendable, Equatable {
     case credentialsMissing
     case invalidCredentials
     case expired
+    /// 续期请求失败（网络/服务端问题），不等于凭证失效。
+    case refreshFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -13,6 +15,16 @@ enum APIKeyFunBrowserCredentialError: LocalizedError, Sendable {
             return "APIKEY.FUN 登录态格式无效，请重新登录后重试。"
         case .expired:
             return "APIKEY.FUN 登录态已过期，请重新登录后重试。"
+        case .refreshFailed(let message):
+            return "刷新 APIKEY.FUN 登录态失败：\(message)。请稍后重试。"
+        }
+    }
+
+    /// 该错误是否表示登录态本身失效（而非网络/服务端暂时问题）。
+    var indicatesInvalidCredential: Bool {
+        switch self {
+        case .expired, .invalidCredentials: true
+        case .credentialsMissing, .refreshFailed: false
         }
     }
 }

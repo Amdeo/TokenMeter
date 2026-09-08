@@ -184,16 +184,6 @@ struct MenuBarView: View {
             : .move(edge: .trailing).combined(with: .opacity)
     }
 
-    private func openSettings() {
-        navigateForward { navigation.route = .settings }
-    }
-    private func openAddSubscription() {
-        navigateForward { navigation.beginAdding() }
-    }
-
-    private func openEditor(for subscription: Subscription) {
-        navigateForward { navigation.beginEditingConfiguration(subscription) }
-    }
 
     var body: some View {
         Group {
@@ -201,7 +191,16 @@ struct MenuBarView: View {
             case .overview:
                 dashboardContent.transition(pushTransition)
             case .settings:
-                SettingsPanel(settings: store.settings, onBack: navigateBack, onPreview: previewEntryAction)
+                SettingsPanel(
+                    settings: store.settings,
+                    onBack: navigateBack,
+                    onMigration: { navigateForward { navigation.route = .migration } },
+                    migrationRecoveryError: store.lastMigrationRecoveryError,
+                    onPreview: previewEntryAction
+                )
+                .transition(pushTransition)
+            case .migration:
+                MigrationPanel(store: store, onClose: closeMigration)
                     .transition(pushTransition)
             case .addProvider:
                 ProviderSelectionPage(onBack: navigateBack) { providerID in
@@ -289,7 +288,7 @@ struct MenuBarView: View {
             DashboardHeader(
                 meta: dashboardMeta,
                 isRefreshing: store.isRefreshing,
-                onRefresh: { Task { await store.refreshAll(source: .manual) } },
+                onRefresh: { store.refreshAll(source: .manual) },
                 onSettings: {
                     withAnimation(reduceMotion ? .none : .easeOut(duration: 0.16)) { openSettings() }
                 },
@@ -537,6 +536,26 @@ struct MenuBarView: View {
         #else
         return {}
         #endif
+    }
+}
+
+private extension MenuBarView {
+    func openSettings() {
+        navigateForward { navigation.route = .settings }
+    }
+
+    func openAddSubscription() {
+        navigateForward { navigation.beginAdding() }
+    }
+
+    func openEditor(for subscription: Subscription) {
+        navigateForward { navigation.beginEditingConfiguration(subscription) }
+    }
+
+    func closeMigration() {
+        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) {
+            navigation.returnToSettings()
+        }
     }
 }
 

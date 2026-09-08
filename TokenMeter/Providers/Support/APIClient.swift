@@ -63,7 +63,7 @@ enum APIClient {
             case (.deepSeek, 429):
                 throw UsageProviderError.requestFailed(providerID, "请求过于频繁，请稍后重试")
             default:
-                throw UsageProviderError.httpStatus(httpResponse.statusCode)
+                throw statusError(providerID: providerID, status: httpResponse.statusCode)
             }
         }
         do {
@@ -105,12 +105,27 @@ enum APIClient {
             throw UsageProviderError.requestFailed(providerID, "服务器返回了无效响应")
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw UsageProviderError.httpStatus(httpResponse.statusCode)
+            throw statusError(providerID: providerID, status: httpResponse.statusCode)
         }
         do {
             return try JSONDecoder().decode(Response.self, from: data)
         } catch {
             throw UsageProviderError.invalidJSON
+        }
+    }
+
+    /// 状态码 → 错误分类。401/403 对多数供应商是凭证无效（进入认证失效状态）；
+    /// 但回退余额（Kimi）与续期重试（CCBus/APIKEY.FUN/NowCoding）的 Provider 层
+    /// 自己处理 401/403 语义，这里保持 `httpStatus` 原样抛出。
+    private static func statusError(providerID: ProviderID, status: Int) -> UsageProviderError {
+        switch status {
+        case 401, 403:
+            if providerID == .kimi || providerID == .ccbus || providerID == .apikeyFun || providerID == .nowCoding {
+                return .httpStatus(status)
+            }
+            return .authenticationRequired(providerID, "凭证无效或无权访问接口")
+        default:
+            return .httpStatus(status)
         }
     }
 }

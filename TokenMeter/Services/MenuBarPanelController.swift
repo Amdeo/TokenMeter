@@ -182,10 +182,7 @@ final class MenuBarPanelController: NSObject {
         panel.makeKey()
 
         if visibilityGate.didReceiveDisplayEvent(), store.settings.refreshOnOpen {
-            Task { [weak self] in
-                guard let self else { return }
-                await self.store.refreshAll(source: .panelOpen)
-            }
+            store.refreshAll(source: .panelOpen)
         }
     }
 

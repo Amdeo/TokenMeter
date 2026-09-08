@@ -4,22 +4,37 @@ import SwiftUI
 /// 正文不再独占一行（避免与锚点重复）。
 struct KimiCardRenderer: ProviderCardRenderer {
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
-        AnyView(
+        let coreKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
+        let coreQuotas = snapshot.quotas.filter { coreKinds.contains($0.kind) }
+        if !coreQuotas.isEmpty {
+            // 订阅制：渲染 5 小时 + 每周两行。
+            return AnyView(
+                VStack(alignment: .leading, spacing: 8) {
+                    QuotaProgressRow(
+                        title: "5 小时额度",
+                        quota: snapshot.quotas.first { $0.kind == .fiveHour },
+                        tint: SubscriptionQuotaColors.resolve(
+                            subscription.quotaColors, name: "5 小时额度", kind: .fiveHour
+                        )
+                    )
+                    QuotaProgressRow(
+                        title: "每周额度",
+                        quota: snapshot.quotas.first { $0.kind == .weekly },
+                        tint: SubscriptionQuotaColors.resolve(
+                            subscription.quotaColors, name: "每周额度", kind: .weekly
+                        )
+                    )
+                }
+            )
+        }
+        // API Key 回退余额：coding 接口 401/403/404 时回退到平台余额，
+        // 渲染余额行而不是“接口未返回”。
+        let balances = snapshot.quotas.filter { $0.kind == .balance }
+        return AnyView(
             VStack(alignment: .leading, spacing: 8) {
-                QuotaProgressRow(
-                    title: "5 小时额度",
-                    quota: snapshot.quotas.first { $0.kind == .fiveHour },
-                    tint: SubscriptionQuotaColors.resolve(
-                        subscription.quotaColors, name: "5 小时额度", kind: .fiveHour
-                    )
-                )
-                QuotaProgressRow(
-                    title: "每周额度",
-                    quota: snapshot.quotas.first { $0.kind == .weekly },
-                    tint: SubscriptionQuotaColors.resolve(
-                        subscription.quotaColors, name: "每周额度", kind: .weekly
-                    )
-                )
+                ForEach(balances) { quota in
+                    BalanceMenuRow(quota: quota, title: quota.name)
+                }
             }
         )
     }
