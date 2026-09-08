@@ -1,22 +1,21 @@
 import SwiftUI
 import AppKit
 
+/// 凭据保存校验：委托给 AuthFlowRegistry 按 flowID 判断。
+@MainActor
 enum SubscriptionCredentialRequirement {
     static func canSave(
-        original: Subscription.AuthMethod?,
-        selected: Subscription.AuthMethod,
-        apiKey: String,
-        hasOAuthCredential: Bool,
-        hasBrowserCredential: Bool,
-        isImportingBrowser: Bool
+        original: AuthMethodID?,
+        selected: AuthMethodID,
+        flowID: AuthFlowID,
+        draft: SubscriptionEditorDraft
     ) -> Bool {
-        guard !isImportingBrowser else { return false }
-        guard original != selected else { return true }
-        return switch selected {
-        case .manualAPIKey: !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .kimiOAuth: hasOAuthCredential
-        case .kimiBrowserSession: hasBrowserCredential
-        }
+        AuthFlowRegistry.canSave(
+            originalAuthMethodID: original,
+            selected: selected,
+            flowID: flowID,
+            draft: draft
+        )
     }
 }
 
@@ -38,16 +37,26 @@ struct SubscriptionEditorSheet: View {
 
     private var isEditing: Bool { subscription != nil }
 
+    @MainActor
+    private var providerDefinition: any ProviderDefinition {
+        ProviderRegistry.definition(for: draft.providerID) ?? UnsupportedProviderDefinition(providerID: draft.providerID)
+    }
+
+    @MainActor
+    private var authFlowID: AuthFlowID {
+        providerDefinition.authMethods.first { $0.id == draft.authMethodID }?.flowID ?? .apiKey
+    }
+
     private var quotaColorTargets: [QuotaColorTarget] {
         let snapshot = subscription.flatMap { store.snapshots[$0.id] }
-        return QuotaColorTarget.targets(platform: draft.platform, quotas: snapshot?.quotas ?? [])
+        return QuotaColorTarget.targets(providerID: draft.providerID, quotas: snapshot?.quotas ?? [])
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(
-                platform: draft.platform,
-                title: draft.platform.rawValue,
+                definition: providerDefinition,
+                title: providerDefinition.metadata.displayName,
                 subtitle: "配置订阅",
                 onBack: attemptClose
             )
@@ -58,8 +67,9 @@ struct SubscriptionEditorSheet: View {
                     }
                     SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
                         AuthMethodSelection(
-                            authMethod: $draft.authMethod,
-                            platform: draft.platform,
+                            authMethods: providerDefinition.authMethods,
+                            authMethod: $draft.authMethodID,
+                            providerID: draft.providerID,
                             apiKey: $draft.apiKey,
                             oauthDevice: draft.oauthDevice,
                             oauthStatus: draft.oauthStatus,
@@ -102,9 +112,9 @@ struct SubscriptionEditorSheet: View {
             .font(.system(size: 12)).padding(.top, 10).padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onChange(of: draft.authMethod) { _, method in
-            if method != .kimiOAuth { resetOAuthState() }
-            if method != .kimiBrowserSession { draft.leaveBrowserAuthentication() }
+        .onChange(of: draft.authMethodID) { _, method in
+            if method != .kimiDeviceOAuth { resetOAuthState() }
+            if method != .kimiBrowserSession, method != .ccbusBrowserSession, method != .apikeyFunBrowserSession, method != .nowCodingBrowserSession { draft.leaveBrowserAuthentication() }
         }
         .overlay {
             if showDiscardConfirmation {
@@ -141,12 +151,10 @@ struct SubscriptionEditorSheet: View {
 
     private var canSave: Bool {
         SubscriptionCredentialRequirement.canSave(
-            original: subscription?.authMethod,
-            selected: draft.authMethod,
-            apiKey: draft.apiKey,
-            hasOAuthCredential: draft.oauthCredential != nil,
-            hasBrowserCredential: draft.browserCredential != nil,
-            isImportingBrowser: draft.browserImportTask != nil
+            original: subscription?.authMethodID,
+            selected: draft.authMethodID,
+            flowID: authFlowID,
+            draft: draft
         )
     }
 
@@ -156,9 +164,9 @@ struct SubscriptionEditorSheet: View {
     private func saveNew() {
         let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let subscription = Subscription(
-            platform: draft.platform,
-            name: trimmedName.isEmpty ? draft.platform.rawValue : trimmedName,
-            authMethod: draft.authMethod,
+            providerID: draft.providerID,
+            name: trimmedName.isEmpty ? providerDefinition.metadata.displayName : trimmedName,
+            authMethodID: draft.authMethodID,
             quotaColors: draft.quotaColors
         )
         do {
@@ -174,7 +182,7 @@ struct SubscriptionEditorSheet: View {
         do {
             try saveCredential(for: subscription.id)
             var updated = subscription
-            if subscription.authMethod != draft.authMethod { store.updateAuthMethod(subscription, to: draft.authMethod); updated.authMethod = draft.authMethod }
+            if subscription.authMethodID != draft.authMethodID { store.updateAuthMethod(subscription, to: draft.authMethodID); updated.authMethodID = draft.authMethodID }
             let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
             if !name.isEmpty, name != subscription.name { store.rename(subscription, to: name); updated.name = name }
             if draft.quotaColors != subscription.quotaColors {
@@ -187,17 +195,7 @@ struct SubscriptionEditorSheet: View {
     }
 
     private func saveCredential(for id: UUID) throws {
-        switch draft.authMethod {
-        case .manualAPIKey:
-            guard !draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            try CredentialStore().save(apiKey: draft.apiKey, for: id)
-        case .kimiOAuth:
-            guard let credential = draft.oauthCredential else { return }
-            try CredentialStore().save(oauthCredential: credential, for: id)
-        case .kimiBrowserSession:
-            guard let credential = draft.browserCredential else { return }
-            try CredentialStore().save(browserCredential: credential, for: id)
-        }
+        try AuthFlowRegistry.saveCredential(for: id, flowID: authFlowID, draft: draft)
     }
 
     private func deleteSubscription() { guard let subscription else { return }; store.remove(subscription); onClose() }
@@ -226,11 +224,29 @@ struct SubscriptionEditorSheet: View {
         resetOAuthState(); draft.leaveBrowserAuthentication(); let sessionID = draft.browserImportSessionID; draft.message = nil
         draft.browserImportTask = Task { @MainActor in
             do {
-                let credential = try await EmbeddedKimiLoginController().login()
-                guard sessionID == draft.browserImportSessionID, draft.authMethod == .kimiBrowserSession else { return }
-                draft.browserCredential = credential; draft.oauthStatus = "已通过内置登录导入 Kimi 网页登录态"
+                let credential = try await Self.makeBrowserLoginController(for: draft.providerID).login()
+                let isBrowserFlow = draft.authMethodID == .kimiBrowserSession
+                    || draft.authMethodID == .ccbusBrowserSession
+                    || draft.authMethodID == .apikeyFunBrowserSession
+                    || draft.authMethodID == .nowCodingBrowserSession
+                guard sessionID == draft.browserImportSessionID, isBrowserFlow else { return }
+                switch credential {
+                case .token(let tokenCredential): draft.browserCredential = tokenCredential
+                case .cookie(let cookieCredential): draft.cookieCredential = cookieCredential
+                }
+                draft.oauthStatus = "已通过内置登录导入网页登录态"
             } catch is CancellationError {} catch { guard sessionID == draft.browserImportSessionID else { return }; draft.message = error.localizedDescription }
             guard sessionID == draft.browserImportSessionID else { return }; draft.browserImportTask = nil
+        }
+    }
+
+    @MainActor
+    private static func makeBrowserLoginController(for providerID: ProviderID) -> any BrowserSessionLogining {
+        switch providerID {
+        case .ccbus: EmbeddedCCBusLoginController()
+        case .apikeyFun: EmbeddedAPIKeyFunLoginController()
+        case .nowCoding: EmbeddedNowCodingLoginController()
+        default: EmbeddedKimiLoginController()
         }
     }
 
@@ -238,14 +254,14 @@ struct SubscriptionEditorSheet: View {
 }
 
 private struct PageHeader: View {
-    let platform: Platform
+    let definition: any ProviderDefinition
     let title: String
     let subtitle: String
     let onBack: () -> Void
     var body: some View {
         HStack(spacing: 10) {
             HeaderIconButton(systemName: "chevron.left", label: "返回概览", action: onBack)
-            PlatformLogo(platform: platform, size: 34)
+            PlatformLogo(definition: definition, size: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 20, weight: .semibold))
@@ -363,8 +379,9 @@ private struct EditorSoftButton: View {
 // MARK: - 认证方式
 
 private struct AuthMethodSelection: View {
-    @Binding var authMethod: Subscription.AuthMethod
-    let platform: Platform
+    let authMethods: [AuthMethodDefinition]
+    @Binding var authMethod: AuthMethodID
+    let providerID: ProviderID
     @Binding var apiKey: String
     let oauthDevice: KimiDeviceAuthorization?
     let oauthStatus: String?
@@ -376,23 +393,20 @@ private struct AuthMethodSelection: View {
     let onOpenURL: (URL) -> Void
     let onCopy: (String) -> Void
 
+    private var selectedFlowID: AuthFlowID {
+        authMethods.first { $0.id == authMethod }?.flowID ?? .apiKey
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             FlowLayout(spacing: 8) {
-                AuthMethodChip(
-                    title: "手动 API Key", icon: "key.fill", tint: TM.accent,
-                    isSelected: authMethod == .manualAPIKey
-                ) { authMethod = .manualAPIKey }
-
-                if platform == .kimi {
+                ForEach(authMethods) { method in
                     AuthMethodChip(
-                        title: "Kimi Code OAuth", icon: "lock.shield.fill", tint: .indigo,
-                        isSelected: authMethod == .kimiOAuth
-                    ) { authMethod = .kimiOAuth }
-                    AuthMethodChip(
-                        title: "网页登录态", icon: "globe", tint: .green,
-                        isSelected: authMethod == .kimiBrowserSession
-                    ) { authMethod = .kimiBrowserSession }
+                        title: method.title,
+                        icon: method.systemImage,
+                        tint: method.tintRGB.map { Color(hex: $0) } ?? TM.accent,
+                        isSelected: authMethod == method.id
+                    ) { authMethod = method.id }
                 }
             }
 
@@ -401,114 +415,121 @@ private struct AuthMethodSelection: View {
                 .foregroundStyle(TM.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            switch authMethod {
-            case .manualAPIKey:
+            switch selectedFlowID {
+            case .apiKey:
                 VStack(alignment: .leading, spacing: 7) {
                     FormField("API Key", text: $apiKey, isSecure: true)
                     Label("仅存储在本机的 TokenMeter 私有凭证文件中，并受文件权限保护", systemImage: "lock.fill")
                         .font(.system(size: 10))
                         .foregroundStyle(TM.textTertiary)
                 }
-            case .kimiOAuth:
-                VStack(alignment: .leading, spacing: 12) {
-                    if let oauthDevice {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(alignment: .center, spacing: 12) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("用户码")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .tracking(0.6)
-                                        .foregroundStyle(TM.textTertiary)
-                                    Text(oauthDevice.userCode)
-                                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                                        .foregroundStyle(TM.textPrimary)
-                                }
-                                Spacer()
-                                EditorSoftButton(title: "复制用户码", systemImage: "doc.on.doc") {
-                                    onCopy(oauthDevice.userCode)
-                                }
-                            }
-                            Rectangle().fill(TM.divider).frame(height: 1)
-                            HStack(spacing: 8) {
-                                Text(oauthDevice.verificationURL.absoluteString)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(TM.textSecondary)
-                                    .lineLimit(2)
-                                    .textSelection(.enabled)
-                                Spacer(minLength: 6)
-                                EditorSoftButton(title: "复制链接", systemImage: "doc.on.doc") {
-                                    onCopy(oauthDevice.verificationURL.absoluteString)
-                                }
-                                EditorSoftButton(title: "打开浏览器", systemImage: "safari", prominent: true) {
-                                    onOpenURL(oauthDevice.verificationURL)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, TM.cardContentHorizontal)
-            .padding(.vertical, 14)
-            .tmCard()
-                    }
-                    if let oauthStatus {
-                        HStack(spacing: 8) {
-                            if isAuthorizing {
-                                ProgressView().controlSize(.small)
-                            } else if oauthCredentialDone {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(TM.ok)
-                                    .font(.system(size: 11))
-                            }
-                            Text(oauthStatus)
-                                .font(.system(size: 11))
-                                .foregroundStyle(TM.textSecondary)
-                        }
-                    }
-                    EditorSoftButton(
-                        title: isAuthorizing ? "取消授权" : "开始 Kimi Code OAuth 授权",
-                        systemImage: isAuthorizing ? "xmark" : "lock.shield",
-                        prominent: !isAuthorizing
-                    ) {
-                        if isAuthorizing { onCancelOAuth() } else { onStartOAuth() }
-                    }
-                    Text("实验性 Device OAuth，令牌不会显示在界面，只保存到 TokenMeter 本地私有文件。")
-                        .font(.system(size: 10))
-                        .foregroundStyle(TM.textTertiary)
-                }
-            case .kimiBrowserSession:
-                VStack(alignment: .leading, spacing: 10) {
-                    EditorSoftButton(
-                        title: isImportingBrowser ? "正在登录…" : "登录 Kimi 账号",
-                        systemImage: "person.crop.circle",
-                        prominent: true
-                    ) { onStartEmbeddedLogin() }
-                    .disabled(isImportingBrowser)
-                    if isImportingBrowser {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("正在获取 Kimi 登录态…")
-                                .font(.system(size: 10))
-                                .foregroundStyle(TM.textSecondary)
-                        }
-                    }
-                    if let oauthStatus, !isImportingBrowser {
-                        Label(oauthStatus, systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(TM.ok)
-                    }
-                    Text("在内置窗口的 Kimi 官方页面完成登录，TokenMeter 只读取登录态。")
-                        .font(.system(size: 10))
-                        .foregroundStyle(TM.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            case .deviceOAuth:
+                deviceOAuthForm
+            case .browserSession:
+                browserSessionForm
             }
         }
     }
 
-    private var selectedMethodDetail: String {
-        switch authMethod {
-        case .manualAPIKey: "适用于所有平台"
-        case .kimiOAuth: "实验性设备授权"
-        case .kimiBrowserSession: "登录 Kimi 账号（内置）"
+    @ViewBuilder
+    private var deviceOAuthForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let oauthDevice {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("用户码")
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(0.6)
+                                .foregroundStyle(TM.textTertiary)
+                            Text(oauthDevice.userCode)
+                                .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(TM.textPrimary)
+                        }
+                        Spacer()
+                        EditorSoftButton(title: "复制用户码", systemImage: "doc.on.doc") {
+                            onCopy(oauthDevice.userCode)
+                        }
+                    }
+                    Rectangle().fill(TM.divider).frame(height: 1)
+                    HStack(spacing: 8) {
+                        Text(oauthDevice.verificationURL.absoluteString)
+                            .font(.system(size: 10))
+                            .foregroundStyle(TM.textSecondary)
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                        Spacer(minLength: 6)
+                        EditorSoftButton(title: "复制链接", systemImage: "doc.on.doc") {
+                            onCopy(oauthDevice.verificationURL.absoluteString)
+                        }
+                        EditorSoftButton(title: "打开浏览器", systemImage: "safari", prominent: true) {
+                            onOpenURL(oauthDevice.verificationURL)
+                        }
+                    }
+                }
+                .padding(.horizontal, TM.cardContentHorizontal)
+                .padding(.vertical, 14)
+                .tmCard()
+            }
+            if let oauthStatus {
+                HStack(spacing: 8) {
+                    if isAuthorizing {
+                        ProgressView().controlSize(.small)
+                    } else if oauthCredentialDone {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(TM.ok)
+                            .font(.system(size: 11))
+                    }
+                    Text(oauthStatus)
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textSecondary)
+                }
+            }
+            EditorSoftButton(
+                title: isAuthorizing ? "取消授权" : "开始设备授权",
+                systemImage: isAuthorizing ? "xmark" : "lock.shield",
+                prominent: !isAuthorizing
+            ) {
+                if isAuthorizing { onCancelOAuth() } else { onStartOAuth() }
+            }
+            Text("实验性 Device OAuth，令牌不会显示在界面，只保存到 TokenMeter 本地私有文件。")
+                .font(.system(size: 10))
+                .foregroundStyle(TM.textTertiary)
         }
+    }
+
+    @ViewBuilder
+    private var browserSessionForm: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            EditorSoftButton(
+                title: isImportingBrowser ? "正在登录…" : "登录账号",
+                systemImage: "person.crop.circle",
+                prominent: true
+            ) { onStartEmbeddedLogin() }
+            .disabled(isImportingBrowser)
+            if isImportingBrowser {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("正在获取登录态…")
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.textSecondary)
+                }
+            }
+            if let oauthStatus, !isImportingBrowser {
+                Label(oauthStatus, systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(TM.ok)
+            }
+            Text("在内置窗口的官方页面完成登录，TokenMeter 只读取登录态。")
+                .font(.system(size: 10))
+                .foregroundStyle(TM.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var selectedMethodDetail: String {
+        authMethods.first { $0.id == authMethod }?.detail
+            ?? "适用于所有平台"
     }
 
     private var oauthCredentialDone: Bool {
@@ -631,20 +652,23 @@ private struct QuotaColorTarget: Identifiable {
         self.isOverall = isOverall
     }
 
-    /// 按平台与当前快照额度生成颜色目标列表；余额没有进度条，不参与配置。
-    static func targets(platform: Platform, quotas: [Quota]) -> [QuotaColorTarget] {
+    /// 按供应商与当前快照额度生成颜色目标列表；余额没有进度条，不参与配置。
+    @MainActor
+    static func targets(providerID: ProviderID, quotas: [Quota]) -> [QuotaColorTarget] {
         var result: [QuotaColorTarget] = []
-        if platform == .kimi {
+        let definition = ProviderRegistry.definition(for: providerID)
+        // 存在「总使用量」聚合额度的供应商（如 Kimi）额外提供 overall 目标。
+        if let overallLabel = definition?.metadata.overallUsageLabel {
             result.append(QuotaColorTarget(
                 key: SubscriptionQuotaColors.overallKey,
-                label: "总使用量",
+                label: overallLabel,
                 defaultColor: SubscriptionQuotaColors.overallDefault,
                 isOverall: true
             ))
         }
         let progressQuotas = quotas.filter { $0.kind != .balance }
         if progressQuotas.isEmpty {
-            if platform == .kimi {
+            if definition?.metadata.overallUsageLabel != nil {
                 result.append(QuotaColorTarget(
                     key: SubscriptionQuotaColors.fiveHourKey,
                     label: "5 小时额度",

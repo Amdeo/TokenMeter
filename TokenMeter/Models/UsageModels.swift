@@ -4,60 +4,55 @@ import SwiftUI
 
 struct Subscription: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
-    let platform: Platform
+    let providerID: ProviderID
     var name: String
-    var authMethod: AuthMethod
+    var authMethodID: AuthMethodID
     let createdAt: Date
     var isEnabled: Bool
     var quotaColors: [String: UInt32]
 
     init(
         id: UUID = UUID(),
-        platform: Platform,
+        providerID: ProviderID,
         name: String,
-        authMethod: AuthMethod,
+        authMethodID: AuthMethodID = .apiKey,
         createdAt: Date = .now,
         isEnabled: Bool = true,
         quotaColors: [String: UInt32] = [:]
     ) {
         self.id = id
-        self.platform = platform
+        self.providerID = providerID
         self.name = name
-        self.authMethod = authMethod
+        self.authMethodID = authMethodID
         self.createdAt = createdAt
         self.isEnabled = isEnabled
         self.quotaColors = quotaColors
     }
 
-    enum AuthMethod: String, Codable, Sendable {
-        case manualAPIKey
-        case kimiOAuth
-        case kimiBrowserSession
-
-        var label: String {
-            switch self {
-            case .manualAPIKey: "手动 API Key"
-            case .kimiOAuth: "Kimi Code OAuth"
-            case .kimiBrowserSession: "Kimi 网页登录态"
-            }
-        }
-    }
-
+    /// 兼容旧数据的解码：优先读新字段 providerID/authMethodID，缺失时回退旧 platform/authMethod。
     enum CodingKeys: String, CodingKey {
-        case id, platform, name, authMethod, createdAt, isEnabled, quotaColors
+        case id, name, createdAt, isEnabled, quotaColors
+        case providerID
+        case authMethodID
+        case platform
+        case authMethod
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        platform = try container.decode(Platform.self, forKey: .platform)
+        if let providerID = try container.decodeIfPresent(ProviderID.self, forKey: .providerID) {
+            self.providerID = providerID
+        } else {
+            let legacy = try container.decode(String.self, forKey: .platform)
+            self.providerID = ProviderID.legacyPlatformMapping(legacy)
+        }
         name = try container.decode(String.self, forKey: .name)
-        let rawAuthMethod = try container.decode(String.self, forKey: .authMethod)
-        switch rawAuthMethod {
-        case "piAuth", "officialAuth":
-            authMethod = .manualAPIKey
-        default:
-            authMethod = AuthMethod(rawValue: rawAuthMethod) ?? .manualAPIKey
+        if let authMethodID = try container.decodeIfPresent(AuthMethodID.self, forKey: .authMethodID) {
+            self.authMethodID = authMethodID
+        } else {
+            let legacy = try container.decode(String.self, forKey: .authMethod)
+            self.authMethodID = AuthMethodID.legacyMapping(legacy)
         }
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
@@ -67,9 +62,9 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
-        try container.encode(platform, forKey: .platform)
+        try container.encode(providerID, forKey: .providerID)
         try container.encode(name, forKey: .name)
-        try container.encode(authMethod, forKey: .authMethod)
+        try container.encode(authMethodID, forKey: .authMethodID)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(isEnabled, forKey: .isEnabled)
         try container.encode(quotaColors, forKey: .quotaColors)
@@ -172,34 +167,78 @@ extension Color {
 struct UsageSnapshot: Identifiable, Codable, Sendable {
     let id: UUID
     let subscriptionID: UUID
-    let platform: Platform
+    let providerID: ProviderID
     let quotas: [Quota]
     let updatedAt: Date
     let isDemo: Bool
     let errorMessage: String?
     let state: UsageState
     let overallUsageRatio: Double?
+    /// 供应商可选的额外数据（Codable JSON 值树），供自定义卡片 renderer 消费。
+    let providerData: JSONValue?
 
     init(
         id: UUID = UUID(),
         subscriptionID: UUID,
-        platform: Platform,
+        providerID: ProviderID,
         quotas: [Quota],
         updatedAt: Date,
         isDemo: Bool,
         errorMessage: String?,
         state: UsageState,
-        overallUsageRatio: Double? = nil
+        overallUsageRatio: Double? = nil,
+        providerData: JSONValue? = nil
     ) {
         self.id = id
         self.subscriptionID = subscriptionID
-        self.platform = platform
+        self.providerID = providerID
         self.quotas = quotas
         self.updatedAt = updatedAt
         self.isDemo = isDemo
         self.errorMessage = errorMessage
         self.state = state
         self.overallUsageRatio = overallUsageRatio
+        self.providerData = providerData
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, subscriptionID, quotas, updatedAt, isDemo, errorMessage, state, overallUsageRatio
+        case providerID
+        case providerData
+        case platform
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        subscriptionID = try container.decode(UUID.self, forKey: .subscriptionID)
+        if let providerID = try container.decodeIfPresent(ProviderID.self, forKey: .providerID) {
+            self.providerID = providerID
+        } else {
+            let legacy = try container.decode(String.self, forKey: .platform)
+            self.providerID = ProviderID.legacyPlatformMapping(legacy)
+        }
+        quotas = try container.decode([Quota].self, forKey: .quotas)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        isDemo = try container.decode(Bool.self, forKey: .isDemo)
+        errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
+        state = try container.decode(UsageState.self, forKey: .state)
+        overallUsageRatio = try container.decodeIfPresent(Double.self, forKey: .overallUsageRatio)
+        providerData = try container.decodeIfPresent(JSONValue.self, forKey: .providerData)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(subscriptionID, forKey: .subscriptionID)
+        try container.encode(providerID, forKey: .providerID)
+        try container.encode(quotas, forKey: .quotas)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(isDemo, forKey: .isDemo)
+        try container.encode(errorMessage, forKey: .errorMessage)
+        try container.encode(state, forKey: .state)
+        try container.encode(overallUsageRatio, forKey: .overallUsageRatio)
+        try container.encode(providerData, forKey: .providerData)
     }
 
     var overallStatus: QuotaStatus {
@@ -214,25 +253,26 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         return .normal
     }
 
-    static func realtime(subscription: Subscription, quotas: [Quota], updatedAt: Date = .now, overallUsageRatio: Double? = nil) -> Self {
+    static func realtime(subscription: Subscription, quotas: [Quota], updatedAt: Date = .now, overallUsageRatio: Double? = nil, providerData: JSONValue? = nil) -> Self {
         .init(
             subscriptionID: subscription.id,
-            platform: subscription.platform,
+            providerID: subscription.providerID,
             quotas: quotas,
             updatedAt: updatedAt,
             isDemo: false,
             errorMessage: nil,
             state: .realtime,
-            overallUsageRatio: overallUsageRatio
+            overallUsageRatio: overallUsageRatio,
+            providerData: providerData
         )
     }
 
     static func failure(subscription: Subscription, message: String, updatedAt: Date = .now) -> Self {
-        .init(subscriptionID: subscription.id, platform: subscription.platform, quotas: [], updatedAt: updatedAt, isDemo: false, errorMessage: message, state: .error)
+        .init(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: updatedAt, isDemo: false, errorMessage: message, state: .error)
     }
 
     static func unsupported(subscription: Subscription, message: String, updatedAt: Date = .now) -> Self {
-        .init(subscriptionID: subscription.id, platform: subscription.platform, quotas: [], updatedAt: updatedAt, isDemo: false, errorMessage: message, state: .unsupported)
+        .init(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: updatedAt, isDemo: false, errorMessage: message, state: .unsupported)
     }
 }
 
@@ -258,45 +298,6 @@ enum UsageState: String, Codable, Sendable {
         case .realtime: .secondary
         case .notConfigured, .authenticationRequired, .unsupported: .orange
         case .error: .red
-        }
-    }
-}
-
-enum Platform: String, CaseIterable, Identifiable, Codable, Sendable {
-    case deepSeek = "DeepSeek"
-    case zhipu = "智谱 AI"
-    case kimi = "Kimi"
-    case openCodeGo = "OpenCode Go"
-    case miniMax = "MiniMax"
-
-    var id: String { rawValue }
-    var icon: String {
-        switch self {
-        case .deepSeek: "bubble.left.and.bubble.right.fill"
-        case .zhipu: "sparkles"
-        case .kimi: "moon.stars.fill"
-        case .openCodeGo: "chevron.left.forwardslash.chevron.right"
-        case .miniMax: "cube.fill"
-        }
-    }
-
-    var capabilityDescription: String {
-        switch self {
-        case .deepSeek: "支持余额接口，可使用 API Key。"
-        case .kimi: "支持 Kimi For Coding 订阅额度、网页登录态和 API Key。"
-        case .openCodeGo: "支持用量窗口接口，可使用 API Key。"
-        case .zhipu: "支持 GLM Coding Plan 额度窗口（5 小时 / 每周），仅支持 API Key；暂无公开 OAuth 集成。"
-        case .miniMax: "支持 MiniMax Coding Plan 套餐额度。"
-        }
-    }
-
-    var authPageURL: URL? {
-        switch self {
-        case .deepSeek: URL(string: "https://platform.deepseek.com/api_keys")
-        case .kimi: URL(string: "https://platform.moonshot.cn/console/api-keys")
-        case .openCodeGo: URL(string: "https://opencode.ai/zen")
-        case .zhipu: URL(string: "https://www.bigmodel.cn/usercenter/proj-mgmt/apikeys")
-        case .miniMax: URL(string: "https://platform.minimaxi.com/user-center/basic-information/interface-key")
         }
     }
 }
@@ -347,21 +348,24 @@ struct Quota: Identifiable, Codable, Sendable {
     let used: Double
     let limit: Double
     let resetAt: Date?
+    /// 额度/订阅的到期时间（区别于每日重置），如订阅到期日。nil 表示无到期概念。
+    let expiresAt: Date?
     let unit: QuotaUnit
     let kind: Kind
 
-    init(id: UUID = UUID(), name: String, used: Double, limit: Double, resetAt: Date?, unit: QuotaUnit = .tokens, kind: Kind = .generic) {
+    init(id: UUID = UUID(), name: String, used: Double, limit: Double, resetAt: Date?, expiresAt: Date? = nil, unit: QuotaUnit = .tokens, kind: Kind = .generic) {
         self.id = id
         self.name = name
         self.used = used
         self.limit = limit
         self.resetAt = resetAt
+        self.expiresAt = expiresAt
         self.unit = unit
         self.kind = kind
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, used, limit, resetAt, unit, kind
+        case id, name, used, limit, resetAt, expiresAt, unit, kind
     }
 
     init(from decoder: Decoder) throws {
@@ -371,6 +375,7 @@ struct Quota: Identifiable, Codable, Sendable {
         used = try container.decode(Double.self, forKey: .used)
         limit = try container.decode(Double.self, forKey: .limit)
         resetAt = try container.decodeIfPresent(Date.self, forKey: .resetAt)
+        expiresAt = try container.decodeIfPresent(Date.self, forKey: .expiresAt)
         unit = try container.decodeIfPresent(QuotaUnit.self, forKey: .unit) ?? .tokens
         kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .generic
     }

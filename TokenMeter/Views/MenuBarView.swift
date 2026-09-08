@@ -148,12 +148,6 @@ private struct SubscriptionListViewportHeightPreferenceKey: PreferenceKey {
     }
 }
 
-private enum ReorderAutoScrollDirection: Equatable {
-    case none
-    case up
-    case down
-}
-
 struct MenuBarView: View {
     @Environment(UsageStore.self) private var store
     @Environment(PanelNavigationState.self) private var navigation
@@ -163,24 +157,9 @@ struct MenuBarView: View {
     @State private var isReordering = false
     @State private var subscriptionListContentHeight: CGFloat = PanelLayoutMetrics.subscriptionListMaxHeight
     @State private var subscriptionListViewportHeight: CGFloat = PanelLayoutMetrics.subscriptionListMaxHeight
-    /// 排序模式（DragGesture）状态。拖动期间不改动 store 数组，全部视觉换位由行 offset 承担，
+    /// 排序模式（DragGesture）状态机：拖动期间不改动 store 数组，全部视觉换位由行 offset 承担，
     /// 消除「系统重排动画 + 手动 offset」双通道造成的抖动；松手才一次性写回 store。
-    /// reorderSequence 是拖动中的「视觉序列」（含拖行当前槽），仅驱动让位 offset。
-    @State private var reorderDraggingID: UUID?
-    @State private var reorderTranslation: CGFloat = 0
-    @State private var reorderOriginMidY: CGFloat = 0
-    @State private var reorderSequence: [UUID] = []
-    @State private var reorderFrames: [UUID: CGRect] = [:]
-    @State private var reorderBaseFrames: [UUID: CGRect] = [:]
-    @State private var reorderPointerY: CGFloat = 0
-    @State private var reorderContentFrame: CGRect = .zero
-    @State private var reorderAutoScrollDirection: ReorderAutoScrollDirection = .none
-    @State private var reorderAutoScrollTick = 0
-    private static let subscriptionListViewportCoordinateSpace = "subscriptionListViewport"
-    private static let subscriptionListContentCoordinateSpace = "subscriptionListContent"
-    private static let reorderSpacing: CGFloat = 8
-    private static let reorderEdgeActivation: CGFloat = 48
-    private static let reorderAutoScrollInterval: UInt64 = 80_000_000
+    @State private var reorder = SubscriptionReorderController()
     #if DEBUG
     @State private var previewMode: StatusPreviewMode?
     #endif
@@ -225,8 +204,8 @@ struct MenuBarView: View {
                 SettingsPanel(settings: store.settings, onBack: navigateBack, onPreview: previewEntryAction)
                     .transition(pushTransition)
             case .addProvider:
-                ProviderSelectionPage(onBack: navigateBack) { platform in
-                    navigateForward { navigation.selectProvider(platform) }
+                ProviderSelectionPage(onBack: navigateBack) { providerID in
+                    navigateForward { navigation.selectProvider(providerID) }
                 }
                 .transition(pushTransition)
             case .addConfiguration(let draft):
@@ -348,22 +327,22 @@ struct MenuBarView: View {
         .onPreferenceChange(SubscriptionRowFramePreferenceKey.self) { frames in
             // 让位 offset 会改变渲染 frame；拖动期间固定基准，避免几何测量和
             // offset 互相反馈导致换位抖动。
-            if reorderDraggingID == nil {
-                reorderFrames = frames
-            } else if reorderBaseFrames.isEmpty, frames.count == store.subscriptions.count {
-                reorderBaseFrames = frames
+            if reorder.draggingID == nil {
+                reorder.frames = frames
+            } else if reorder.baseFrames.isEmpty, frames.count == store.subscriptions.count {
+                reorder.baseFrames = frames
             }
         }
         .onPreferenceChange(ReorderContentFramePreferenceKey.self) { frame in
-            reorderContentFrame = frame
-            guard reorderDraggingID != nil else { return }
-            adjustReorderSequence(centerY: reorderPointerY - frame.minY)
+            reorder.contentFrame = frame
+            guard reorder.draggingID != nil else { return }
+            reorder.adjustSequence(centerY: reorder.pointerY - frame.minY)
         }
         .animation(reduceMotion ? .none : .easeOut(duration: 0.15), value: isReordering)
         .reportsIntrinsicPanelHeight(route: .overview, chrome: PanelLayoutMetrics.rootVerticalChrome)
         .onDisappear {
             isReordering = false
-            resetReorderState()
+            reorder.reset()
         }
     }
 
@@ -389,23 +368,23 @@ struct MenuBarView: View {
     private var subscriptionList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(spacing: Self.reorderSpacing) {
+                VStack(spacing: SubscriptionReorderController.spacing) {
                     ForEach(store.subscriptions) { subscription in
                         subscriptionRow(for: subscription)
                             .id(subscription.id)
                     }
                 }
-                .coordinateSpace(name: Self.subscriptionListContentCoordinateSpace)
+                .coordinateSpace(name: SubscriptionReorderController.contentCoordinateSpace)
                 .background {
                     GeometryReader { geometry in
                         Color.clear.preference(
                             key: ReorderContentFramePreferenceKey.self,
-                            value: geometry.frame(in: .named(Self.subscriptionListViewportCoordinateSpace))
+                            value: geometry.frame(in: .named(SubscriptionReorderController.viewportCoordinateSpace))
                         )
                     }
                 }
             }
-            .coordinateSpace(name: Self.subscriptionListViewportCoordinateSpace)
+            .coordinateSpace(name: SubscriptionReorderController.viewportCoordinateSpace)
             .scrollIndicators(.hidden)
             .frame(
                 idealHeight: subscriptionListIdealHeight,
@@ -420,44 +399,55 @@ struct MenuBarView: View {
                 }
             }
             .padding(.vertical, 2)
-            .task(id: reorderAutoScrollDirection) {
-                guard reorderAutoScrollDirection != .none else { return }
+            .task(id: reorder.autoScrollDirection) {
+                guard reorder.autoScrollDirection != .none else { return }
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: Self.reorderAutoScrollInterval)
+                    try? await Task.sleep(nanoseconds: SubscriptionReorderController.autoScrollInterval)
                     guard !Task.isCancelled else { return }
-                    reorderAutoScrollTick &+= 1
+                    reorder.autoScrollTick &+= 1
                 }
             }
-            .onChange(of: reorderAutoScrollTick) { _, _ in
-                advanceAutoScroll(using: proxy)
+            .onChange(of: reorder.autoScrollTick) { _, _ in
+                reorder.advanceAutoScroll(using: proxy, viewportHeight: subscriptionListViewportHeight, reduceMotion: reduceMotion)
             }
         }
     }
 
     @ViewBuilder
     private func subscriptionRow(for subscription: Subscription) -> some View {
-        let isDragging = reorderDraggingID == subscription.id
+        let isDragging = reorder.draggingID == subscription.id
         let row = subscriptionCard(for: subscription)
             .background(GeometryReader { proxy in
                 Color.clear
                     .preference(key: SubscriptionListContentHeightPreferenceKey.self, value: proxy.size.height)
                     .preference(
                         key: SubscriptionRowFramePreferenceKey.self,
-                        value: [subscription.id: proxy.frame(in: .named(Self.subscriptionListContentCoordinateSpace))]
+                        value: [subscription.id: proxy.frame(in: .named(SubscriptionReorderController.contentCoordinateSpace))]
                     )
             })
             .zIndex(isDragging ? 1 : 0)
 
         if isReordering {
             let offsetRow = row
-                .offset(y: reorderOffsetY(for: subscription.id))
+                .offset(y: reorder.offsetY(for: subscription.id))
                 .contentShape(Rectangle())
                 // ScrollView 在 macOS 上仍可能参与纵向手势，排序手势必须优先。
-                .highPriorityGesture(reorderDragGesture(for: subscription.id))
+                .highPriorityGesture(reorder.dragGesture(
+                    for: subscription.id,
+                    subscriptions: store.subscriptions,
+                    viewportHeight: subscriptionListViewportHeight,
+                    onCommit: { _, sourceIndex, targetIndex in
+                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.18)) {
+                            // Array.move 的 destination 是插入点；向下移动时需跳过被移除的原槽位。
+                            let destination = targetIndex > sourceIndex ? targetIndex + 1 : targetIndex
+                            store.moveSubscriptions(fromOffsets: IndexSet(integer: sourceIndex), toOffset: destination)
+                        }
+                    }
+                ))
                 // 拖行跟手更新不动画，让位行只在序列改变时短暂缓动。
                 .animation(
                     isDragging || reduceMotion ? nil : .easeOut(duration: 0.15),
-                    value: reorderSequence
+                    value: reorder.sequence
                 )
             offsetRow
         } else {
@@ -474,207 +464,22 @@ struct MenuBarView: View {
         )
     }
 
-    /// 行在视觉序列 reorderSequence（目标布局，内容坐标）下的顶部 y。
-    private func reorderVisualTop(for id: UUID) -> CGFloat? {
-        let frames = activeReorderFrames
-        guard let listTop = frames.values.map(\.minY).min() else { return nil }
-        var top = listTop
-        for seqID in reorderSequence {
-            guard let frame = frames[seqID] else { return nil }
-            if seqID == id { return top }
-            top += frame.height + Self.reorderSpacing
-        }
-        return nil
-    }
-
-    /// 排序行的纵向 offset：
-    /// - 拖动行：布局槽静止，offset = 跟手位移（视觉中心 = 起始中线 + translation）。
-    /// - 让位行：从 store 布局槽让位到视觉序列槽（拖动期间 store 数组不变，布局静止）。
-    private func reorderOffsetY(for id: UUID) -> CGFloat {
-        guard isReordering, reorderDraggingID != nil else { return 0 }
-        if reorderDraggingID == id {
-            if let frame = activeReorderFrames[id], !reorderContentFrame.isEmpty {
-                return reorderPointerY - (reorderContentFrame.minY + frame.midY)
-            }
-            return reorderTranslation
-        }
-        guard let visualTop = reorderVisualTop(for: id), let layoutTop = activeReorderFrames[id]?.minY else { return 0 }
-        return visualTop - layoutTop
-    }
-
-    private var activeReorderFrames: [UUID: CGRect] {
-        reorderBaseFrames.isEmpty ? reorderFrames : reorderBaseFrames
-    }
-
-    private func resetReorderState() {
-        reorderDraggingID = nil
-        reorderTranslation = 0
-        reorderOriginMidY = 0
-        reorderSequence = []
-        reorderBaseFrames = [:]
-        reorderPointerY = 0
-        reorderContentFrame = .zero
-        reorderAutoScrollDirection = .none
-    }
-
-    private func reorderDragGesture(for id: UUID) -> some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: .named(Self.subscriptionListViewportCoordinateSpace))
-            .onChanged { value in
-                guard reorderDraggingID == nil || reorderDraggingID == id else { return }
-                if reorderDraggingID == nil {
-                    var transaction = Transaction()
-                    transaction.animation = nil
-                    withTransaction(transaction) {
-                        // 有基准 frame 时按卡片中线换位；测量稍晚时退回 startLocation，
-                        // 先保证手势可以开始，后续 frame 到位后再参与换位。
-                        reorderDraggingID = id
-                        reorderOriginMidY = reorderFrames[id]?.midY ?? value.startLocation.y
-                        reorderSequence = store.subscriptions.map(\.id)
-                        reorderBaseFrames = reorderFrames
-                    }
-                }
-                reorderPointerY = value.location.y
-                reorderTranslation = value.translation.height
-                let centerY = reorderContentFrame.isEmpty
-                    ? reorderOriginMidY + value.translation.height
-                    : value.location.y - reorderContentFrame.minY
-                adjustReorderSequence(centerY: centerY)
-                updateAutoScrollDirection(for: value.location.y)
-            }
-            .onEnded { _ in
-                finishReorder()
-            }
-    }
-
-    private func updateAutoScrollDirection(for pointerY: CGFloat) {
-        guard reorderContentFrame.isEmpty || reorderContentFrame.height > subscriptionListViewportHeight + 1 else {
-            reorderAutoScrollDirection = .none
-            return
-        }
-        let top = Self.reorderEdgeActivation
-        let bottom = subscriptionListViewportHeight - Self.reorderEdgeActivation
-        let direction: ReorderAutoScrollDirection
-        if pointerY < top {
-            direction = .up
-        } else if pointerY > bottom {
-            direction = .down
-        } else {
-            direction = .none
-        }
-        if direction != reorderAutoScrollDirection {
-            reorderAutoScrollDirection = direction
-        }
-    }
-
-    private func advanceAutoScroll(using proxy: ScrollViewProxy) {
-        guard isReordering,
-              reorderAutoScrollDirection != .none,
-              let dragID = reorderDraggingID,
-              var index = reorderSequence.firstIndex(of: dragID)
-        else { return }
-
-        let step: Int = reorderAutoScrollDirection == .down ? 1 : -1
-        let nextIndex = index + step
-        guard reorderSequence.indices.contains(nextIndex) else {
-            reorderAutoScrollDirection = .none
-            return
-        }
-
-        let previousSequence = reorderSequence
-        let centerY = reorderContentFrame.isEmpty
-            ? reorderOriginMidY + reorderTranslation
-            : reorderPointerY - reorderContentFrame.minY
-        adjustReorderSequence(centerY: centerY)
-        index = reorderSequence.firstIndex(of: dragID) ?? index
-
-        let targetIndex = index + step
-        guard reorderSequence.indices.contains(targetIndex) else {
-            reorderAutoScrollDirection = .none
-            return
-        }
-        if reorderSequence == previousSequence {
-            reorderSequence.swapAt(index, targetIndex)
-        }
-
-        let revealIndex = reorderAutoScrollDirection == .down
-            ? min(targetIndex + 1, reorderSequence.count - 1)
-            : max(targetIndex - 1, 0)
-        let revealID = reorderSequence[revealIndex]
-        let animation: Animation? = reduceMotion ? nil : .easeOut(duration: 0.12)
-        withAnimation(animation) {
-            proxy.scrollTo(revealID, anchor: reorderAutoScrollDirection == .down ? .bottom : .top)
-        }
-    }
-
-    /// 拖动中视觉让位：只调整 reorderSequence（不动 store），使拖行在序列中的槽位贴近鼠标中心。
-    /// 比较对象是各行在目标序列中的中线（静态几何），不受让位动画瞬时位置影响，判定稳定。
-    private func adjustReorderSequence(centerY: CGFloat) {
-        guard let dragID = reorderDraggingID else { return }
-        var seq = reorderSequence
-        guard var k = seq.firstIndex(of: dragID) else { return }
-        let frames = activeReorderFrames
-        guard frames.count == seq.count, seq.allSatisfy({ frames[$0] != nil }) else { return }
-        func centerYInSequence(_ id: UUID, in s: [UUID]) -> CGFloat {
-            var top = frames.values.map(\.minY).min() ?? 0
-            for sid in s {
-                guard let frame = frames[sid] else { return top }
-                if sid == id { return top + frame.height / 2 }
-                top += frame.height + Self.reorderSpacing
-            }
-            return top
-        }
-        while k > 0, centerY < centerYInSequence(seq[k - 1], in: seq) {
-            seq.swapAt(k, k - 1)
-            k -= 1
-        }
-        while k < seq.count - 1, centerY > centerYInSequence(seq[k + 1], in: seq) {
-            seq.swapAt(k, k + 1)
-            k += 1
-        }
-        if seq != reorderSequence { reorderSequence = seq }
-    }
-
-    /// 松手落位：把视觉序列一次性写回 store（数组 move + 持久化）并复位拖行状态。
-    /// 拖动期间让位 offset 恰把各行显示在最终槽位，落位动画只是拖行从跟手处平滑归槽，
-    /// 无「系统重排动画 + offset」双通道，不抖。
-    private func finishReorder() {
-        guard let dragID = reorderDraggingID else { return }
-        let sourceIndex = store.subscriptions.firstIndex(where: { $0.id == dragID })
-        let targetIndex = reorderSequence.firstIndex(of: dragID)
-        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.18)) {
-            if let sourceIndex, let targetIndex, sourceIndex != targetIndex {
-                // Array.move 的 destination 是插入点；向下移动时需跳过被移除的原槽位。
-                let destination = targetIndex > sourceIndex ? targetIndex + 1 : targetIndex
-                store.moveSubscriptions(fromOffsets: IndexSet(integer: sourceIndex), toOffset: destination)
-            }
-            reorderDraggingID = nil
-            reorderTranslation = 0
-            reorderOriginMidY = 0
-            reorderSequence = store.subscriptions.map(\.id)
-            reorderBaseFrames = [:]
-            reorderPointerY = 0
-            reorderContentFrame = .zero
-            reorderAutoScrollDirection = .none
-        }
-    }
 
     private func toggleReordering() {
         withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) {
             if isReordering {
                 // 退出排序：store 已是最新顺序，仅复位视觉状态。
-                resetReorderState()
+                reorder.reset()
             } else {
-                reorderSequence = store.subscriptions.map(\.id)
-                reorderBaseFrames = [:]
+                reorder.sequence = store.subscriptions.map(\.id)
+                reorder.baseFrames = [:]
             }
             isReordering.toggle()
         }
     }
 
     private var dashboardMeta: String {
-        let count = store.subscriptions.count
-        let updated = store.lastRefreshAt.map { " · \($0.tokenMeterTimeText) 更新" } ?? ""
-        return "\(count) 个服务\(updated)"
+        "\(store.subscriptions.count) 个服务"
     }
 
     private var footer: some View {
@@ -693,9 +498,19 @@ struct MenuBarView: View {
 
                 HStack(spacing: 5) {
                     Circle().fill(store.isRefreshing ? TM.accent : TM.ok).frame(width: 6, height: 6)
-                    Text(store.isRefreshing ? "同步中…" : (store.lastRefreshAt.map { _ in "已同步" } ?? "等待同步"))
-                        .font(.system(size: 10))
-                        .foregroundStyle(TM.textTertiary)
+                    if store.isRefreshing {
+                        Text("同步中…")
+                            .font(.system(size: 10))
+                            .foregroundStyle(TM.textTertiary)
+                    } else if let updatedAt = store.lastRefreshAt {
+                        Text("已同步 · \(updatedAt.formatted(date: .omitted, time: .shortened))")
+                            .font(.system(size: 10))
+                            .foregroundStyle(TM.textTertiary)
+                    } else {
+                        Text("等待同步")
+                            .font(.system(size: 10))
+                            .foregroundStyle(TM.textTertiary)
+                    }
                 }
 
                 Button(role: .destructive) {
@@ -727,7 +542,7 @@ struct MenuBarView: View {
 
 private struct ProviderSelectionPage: View {
     let onBack: () -> Void
-    let onSelect: (Platform) -> Void
+    let onSelect: (ProviderID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -747,8 +562,8 @@ private struct ProviderSelectionPage: View {
 
             ScrollView {
                 VStack(spacing: 8) {
-                    ForEach(Platform.allCases) { platform in
-                        ProviderSelectionCard(platform: platform) { onSelect(platform) }
+                    ForEach(ProviderRegistry.all, id: \.id) { definition in
+                        ProviderSelectionCard(definition: definition) { onSelect(definition.id) }
                     }
                 }
                 .padding(.vertical, 8)
@@ -761,25 +576,21 @@ private struct ProviderSelectionPage: View {
 }
 
 private struct ProviderSelectionCard: View {
-    let platform: Platform
+    let definition: any ProviderDefinition
     let action: () -> Void
     @State private var hovering = false
 
-    private var authenticationSummary: String {
-        platform == .kimi
-            ? "API Key、Kimi Code OAuth 或网页登录态"
-            : "API Key · \(platform.capabilityDescription)"
-    }
+    private var metadata: ProviderMetadata { definition.metadata }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                PlatformLogo(platform: platform, size: 30)
+                PlatformLogo(definition: definition, size: 30)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(platform.rawValue)
+                    Text(metadata.displayName)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(TM.textPrimary)
-                    Text(authenticationSummary)
+                    Text(metadata.authenticationSummary)
                         .font(.system(size: 10))
                         .foregroundStyle(TM.textSecondary)
                         .lineLimit(2)
@@ -796,7 +607,7 @@ private struct ProviderSelectionCard: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .accessibilityLabel("\(platform.rawValue)，\(authenticationSummary)")
+        .accessibilityLabel("\(metadata.displayName)，\(metadata.authenticationSummary)")
     }
 }
 
@@ -813,14 +624,12 @@ private struct DashboardHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("AI 额度")
-                    .font(.system(size: 20, weight: .semibold).width(.standard))
-                    .tracking(-0.5)
-                Text(meta)
-                    .font(.system(size: 11))
-                    .foregroundStyle(TM.textSecondary)
-            }
+            Text(meta)
+                .font(.system(size: 11))
+                .foregroundStyle(TM.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
 
             Spacer()
 
@@ -878,367 +687,6 @@ struct HeaderIconButton: View {
     }
 }
 
-// MARK: - 空状态
-
-private struct MenuBarEmptyState: View {
-    let onAdd: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 34)
-            Image(systemName: "gauge.with.dots.needle.67percent")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(TM.textPrimary.opacity(0.85))
-                .frame(width: 56, height: 56)
-                .background(TM.hoverFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(TM.border, lineWidth: 1))
-            Text("集中查看 AI 用量")
-                .font(.system(size: 16, weight: .semibold))
-                .tracking(-0.3)
-                .padding(.top, 16)
-            Text("添加 DeepSeek、Kimi 或其他服务，随时查看余额与用量。")
-                .font(.system(size: 11))
-                .foregroundStyle(TM.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 260)
-                .padding(.top, 6)
-            Button(action: onAdd) {
-                Label("添加订阅", systemImage: "plus")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: 0x191A1A))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color(hex: 0xE9EBE8), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 18)
-            .help("添加订阅")
-            .accessibilityLabel("添加订阅")
-            Spacer(minLength: 30)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - 订阅卡片
-
-private struct SubscriptionMenuCard: View {
-    let subscription: Subscription
-    let snapshot: UsageSnapshot?
-    let onEdit: () -> Void
-    var isReordering: Bool = false
-
-    @State private var hovering = false
-
-    private var status: QuotaStatus? {
-        guard let snapshot else { return nil }
-        return SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription)
-    }
-
-    private var cardAnchor: SubscriptionCardPresentation.Anchor? {
-        guard let snapshot else { return nil }
-        return SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
-    }
-
-    private var accessibilityLabel: String {
-        SubscriptionCardPresentation.cardAccessibilityLabel(
-            subscription: subscription,
-            snapshot: snapshot,
-            anchor: cardAnchor
-        )
-    }
-
-    var body: some View {
-        // 排序模式下卡片不能是 Button：Button 会消费鼠标按下，行级手势
-        // （排序 DragGesture）收不到事件。此时改用非交互容器渲染卡片外观，
-        // 拖拽手势由外层行视图捕获。
-        Group {
-            if isReordering {
-                cardContent
-            } else {
-                Button(action: onEdit) { cardContent }
-                    .buttonStyle(.plain)
-            }
-        }
-        .tmCard(hovering: hovering)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
-        .help(isReordering ? "拖动排序" : "编辑配置")
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 9) {
-                PlatformLogo(platform: subscription.platform, size: 30)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(subscription.name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        if let status {
-                            Circle()
-                                .fill(status == .normal ? TM.ok : (status == .warning ? TM.warn : TM.danger))
-                                .frame(width: 6, height: 6)
-                                .accessibilityLabel(status.label)
-                        }
-                    }
-                    Text("\(subscription.platform.rawValue) · \(subscription.authMethod.label)")
-                        .font(.system(size: 9))
-                        .foregroundStyle(TM.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .layoutPriority(0)
-
-                Spacer(minLength: 8)
-
-                if let anchor = cardAnchor {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(anchor.label)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(TM.textTertiary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .layoutPriority(0)
-                        Text(anchor.value)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
-                            .foregroundStyle(anchor.color)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .layoutPriority(1)
-                    }
-                    .layoutPriority(1)
-                }
-
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(TM.textTertiary)
-                    .frame(width: isReordering ? 18 : 0)
-                    .opacity(isReordering ? 1 : 0)
-                    .accessibilityHidden(true)
-            }
-
-            cardBody
-        }
-        .padding(.horizontal, TM.cardContentHorizontal)
-        .padding(.vertical, 11)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private var cardBody: some View {
-        if let snapshot, snapshot.state == .realtime {
-            SubscriptionUsageView(subscription: subscription, snapshot: snapshot)
-        } else if let snapshot {
-            stateRow(for: snapshot)
-        } else {
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.mini)
-                Text("等待首次刷新…")
-            }
-            .font(.system(size: 11))
-            .foregroundStyle(TM.textSecondary)
-        }
-    }
-
-    @ViewBuilder
-    private func stateRow(for snapshot: UsageSnapshot) -> some View {
-        switch snapshot.state {
-        case .authenticationRequired:
-            cardStateRow(icon: "person.crop.circle.badge.exclamationmark", tint: TM.warn,
-                         title: "认证已失效", detail: "前往编辑页面重新连接")
-        case .notConfigured:
-            cardStateRow(icon: "lock.trianglebadge.exclamationmark", tint: TM.warn,
-                         title: "需要配置", detail: snapshot.errorMessage ?? "前往编辑页面完成配置")
-        case .unsupported:
-            cardStateRow(icon: "questionmark.circle", tint: TM.textSecondary,
-                         title: "暂不支持额度接口", detail: snapshot.errorMessage ?? "")
-        case .error:
-            cardStateRow(icon: "exclamationmark.triangle", tint: TM.danger,
-                         title: "获取失败", detail: snapshot.errorMessage ?? "请稍后重试")
-        case .realtime:
-            EmptyView()
-        }
-    }
-
-    private func cardStateRow(icon: String, tint: Color, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(tint)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(tint)
-                if !detail.isEmpty {
-                    Text(detail)
-                        .font(.system(size: 10))
-                        .foregroundStyle(TM.textSecondary)
-                        .lineLimit(2)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-#if DEBUG
-private enum StatusPreviewMode: String, CaseIterable, Identifiable {
-    case normal, loading, authenticationRequired, error, lowBalance, empty
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .normal: "正常连接"
-        case .loading: "正在更新"
-        case .authenticationRequired: "认证已过期"
-        case .error: "网络错误"
-        case .lowBalance: "余额偏低"
-        case .empty: "空状态"
-        }
-    }
-}
-
-private struct StatusPreviewOverlay: View {
-    let mode: StatusPreviewMode
-    let onClose: () -> Void
-
-    @State private var current: StatusPreviewMode
-
-    init(mode: StatusPreviewMode, onClose: @escaping () -> Void) {
-        self.mode = mode
-        self.onClose = onClose
-        _current = State(initialValue: mode)
-    }
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(0.32)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onClose)
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("预览组件状态")
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(TM.textSecondary)
-                            .frame(width: 26, height: 26)
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("关闭预览")
-                    .accessibilityLabel("关闭预览")
-                }
-                Text("仅本地示例，不修改任何真实数据。")
-                    .font(.system(size: 10))
-                    .foregroundStyle(TM.textSecondary)
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
-                    ForEach(StatusPreviewMode.allCases) { item in
-                        Button { current = item } label: {
-                            Text(item.label)
-                                .font(.system(size: 10, weight: item == current ? .semibold : .regular))
-                                .foregroundStyle(item == current ? TM.textPrimary : TM.textSecondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 7)
-                                .background(item == current ? TM.cardFillHover : TM.cardFill, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(item == current ? TM.borderStrong : TM.border, lineWidth: 1))
-                                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                previewContent
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: 130)
-            }
-            .padding(14)
-            .background(TM.panelMid, in: UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14, style: .continuous))
-            .overlay(
-                UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14, style: .continuous)
-                    .strokeBorder(TM.borderStrong, lineWidth: 1)
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var previewContent: some View {
-        switch current {
-        case .empty:
-            MenuBarEmptyState {}
-                .scaleEffect(0.92, anchor: .top)
-        case .loading:
-            VStack(spacing: 10) {
-                SubscriptionMenuCard(subscription: Self.deepSeek, snapshot: nil, onEdit: {})
-                SubscriptionMenuCard(subscription: Self.kimi, snapshot: nil, onEdit: {})
-            }
-        case .normal:
-            VStack(spacing: 10) {
-                SubscriptionMenuCard(subscription: Self.deepSeek, snapshot: Self.normalDeepSeek, onEdit: {})
-                SubscriptionMenuCard(subscription: Self.kimi, snapshot: Self.normalKimi, onEdit: {})
-            }
-        case .authenticationRequired:
-            SubscriptionMenuCard(subscription: Self.kimi, snapshot: Self.authExpiredKimi, onEdit: {})
-        case .error:
-            SubscriptionMenuCard(subscription: Self.deepSeek, snapshot: Self.errorDeepSeek, onEdit: {})
-        case .lowBalance:
-            SubscriptionMenuCard(subscription: Self.deepSeek, snapshot: Self.lowDeepSeek, onEdit: {})
-        }
-    }
-
-    private static let deepSeek = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
-    private static let kimi = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiOAuth)
-
-    private static func balanceQuota(remaining: Double) -> Quota {
-        Quota(name: "API 余额", used: 100 - remaining, limit: 100, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
-    }
-
-    private static var normalDeepSeek: UsageSnapshot {
-        .realtime(subscription: deepSeek, quotas: [balanceQuota(remaining: 18.42)])
-    }
-
-    private static var lowDeepSeek: UsageSnapshot {
-        .realtime(subscription: deepSeek, quotas: [balanceQuota(remaining: 2.10)])
-    }
-
-    private static var errorDeepSeek: UsageSnapshot {
-        .failure(subscription: deepSeek, message: "网络请求超时，请稍后重试")
-    }
-
-    private static var authExpiredKimi: UsageSnapshot {
-        UsageSnapshot(
-            subscriptionID: kimi.id,
-            platform: .kimi,
-            quotas: [],
-            updatedAt: .now,
-            isDemo: false,
-            errorMessage: "OAuth 令牌已过期",
-            state: .authenticationRequired
-        )
-    }
-
-    private static var normalKimi: UsageSnapshot {
-        .realtime(
-            subscription: kimi,
-            quotas: [
-                Quota(name: "5 小时额度", used: 82, limit: 100, resetAt: .now.addingTimeInterval(7200), kind: .fiveHour),
-                Quota(name: "每周额度", used: 64, limit: 100, resetAt: .now.addingTimeInterval(86400 * 2), kind: .weekly)
-            ],
-            overallUsageRatio: 0.41
-        )
-    }
-}
-#endif
 
 /// 面板内确认对话框：模态遮罩 + 卡片，避免 SwiftUI .alert 在瞬态面板
 /// 中弹独立系统窗口，导致面板被外部点击逻辑关闭。

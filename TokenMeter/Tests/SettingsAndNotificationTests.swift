@@ -36,65 +36,61 @@ struct SettingsAndNotificationTests {
 
     @Test
     func newManualCredentialRequiresAPIKey() {
+        let draft = SubscriptionEditorDraft(providerID: .deepSeek)
         #expect(!SubscriptionCredentialRequirement.canSave(
             original: nil,
-            selected: .manualAPIKey,
-            apiKey: "",
-            hasOAuthCredential: false,
-            hasBrowserCredential: false,
-            isImportingBrowser: false
+            selected: .apiKey,
+            flowID: .apiKey,
+            draft: draft
         ))
+        draft.apiKey = "replacement-key"
         #expect(SubscriptionCredentialRequirement.canSave(
             original: nil,
-            selected: .manualAPIKey,
-            apiKey: "replacement-key",
-            hasOAuthCredential: false,
-            hasBrowserCredential: false,
-            isImportingBrowser: false
+            selected: .apiKey,
+            flowID: .apiKey,
+            draft: draft
         ))
     }
 
     @Test
     func editingAuthenticationMethodRequiresNewMatchingCredential() {
+        let draft = SubscriptionEditorDraft(providerID: .deepSeek)
         #expect(SubscriptionCredentialRequirement.canSave(
-            original: .manualAPIKey,
-            selected: .manualAPIKey,
-            apiKey: "",
-            hasOAuthCredential: false,
-            hasBrowserCredential: false,
-            isImportingBrowser: false
+            original: .apiKey,
+            selected: .apiKey,
+            flowID: .apiKey,
+            draft: draft
         ))
+        draft.authMethodID = .kimiDeviceOAuth
         #expect(!SubscriptionCredentialRequirement.canSave(
-            original: .manualAPIKey,
-            selected: .kimiOAuth,
-            apiKey: "",
-            hasOAuthCredential: false,
-            hasBrowserCredential: false,
-            isImportingBrowser: false
+            original: .apiKey,
+            selected: .kimiDeviceOAuth,
+            flowID: .deviceOAuth,
+            draft: draft
         ))
+        draft.oauthCredential = OAuthCredential(accessToken: "oauth", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
         #expect(SubscriptionCredentialRequirement.canSave(
-            original: .manualAPIKey,
-            selected: .kimiOAuth,
-            apiKey: "",
-            hasOAuthCredential: true,
-            hasBrowserCredential: false,
-            isImportingBrowser: false
+            original: .apiKey,
+            selected: .kimiDeviceOAuth,
+            flowID: .deviceOAuth,
+            draft: draft
         ))
+        draft.authMethodID = .kimiBrowserSession
+        draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+        draft.browserImportTask = Task {}
         #expect(!SubscriptionCredentialRequirement.canSave(
-            original: .manualAPIKey,
+            original: .apiKey,
             selected: .kimiBrowserSession,
-            apiKey: "",
-            hasOAuthCredential: false,
-            hasBrowserCredential: true,
-            isImportingBrowser: true
+            flowID: .browserSession,
+            draft: draft
         ))
+        draft.cancelTasks()
+        draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
         #expect(SubscriptionCredentialRequirement.canSave(
-            original: .manualAPIKey,
+            original: .apiKey,
             selected: .kimiBrowserSession,
-            apiKey: "",
-            hasOAuthCredential: false,
-            hasBrowserCredential: true,
-            isImportingBrowser: false
+            flowID: .browserSession,
+            draft: draft
         ))
     }
 
@@ -104,7 +100,7 @@ struct SettingsAndNotificationTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [Quota(name: "余额", used: 0, limit: 400, resetAt: nil, unit: .currency(code: "CNY", scale: 100), kind: .balance)])
         #expect(evaluator.evaluate(previous: nil, current: snapshot, subscription: subscription, source: .manual, settings: AlertSettings()).count == 1)
     }
@@ -178,12 +174,13 @@ struct SettingsAndNotificationTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
-        let subscription = Subscription(platform: .deepSeek, name: "私人工作账号", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "私人工作账号", authMethodID: .apiKey)
         let alert = try #require(
             evaluator.evaluate(
                 previous: nil,
                 current: balanceSnapshot(subscription, remaining: 4.25, currency: "CNY"),
                 subscription: subscription,
+                providerName: "DeepSeek",
                 source: .manual,
                 settings: AlertSettings()
             ).first
@@ -288,8 +285,8 @@ struct SettingsAndNotificationTests {
 
     @Test
     func authenticationRequiredIsCodableAndDistinctFromNotConfigured() throws {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
-        let snapshot = UsageSnapshot(subscriptionID: subscription.id, platform: .kimi, quotas: [], updatedAt: .now, isDemo: false, errorMessage: "expired", state: .authenticationRequired)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
+        let snapshot = UsageSnapshot(subscriptionID: subscription.id, providerID: .kimi, quotas: [], updatedAt: .now, isDemo: false, errorMessage: "expired", state: .authenticationRequired)
         let decoded = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
         #expect(decoded.state == .authenticationRequired)
         #expect(decoded.state != .notConfigured)
@@ -306,7 +303,7 @@ struct AlertEvaluationTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
         let settings = AlertSettings()
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let lowCNY = balanceSnapshot(subscription, remaining: 4, currency: "CNY")
         let lowUSD = balanceSnapshot(subscription, remaining: 0.5, currency: "USD")
         #expect(evaluator.evaluate(previous: nil, current: lowCNY, subscription: subscription, source: .manual, settings: settings).count == 1)
@@ -323,7 +320,7 @@ struct AlertEvaluationTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let snapshot = balanceSnapshot(subscription, remaining: 0, currency: "EUR")
         #expect(evaluator.evaluate(previous: nil, current: snapshot, subscription: subscription, source: .manual, settings: AlertSettings()).isEmpty)
     }
@@ -334,7 +331,7 @@ struct AlertEvaluationTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let low = balanceSnapshot(subscription, remaining: 1, currency: "CNY")
         var disabled = AlertSettings(); disabled.lowBalanceAlerts = false
         #expect(evaluator.evaluate(previous: nil, current: low, subscription: subscription, source: .manual, settings: disabled).isEmpty)
@@ -348,8 +345,8 @@ struct AlertEvaluationTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiOAuth)
-        let expired = UsageSnapshot(subscriptionID: subscription.id, platform: .kimi, quotas: [], updatedAt: .now, isDemo: false, errorMessage: "expired", state: .authenticationRequired)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiDeviceOAuth)
+        let expired = UsageSnapshot(subscriptionID: subscription.id, providerID: .kimi, quotas: [], updatedAt: .now, isDemo: false, errorMessage: "expired", state: .authenticationRequired)
         let realtime = UsageSnapshot.realtime(subscription: subscription, quotas: [])
         #expect(evaluator.evaluate(previous: nil, current: expired, subscription: subscription, source: .background, settings: AlertSettings()).count == 1)
         #expect(evaluator.evaluate(previous: expired, current: expired, subscription: subscription, source: .background, settings: AlertSettings()).isEmpty)
@@ -365,7 +362,7 @@ struct AlertEvaluationTests {
         var clock = Date(timeIntervalSince1970: 1_000)
         let evaluator = AlertEvaluator(defaults: defaults, now: { clock })
         var settings = AlertSettings(); settings.serviceErrorAlerts = true
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let error = UsageSnapshot.failure(subscription: subscription, message: "network details")
         #expect(evaluator.evaluate(previous: nil, current: error, subscription: subscription, source: .manual, settings: settings).isEmpty)
         #expect(evaluator.evaluate(previous: error, current: error, subscription: subscription, source: .panelOpen, settings: settings).isEmpty)
@@ -386,8 +383,8 @@ struct AlertEvaluationTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
-        let first = Subscription(platform: .deepSeek, name: "One", authMethod: .manualAPIKey)
-        let second = Subscription(platform: .deepSeek, name: "Two", authMethod: .manualAPIKey)
+        let first = Subscription(providerID: .deepSeek, name: "One", authMethodID: .apiKey)
+        let second = Subscription(providerID: .deepSeek, name: "Two", authMethodID: .apiKey)
         let lowFirst = balanceSnapshot(first, remaining: 1, currency: "CNY")
         let lowSecond = balanceSnapshot(second, remaining: 1, currency: "CNY")
         #expect(evaluator.evaluate(previous: nil, current: lowFirst, subscription: first, source: .manual, settings: AlertSettings()).count == 1)
@@ -641,7 +638,7 @@ struct PanelNavigationTests {
 
         navigation.selectProvider(.kimi)
         let draft = navigation.draft
-        #expect(draft?.platform == .kimi)
+        #expect(draft?.providerID == .kimi)
         #expect(draft?.isDirty == false)
         #expect(navigation.route == .addConfiguration)
         if case .addConfiguration = navigation.content(for: []) {
@@ -651,7 +648,7 @@ struct PanelNavigationTests {
     @Test
     func editingFromCardCreatesDraftAndResolvesConfigurationRoute() {
         let navigation = freshPanelNavigationState()
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         navigation.beginEditingConfiguration(subscription)
         #expect(navigation.draft != nil)
         #expect(navigation.route == .editConfiguration(subscription.id))
@@ -673,24 +670,24 @@ struct PanelNavigationTests {
 
     @Test
     func editorDraftDirtyStateTracksEveryEditableInputAndReturnsToBaseline() {
-        let subscription = Subscription(platform: .kimi, name: "Original", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Original", authMethodID: .apiKey)
         let draft = SubscriptionEditorDraft(subscription: subscription)
         #expect(!draft.isDirty)
         draft.name = "Renamed"
         #expect(draft.isDirty)
         draft.name = "Original"
         #expect(!draft.isDirty)
-        draft.platform = .deepSeek
+        draft.providerID = .deepSeek
         #expect(draft.isDirty)
-        draft.platform = .kimi
+        draft.providerID = .kimi
         #expect(!draft.isDirty)
         draft.apiKey = "new-key"
         #expect(draft.isDirty)
         draft.apiKey = ""
         #expect(!draft.isDirty)
-        draft.authMethod = .kimiOAuth
+        draft.authMethodID = .kimiDeviceOAuth
         #expect(draft.isDirty)
-        draft.authMethod = .manualAPIKey
+        draft.authMethodID = .apiKey
         #expect(!draft.isDirty)
         draft.oauthCredential = testOAuthCredential
         #expect(draft.isDirty)
@@ -710,7 +707,7 @@ struct PanelNavigationTests {
 
     @Test
     func newEditorDraftStartsCleanAndBecomesDirtyForInputs() {
-        let draft = SubscriptionEditorDraft(platform: .kimi)
+        let draft = SubscriptionEditorDraft(providerID: .kimi)
         #expect(!draft.isDirty)
         draft.name = "New subscription"
         #expect(draft.isDirty)
@@ -722,7 +719,7 @@ struct PanelNavigationTests {
 
     @Test
     func leavingBrowserAuthenticationCancelsAndClearsImportTask() {
-        let draft = SubscriptionEditorDraft(platform: .kimi)
+        let draft = SubscriptionEditorDraft(providerID: .kimi)
         let originalGeneration = draft.browserImportSessionID
         draft.browserImportTask = Task {}
         draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")

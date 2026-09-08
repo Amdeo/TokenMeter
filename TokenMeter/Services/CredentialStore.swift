@@ -14,15 +14,75 @@ struct KimiBrowserCredential: Codable, Sendable, Equatable {
     let tokenType: String
 }
 
-struct CredentialStore: Sendable {
-    private struct Entry: Codable, Sendable {
-        var apiKey: String?
-        var oauthCredential: OAuthCredential?
-        var browserCredential: KimiBrowserCredential?
+/// HttpOnly session cookie 会话凭证（new-api 新版认证：cookie + 用户 ID 头，无 refresh）。
+struct CookieSessionCredential: Codable, Sendable, Equatable {
+    let sessionCookie: String
+    let userID: String
+}
+
+/// 浏览器会话登录的结果：token 型（Kimi/CCBus/APIKEY.FUN）或 cookie 型（new-api 新版）。
+enum BrowserLoginResult: Sendable, Equatable {
+    case token(KimiBrowserCredential)
+    case cookie(CookieSessionCredential)
+}
+
+/// 凭证文件中的单条订阅条目（互斥字段：一次只保存一种认证方式的凭据）。
+struct CredentialEntry: Codable, Sendable {
+    var apiKey: String?
+    var oauthCredential: OAuthCredential?
+    var browserCredential: KimiBrowserCredential?
+    var cookieCredential: CookieSessionCredential?
+}
+
+/// 通用存储凭据：按订阅 ID 保存，互斥（一次只保留一种认证方式的凭据）。
+enum StoredCredential: Sendable, Equatable {
+    case apiKey(String)
+    case oauth(OAuthCredential)
+    case browserSession(KimiBrowserCredential)
+    case cookieSession(CookieSessionCredential)
+
+    /// 从旧 Entry 中解析对应 flow 的凭据。
+    static func from(entry: CredentialEntry, flowID: AuthFlowID) -> StoredCredential? {
+        switch flowID {
+        case .apiKey:
+            return entry.apiKey.map { .apiKey($0) }
+        case .deviceOAuth:
+            return entry.oauthCredential.map { .oauth($0) }
+        case .browserSession:
+            return entry.browserCredential.map { .browserSession($0) } ?? entry.cookieCredential.map { .cookieSession($0) }
+        }
     }
 
+    /// 写入 Entry 时互斥清空其他字段。
+    func apply(to entry: inout CredentialEntry) {
+        switch self {
+        case .apiKey(let key):
+            entry.apiKey = key
+            entry.oauthCredential = nil
+            entry.browserCredential = nil
+            entry.cookieCredential = nil
+        case .oauth(let credential):
+            entry.apiKey = nil
+            entry.oauthCredential = credential
+            entry.browserCredential = nil
+            entry.cookieCredential = nil
+        case .browserSession(let credential):
+            entry.apiKey = nil
+            entry.oauthCredential = nil
+            entry.browserCredential = credential
+            entry.cookieCredential = nil
+        case .cookieSession(let credential):
+            entry.apiKey = nil
+            entry.oauthCredential = nil
+            entry.browserCredential = nil
+            entry.cookieCredential = credential
+        }
+    }
+}
+
+struct CredentialStore: Sendable {
     private struct CredentialFile: Codable, Sendable {
-        var entries: [String: Entry] = [:]
+        var entries: [String: CredentialEntry] = [:]
     }
 
     private let fileURL: URL
@@ -43,6 +103,25 @@ struct CredentialStore: Sendable {
         try? load().entries[subscriptionID.uuidString]?.browserCredential
     }
 
+    func cookieSession(for subscriptionID: UUID) -> CookieSessionCredential? {
+        try? load().entries[subscriptionID.uuidString]?.cookieCredential
+    }
+
+    /// 按认证流程读取通用凭据（新认证方式接入的统一入口）。
+    func credential(for subscriptionID: UUID, flowID: AuthFlowID) -> StoredCredential? {
+        guard let entry = try? load().entries[subscriptionID.uuidString] else { return nil }
+        return StoredCredential.from(entry: entry, flowID: flowID)
+    }
+
+    /// 保存通用凭据（互斥：同一订阅只保留当前认证方式的凭据）。
+    func save(_ credential: StoredCredential, for subscriptionID: UUID) throws {
+        var file = try load()
+        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+        credential.apply(to: &entry)
+        file.entries[subscriptionID.uuidString] = entry
+        try write(file)
+    }
+
     func isExpiringSoon(_ credential: OAuthCredential, now: Date = .now) -> Bool {
         credential.expiresAt.timeIntervalSince(now) <= 300
     }
@@ -51,7 +130,7 @@ struct CredentialStore: Sendable {
         let value = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { throw CredentialStoreError.emptyCredential }
         var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? Entry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
         entry.apiKey = value
         entry.oauthCredential = nil
         entry.browserCredential = nil
@@ -61,7 +140,7 @@ struct CredentialStore: Sendable {
 
     func save(oauthCredential: OAuthCredential, for subscriptionID: UUID) throws {
         var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? Entry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
         entry.apiKey = nil
         entry.oauthCredential = oauthCredential
         entry.browserCredential = nil
@@ -71,10 +150,22 @@ struct CredentialStore: Sendable {
 
     func save(browserCredential: KimiBrowserCredential, for subscriptionID: UUID) throws {
         var file = try load()
-        var entry = file.entries[subscriptionID.uuidString] ?? Entry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
         entry.apiKey = nil
         entry.oauthCredential = nil
         entry.browserCredential = browserCredential
+        entry.cookieCredential = nil
+        file.entries[subscriptionID.uuidString] = entry
+        try write(file)
+    }
+
+    func save(cookieSession: CookieSessionCredential, for subscriptionID: UUID) throws {
+        var file = try load()
+        var entry = file.entries[subscriptionID.uuidString] ?? CredentialEntry(apiKey: nil, oauthCredential: nil, browserCredential: nil)
+        entry.apiKey = nil
+        entry.oauthCredential = nil
+        entry.browserCredential = nil
+        entry.cookieCredential = cookieSession
         file.entries[subscriptionID.uuidString] = entry
         try write(file)
     }

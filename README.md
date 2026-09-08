@@ -49,6 +49,17 @@ authentication expires, or a service errors out — without opening each provide
 | **智谱 AI Zhipu** | GLM Coding Plan 额度窗口（5 小时 / 每周） | API Key |
 | **OpenCode Go** | 用量窗口 Usage windows | API Key |
 | **MiniMax** | MiniMax Coding Plan 套餐额度 | API Key |
+| **CCBus（AI 巴士）** | 账户余额 Balance | 网页登录态 |
+
+> 需要接入新的供应商？请阅读
+> [Adding a provider / 添加供应商](docs/provider-development.md)
+> 与 `.pi/skills/add-provider/SKILL.md` 中的扩展契约；
+> API 中转站（new-api/one-api 系）可参考 `.pi/skills/add-relay-provider/SKILL.md`
+> 通过问答生成对应厂商。
+>
+> New provider? Read the [provider development guide](docs/provider-development.md)
+> and the `add-provider` skill; relay/gateway sites (new-api/one-api family) can be
+> scaffolded via the `add-relay-provider` skill.
 
 > Kimi 网页登录态支持从 Chrome 会话导入，或在内嵌登录页完成授权
 > （实验性），令牌不会显示在界面中。

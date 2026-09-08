@@ -72,9 +72,9 @@ final class UsageStore {
         saveSubscriptions()
     }
 
-    func updateAuthMethod(_ subscription: Subscription, to authMethod: Subscription.AuthMethod) {
+    func updateAuthMethod(_ subscription: Subscription, to authMethodID: AuthMethodID) {
         guard let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return }
-        subscriptions[index].authMethod = authMethod
+        subscriptions[index].authMethodID = authMethodID
         saveSubscriptions()
     }
 
@@ -119,22 +119,25 @@ final class UsageStore {
     }
 
     private func fetch(_ subscription: Subscription, source: RefreshSource) async {
-        UsageStoreLogger.logger.debug("fetch started platform=\(subscription.platform.rawValue, privacy: .public)")
+        UsageStoreLogger.logger.debug("fetch started provider=\(subscription.providerID.rawValue, privacy: .public)")
         do {
-            let snapshot = try await LiveUsageProviders.provider(for: subscription).fetchUsage()
+            guard let definition = ProviderRegistry.definition(for: subscription.providerID) else {
+                throw UsageProviderError.unsupported(subscription.providerID)
+            }
+            let snapshot = try await definition.makeUsageProvider(for: subscription).fetchUsage()
             let previous = snapshots[subscription.id]
             snapshots[subscription.id] = snapshot
             alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
         } catch is CancellationError {
-            UsageStoreLogger.logger.debug("fetch cancelled platform=\(subscription.platform.rawValue, privacy: .public)")
+            UsageStoreLogger.logger.debug("fetch cancelled provider=\(subscription.providerID.rawValue, privacy: .public)")
         } catch {
             if case UsageProviderError.unsupported = error {
                 snapshots[subscription.id] = .unsupported(subscription: subscription, message: error.localizedDescription)
-                UsageStoreLogger.logger.info("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=unsupported")
+                UsageStoreLogger.logger.info("snapshot stored provider=\(subscription.providerID.rawValue, privacy: .public) generated=true state=unsupported")
             } else if case UsageProviderError.notConfigured = error {
                 let snapshot = UsageSnapshot(
                     subscriptionID: subscription.id,
-                    platform: subscription.platform,
+                    providerID: subscription.providerID,
                     quotas: [], updatedAt: .now, isDemo: false,
                     errorMessage: error.localizedDescription,
                     state: .notConfigured
@@ -142,11 +145,11 @@ final class UsageStore {
                 let previous = snapshots[subscription.id]
                 snapshots[subscription.id] = snapshot
                 alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
-                UsageStoreLogger.logger.info("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=notConfigured")
+                UsageStoreLogger.logger.info("snapshot stored provider=\(subscription.providerID.rawValue, privacy: .public) generated=true state=notConfigured")
             } else if case UsageProviderError.authenticationRequired = error {
                 let snapshot = UsageSnapshot(
                     subscriptionID: subscription.id,
-                    platform: subscription.platform,
+                    providerID: subscription.providerID,
                     quotas: [], updatedAt: .now, isDemo: false,
                     errorMessage: error.localizedDescription,
                     state: .authenticationRequired
@@ -154,7 +157,7 @@ final class UsageStore {
                 let previous = snapshots[subscription.id]
                 snapshots[subscription.id] = snapshot
                 alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
-                UsageStoreLogger.logger.info("snapshot stored platform=\(subscription.platform.rawValue, privacy: .public) generated=true state=authenticationRequired")
+                UsageStoreLogger.logger.info("snapshot stored provider=\(subscription.providerID.rawValue, privacy: .public) generated=true state=authenticationRequired")
             } else {
                 let snapshot = UsageSnapshot.failure(subscription: subscription, message: error.localizedDescription)
                 let previous = snapshots[subscription.id]
@@ -162,7 +165,7 @@ final class UsageStore {
                 alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
                 UsageStoreLogger.logger.error("""
                     snapshot stored \
-                    platform=\(subscription.platform.rawValue, privacy: .public) \
+                    provider=\(subscription.providerID.rawValue, privacy: .public) \
                     generated=true state=error \
                     errorClass=\(Self.errorClass(error), privacy: .public)
                     """)

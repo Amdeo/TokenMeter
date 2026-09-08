@@ -64,9 +64,10 @@ final class AlertEvaluator {
         }
     }
 
-    func evaluate(previous: UsageSnapshot?, current: UsageSnapshot, subscription: Subscription, source: RefreshSource, settings: AlertSettings) -> [AlertEvaluation] {
+    func evaluate(previous: UsageSnapshot?, current: UsageSnapshot, subscription: Subscription, providerName: String? = nil, source: RefreshSource, settings: AlertSettings) -> [AlertEvaluation] {
         var alerts: [AlertEvaluation] = []
         let realtime = current.state == .realtime
+        let resolvedProviderName = providerName ?? subscription.providerID.rawValue
         let balanceQuotas = current.quotas.filter { $0.kind == .balance && $0.unit.isCurrency }
         for quota in balanceQuotas {
             let currency = quota.unit.label ?? ""
@@ -75,7 +76,7 @@ final class AlertEvaluator {
             var item = read(key)
             if realtime && quota.remaining / quota.unit.displayScale <= threshold {
                 if !item.active && settings.lowBalanceAlerts {
-                    alerts.append(AlertEvaluation(kind: .lowBalance, key: key, title: "余额偏低", body: "\(subscription.platform.rawValue) 的 \(currency) 余额已低于你设置的阈值。"))
+                    alerts.append(AlertEvaluation(kind: .lowBalance, key: key, title: "余额偏低", body: "\(resolvedProviderName) 的 \(currency) 余额已低于你设置的阈值。"))
                 }
                 item.active = true
             } else if quota.remaining / quota.unit.displayScale > threshold {
@@ -88,7 +89,7 @@ final class AlertEvaluator {
         var auth = read(authKey)
         if current.state == .authenticationRequired {
             if !auth.active && settings.authenticationAlerts {
-                alerts.append(AlertEvaluation(kind: .authentication, key: authKey, title: "需要重新认证 · \(subscription.name)", body: "\(subscription.platform.rawValue) 认证已失效，请重新连接。"))
+                alerts.append(AlertEvaluation(kind: .authentication, key: authKey, title: "需要重新认证 · \(subscription.name)", body: "\(resolvedProviderName) 认证已失效，请重新连接。"))
             }
             auth.active = true
         } else if realtime {
@@ -109,7 +110,7 @@ final class AlertEvaluator {
             // inside the current window so a long outage can notify again hourly.
             if cooled { error.active = false }
             if error.backgroundFailures >= 2 && !error.active && cooled && settings.serviceErrorAlerts {
-                alerts.append(AlertEvaluation(kind: .serviceError, key: errorKey, title: "服务暂时不可用 · \(subscription.name)", body: "\(subscription.platform.rawValue) 连续刷新失败，请稍后重试。"))
+                alerts.append(AlertEvaluation(kind: .serviceError, key: errorKey, title: "服务暂时不可用 · \(subscription.name)", body: "\(resolvedProviderName) 连续刷新失败，请稍后重试。"))
                 error.active = true
                 error.lastServiceAlertAt = now()
             }
@@ -157,7 +158,9 @@ final class NotificationCoordinator: AlertCoordinating {
     }
 
     func process(previous: UsageSnapshot?, current: UsageSnapshot, subscription: Subscription, source: RefreshSource) {
-        let alerts = evaluator.evaluate(previous: previous, current: current, subscription: subscription, source: source, settings: AlertSettings(settings: settings))
+        let providerName = ProviderRegistry.definition(for: subscription.providerID)?.metadata.displayName
+            ?? subscription.providerID.rawValue
+        let alerts = evaluator.evaluate(previous: previous, current: current, subscription: subscription, providerName: providerName, source: source, settings: AlertSettings(settings: settings))
         alerts.forEach(delivery.deliver)
     }
 

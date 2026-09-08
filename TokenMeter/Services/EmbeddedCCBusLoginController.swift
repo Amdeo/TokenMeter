@@ -1,18 +1,11 @@
 import AppKit
 import WebKit
 
-/// 内嵌 WKWebView 的浏览器登录窗口协议：返回网页登录态凭证。
-/// 各供应商实现自己的登录页加载与 localStorage 提取逻辑。
-@MainActor
-protocol BrowserSessionLogining {
-    func login() async throws -> BrowserLoginResult
-}
-
-/// 内嵌 WKWebView 的 Kimi 账号登录窗口：会话由 App 自持，
-/// 用户在 Kimi 官方登录页完成登录后，自动提取 localStorage 登录态。
+/// 内嵌 WKWebView 的 CCBus（AI 巴士）账号登录窗口：会话由 App 自持，
+/// 用户在 CCBus 官方登录页完成登录后，自动提取 localStorage 登录态。
 /// 成功返回凭证；用户关窗、超时或任务取消时抛 CancellationError（调用方静默收尾）。
 @MainActor
-final class EmbeddedKimiLoginController: NSObject, NSWindowDelegate, BrowserSessionLogining {
+final class EmbeddedCCBusLoginController: NSObject, NSWindowDelegate, BrowserSessionLogining {
     private static let windowSize = NSSize(width: 920, height: 700)
     private static let pollInterval: Duration = .seconds(1)
     private static let timeout: TimeInterval = 5 * 60
@@ -48,7 +41,7 @@ final class EmbeddedKimiLoginController: NSObject, NSWindowDelegate, BrowserSess
         // 持久化站点数据：会话留在 App 内，重登时通常免登录。
         configuration.websiteDataStore = .default()
         let webView = WKWebView(frame: NSRect(origin: .zero, size: Self.windowSize), configuration: configuration)
-        webView.load(URLRequest(url: URL(string: ChromeSessionImporter.quotaURL)!))
+        webView.load(URLRequest(url: CCBusSessionRefresher.loginPageURL))
         self.webView = webView
 
         let panel = NSPanel(
@@ -57,7 +50,7 @@ final class EmbeddedKimiLoginController: NSObject, NSWindowDelegate, BrowserSess
             backing: .buffered,
             defer: false
         )
-        panel.title = "登录 Kimi 账号"
+        panel.title = "登录 CCBus（AI 巴士）账号"
         panel.delegate = self
         panel.isReleasedWhenClosed = false
         panel.contentView = webView
@@ -75,13 +68,13 @@ final class EmbeddedKimiLoginController: NSObject, NSWindowDelegate, BrowserSess
         webView = nil
     }
 
-    /// 仅在 kimi.com 域内页面尝试提取；未登录（token 缺失/过期）时返回 nil 继续等待。
+    /// 仅在 ccbus.top 域内页面尝试提取；未登录（token 缺失/过期）时返回 nil 继续等待。
     private func extractIfReady() async -> KimiBrowserCredential? {
         guard let webView,
               let host = webView.url?.host?.lowercased(),
-              host == "kimi.com" || host.hasSuffix(".kimi.com") else { return nil }
-        guard let raw = try? await webView.evaluateJavaScript(KimiBrowserCredentialExtractor.extractionJavaScript) as? String,
+              host == "ccbus.top" || host.hasSuffix(".ccbus.top") else { return nil }
+        guard let raw = try? await webView.evaluateJavaScript(CCBusBrowserCredentialExtractor.extractionJavaScript) as? String,
               !raw.isEmpty else { return nil }
-        return try? KimiBrowserCredentialExtractor.credential(from: raw)
+        return try? CCBusBrowserCredentialExtractor.credential(from: raw)
     }
 }

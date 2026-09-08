@@ -109,8 +109,8 @@ final class PanelNavigationState {
         route = .addProvider
     }
 
-    func selectProvider(_ platform: Platform) {
-        draft = SubscriptionEditorDraft(platform: platform)
+    func selectProvider(_ providerID: ProviderID) {
+        draft = SubscriptionEditorDraft(providerID: providerID)
         route = .addConfiguration
     }
 
@@ -147,15 +147,16 @@ final class PanelNavigationState {
 final class SubscriptionEditorDraft {
     let original: Subscription?
     let originalName: String
-    let originalAuthMethod: Subscription.AuthMethod
-    let initialPlatform: Platform
-    var platform: Platform
-    var authMethod: Subscription.AuthMethod
+    let originalAuthMethodID: AuthMethodID
+    let initialProviderID: ProviderID
+    var providerID: ProviderID
+    var authMethodID: AuthMethodID
     var name: String
     var quotaColors: [String: UInt32]
     var apiKey = ""
     var oauthCredential: OAuthCredential?
     var browserCredential: KimiBrowserCredential?
+    var cookieCredential: CookieSessionCredential?
     var oauthDevice: KimiDeviceAuthorization?
     var oauthStatus: String?
     var oauthTask: Task<Void, Never>?
@@ -164,13 +165,13 @@ final class SubscriptionEditorDraft {
     var oauthSessionID = UUID()
     var message: String?
 
-    init(platform: Platform = .deepSeek) {
+    init(providerID: ProviderID = .deepSeek) {
         original = nil
         originalName = ""
-        originalAuthMethod = .manualAPIKey
-        initialPlatform = platform
-        self.platform = platform
-        authMethod = .manualAPIKey
+        originalAuthMethodID = .apiKey
+        initialProviderID = providerID
+        self.providerID = providerID
+        authMethodID = .apiKey
         name = ""
         quotaColors = [:]
     }
@@ -178,26 +179,27 @@ final class SubscriptionEditorDraft {
     init(subscription: Subscription) {
         original = subscription
         originalName = subscription.name
-        originalAuthMethod = subscription.authMethod
-        initialPlatform = subscription.platform
-        platform = subscription.platform
-        authMethod = subscription.authMethod
+        originalAuthMethodID = subscription.authMethodID
+        initialProviderID = subscription.providerID
+        providerID = subscription.providerID
+        authMethodID = subscription.authMethodID
         name = subscription.name
         quotaColors = subscription.quotaColors
     }
 
     var isEditing: Bool { original != nil }
+    var isImportingBrowser: Bool { browserImportTask != nil }
     var isAuthenticating: Bool { oauthTask != nil || browserImportTask != nil }
     var isDirty: Bool {
-        if isAuthenticating || oauthCredential != nil || browserCredential != nil { return true }
+        if isAuthenticating || oauthCredential != nil || browserCredential != nil || cookieCredential != nil { return true }
         if original == nil {
-            return authMethod != .manualAPIKey
+            return authMethodID != .apiKey
                 || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 || !quotaColors.isEmpty
         }
-        return platform != initialPlatform
-            || authMethod != originalAuthMethod
+        return providerID != initialProviderID
+            || authMethodID != originalAuthMethodID
             || name != originalName
             || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             || quotaColors != original?.quotaColors
@@ -217,5 +219,6 @@ final class SubscriptionEditorDraft {
         browserImportTask?.cancel()
         browserImportTask = nil
         browserCredential = nil
+        cookieCredential = nil
     }
 }

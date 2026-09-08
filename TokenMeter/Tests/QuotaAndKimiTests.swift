@@ -4,6 +4,7 @@ import Testing
 import UserNotifications
 @testable import TokenMeter
 
+@MainActor
 struct QuotaAndKimiTests {
     @Test
     func credentialStoreSavesReadsAndRemovesAPIKey() throws {
@@ -142,7 +143,7 @@ struct QuotaAndKimiTests {
         }
         """.utf8)
         let response = try JSONDecoder().decode(KimiUsagesResponse.self, from: data)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
 
         let snapshot = try KimiUsageProvider.parseCodingUsage(response, subscription: subscription)
         #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
@@ -161,7 +162,7 @@ struct QuotaAndKimiTests {
         }
         """.utf8)
         let response = try JSONDecoder().decode(KimiUsagesResponse.self, from: data)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
 
         let snapshot = try KimiUsageProvider.parseCodingUsage(response, subscription: subscription)
         let fiveHour = try #require(snapshot.quotas.first { $0.kind == .fiveHour })
@@ -180,7 +181,7 @@ struct QuotaAndKimiTests {
         }
         """.utf8)
         let response = try JSONDecoder().decode(KimiUsagesResponse.self, from: data)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
 
         let snapshot = try KimiUsageProvider.parseCodingUsage(response, subscription: subscription)
         let fiveHour = try #require(snapshot.quotas.first { $0.kind == .fiveHour })
@@ -191,7 +192,7 @@ struct QuotaAndKimiTests {
 
     @Test
     func kimiBalanceSnapshotIsIdentifiableAsFallbackMode() {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "可用余额", used: 0, limit: 8, resetAt: nil, kind: .balance)
         ])
@@ -211,7 +212,7 @@ struct QuotaAndKimiTests {
         }
         """.utf8)
         let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiBrowserSession)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
 
         let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
 
@@ -232,7 +233,7 @@ struct QuotaAndKimiTests {
         }
         """.utf8)
         let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiBrowserSession)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
 
         let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
 
@@ -253,7 +254,7 @@ struct QuotaAndKimiTests {
         }
         """.utf8)
         let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiBrowserSession)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
 
         let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
 
@@ -382,7 +383,7 @@ extension QuotaAndKimiTests {
     @Test
     func subscriptionCardAnchorIsNilForDeepSeekBalance() {
         // DeepSeek 头部不再显示「可用余额」锚点，余额改由正文单行展示。
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "API 余额", used: 0, limit: 18.42, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
         ])
@@ -392,7 +393,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCardAnchorUsesKimiTotalRatio() throws {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiOAuth)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiDeviceOAuth)
         let snapshot = UsageSnapshot.realtime(
             subscription: subscription,
             quotas: [
@@ -409,13 +410,13 @@ extension QuotaAndKimiTests {
         #expect(anchor.accessibilityLabel == "总使用量 \(anchor.value)")
         // 未配置：overall 锚点回退到 ratioStatus 对应的状态色（normal → TM.ok），而非内置默认 indigo。
         #expect(!SubscriptionQuotaColors.hasOverallConfiguration(subscription.quotaColors))
-        #expect(anchor.color.tokenMeterRGB == SubscriptionCardPresentation.ratioStatus(for: 0.41).tint.tokenMeterRGB)
-        #expect(anchor.color.tokenMeterRGB != SubscriptionQuotaColors.overallDefault.tokenMeterRGB)
+        #expect(anchor.colorRGB == SubscriptionCardPresentation.ratioStatus(for: 0.41).tint.tokenMeterRGB)
+        #expect(anchor.colorRGB != SubscriptionQuotaColors.overallDefault.tokenMeterRGB)
     }
 
     @Test
     func subscriptionCardAnchorFallsBackToKimiCoreWindow() throws {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .kimiOAuth)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiDeviceOAuth)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "5 小时额度", used: 55, limit: 100, resetAt: nil, kind: .fiveHour)
         ])
@@ -428,7 +429,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCardAnchorIsNilForBalanceOnlyKimi() {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "可用余额", used: 0, limit: 8, resetAt: nil, kind: .balance)
         ])
@@ -438,7 +439,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCardAnchorUsesFirstQuotaForGenericPlatform() throws {
-        let subscription = Subscription(platform: .zhipu, name: "智谱 AI", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "5 小时额度", used: 60, limit: 100, resetAt: nil, kind: .fiveHour),
             Quota(name: "每周额度", used: 20, limit: 100, resetAt: nil, kind: .weekly)
@@ -453,7 +454,7 @@ extension QuotaAndKimiTests {
     @Test
     func subscriptionCardAnchorUsesOpenCodeGoMonthlyWindow() throws {
         // OpenCodeGo 头部锚点应优先显示「每月窗口」这一周期值，而非第一个（5 小时）配额。
-        let subscription = Subscription(platform: .openCodeGo, name: "OpenCode Go", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .openCodeGo, name: "OpenCode Go", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "5 小时窗口", used: 82, limit: 100, resetAt: nil, kind: .fiveHour),
             Quota(name: "每周窗口", used: 20, limit: 100, resetAt: nil, kind: .weekly),
@@ -468,7 +469,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCardAnchorIsNilWithoutQuotaData() {
-        let subscription = Subscription(platform: .zhipu, name: "智谱 AI", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [])
 
         #expect(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot) == nil)
@@ -476,7 +477,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCardAnchorIsNilWhenDeepSeekBalanceMissing() {
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "5 小时额度", used: 1, limit: 100, resetAt: nil, kind: .fiveHour)
         ])
@@ -489,10 +490,10 @@ extension QuotaAndKimiTests {
         ["认证已失效", "需要配置", "暂不支持额度接口", "获取失败"]
     ))
     func subscriptionCardAccessibilityReportsState(_ state: UsageState, _ expected: String) {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let snapshot = UsageSnapshot(
             subscriptionID: subscription.id,
-            platform: .kimi,
+            providerID: .kimi,
             quotas: [],
             updatedAt: .now,
             isDemo: false,
@@ -507,7 +508,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCardAccessibilityReportsWaitingForFirstRefresh() {
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
 
         let label = SubscriptionCardPresentation.cardAccessibilityLabel(subscription: subscription, snapshot: nil, anchor: nil)
 
@@ -517,7 +518,7 @@ extension QuotaAndKimiTests {
     @Test
     func subscriptionCardAccessibilityAppendsRealtimeAnchorAndStatus() throws {
         // 用通用平台（Zhipu）验证：realtime 状态会把配额状态与锚点百分比拼接进文案。
-        let subscription = Subscription(platform: .zhipu, name: "智谱 AI", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "5 小时额度", used: 18, limit: 100, resetAt: nil, kind: .fiveHour)
         ])
@@ -530,7 +531,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCardAccessibilityAppendsWarningQuotaStatus() throws {
-        let subscription = Subscription(platform: .zhipu, name: "智谱 AI", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "5 小时额度", used: 90, limit: 100, resetAt: nil, kind: .fiveHour)
         ])
@@ -546,10 +547,10 @@ extension QuotaAndKimiTests {
         [QuotaStatus.warning, .warning, .warning, .error]
     ))
     func cardIndicatorStatusMapsState(_ state: UsageState, _ expected: QuotaStatus) {
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let snapshot = UsageSnapshot(
             subscriptionID: subscription.id,
-            platform: .kimi,
+            providerID: .kimi,
             quotas: [],
             updatedAt: .now,
             isDemo: false,
@@ -562,7 +563,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func cardIndicatorStatusUsesRealtimeWarningQuota() {
-        let subscription = Subscription(platform: .deepSeek, name: "DeepSeek", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
             Quota(name: "API 余额", used: 90, limit: 100, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
         ])
@@ -572,10 +573,10 @@ extension QuotaAndKimiTests {
 
     @Test
     func generalPlatformRealtimeVisibleStatusIgnoresErrorMessage() {
-        let subscription = Subscription(platform: .zhipu, name: "智谱 AI", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
         let snapshot = UsageSnapshot(
             subscriptionID: subscription.id,
-            platform: .zhipu,
+            providerID: .zhipu,
             quotas: [Quota(name: "5 小时额度", used: 90, limit: 100, resetAt: nil, kind: .fiveHour)],
             updatedAt: .now,
             isDemo: false,
@@ -603,7 +604,7 @@ extension QuotaAndKimiTests {
 
     @Test
     func subscriptionCodableRoundTripsQuotaColors() throws {
-        var subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        var subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         subscription.quotaColors = [
             SubscriptionQuotaColors.overallKey: 0x3366AA,
             SubscriptionQuotaColors.nameKey("每周额度"): 0x11BB22
@@ -708,26 +709,26 @@ extension QuotaAndKimiTests {
 
     @Test
     func cardAnchorUsesConfiguredColorAndPreservesStatusSemantics() {
-        var subscription = Subscription(platform: .zhipu, name: "智谱", authMethod: .manualAPIKey)
+        var subscription = Subscription(providerID: .zhipu, name: "智谱", authMethodID: .apiKey)
         let quota = Quota(name: "每月窗口", used: 85, limit: 100, resetAt: nil, kind: .generic)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [quota])
 
         // 未配置：锚点回退到 status.tint（精确等于 warning 状态色，而非内置默认 teal）。
         let unconfigured = SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
         #expect(!SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: quota.name, kind: quota.kind))
-        #expect(unconfigured?.color.tokenMeterRGB == QuotaStatus.warning.tint.tokenMeterRGB)
-        #expect(unconfigured?.color.tokenMeterRGB != SubscriptionQuotaColors.defaultColor(forKind: .generic).tokenMeterRGB)
+        #expect(unconfigured?.colorRGB == QuotaStatus.warning.tint.tokenMeterRGB)
+        #expect(unconfigured?.colorRGB != SubscriptionQuotaColors.defaultColor(forKind: .generic).tokenMeterRGB)
 
         // 配置后：百分比使用解析色。
         let custom: UInt32 = 0x123456
         subscription.quotaColors = [SubscriptionQuotaColors.nameKey(quota.name): custom]
         let configured = SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
-        #expect(configured?.color.tokenMeterRGB == custom)
+        #expect(configured?.colorRGB == custom)
     }
 
     @Test @MainActor
     func editorDraftTracksQuotaColorDirtyState() {
-        var subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        var subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         subscription.quotaColors = [SubscriptionQuotaColors.overallKey: 0x112233]
         let draft = SubscriptionEditorDraft(subscription: subscription)
         #expect(!draft.isDirty)
@@ -741,7 +742,7 @@ extension QuotaAndKimiTests {
 
     @Test @MainActor
     func newEditorDraftTracksQuotaColorDirtyState() {
-        let draft = SubscriptionEditorDraft(platform: .kimi)
+        let draft = SubscriptionEditorDraft(providerID: .kimi)
         #expect(!draft.isDirty)
 
         draft.quotaColors[SubscriptionQuotaColors.overallKey] = 0x112233
@@ -767,7 +768,7 @@ extension QuotaAndKimiTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let store = UsageStore(settings: settings, metadataURL: fileURL)
-        let subscription = Subscription(platform: .kimi, name: "Kimi", authMethod: .manualAPIKey)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         store.add(subscription)
         store.updateQuotaColors([SubscriptionQuotaColors.overallKey: 0x3366AA], for: subscription)
 
@@ -794,9 +795,9 @@ extension QuotaAndKimiTests {
 
         let store = UsageStore(settings: settings, metadataURL: fileURL)
         // 添加顺序与 createdAt 相反：显示顺序必须是数组顺序（手动排序语义），而非 createdAt。
-        let later = Subscription(platform: .kimi, name: "Later", authMethod: .manualAPIKey,
+        let later = Subscription(providerID: .kimi, name: "Later", authMethodID: .apiKey,
                                  createdAt: Date(timeIntervalSince1970: 2_000))
-        let earlier = Subscription(platform: .deepSeek, name: "Earlier", authMethod: .manualAPIKey,
+        let earlier = Subscription(providerID: .deepSeek, name: "Earlier", authMethodID: .apiKey,
                                    createdAt: Date(timeIntervalSince1970: 1_000))
         store.add(later)
         store.add(earlier)
@@ -820,9 +821,9 @@ extension QuotaAndKimiTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let store = UsageStore(settings: settings, metadataURL: fileURL)
-        let first = Subscription(platform: .deepSeek, name: "First", authMethod: .manualAPIKey)
-        let second = Subscription(platform: .kimi, name: "Second", authMethod: .manualAPIKey)
-        let third = Subscription(platform: .zhipu, name: "Third", authMethod: .manualAPIKey)
+        let first = Subscription(providerID: .deepSeek, name: "First", authMethodID: .apiKey)
+        let second = Subscription(providerID: .kimi, name: "Second", authMethodID: .apiKey)
+        let third = Subscription(providerID: .zhipu, name: "Third", authMethodID: .apiKey)
         store.add(first)
         store.add(second)
         store.add(third)

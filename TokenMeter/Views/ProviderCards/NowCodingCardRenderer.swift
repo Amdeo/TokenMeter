@@ -1,0 +1,47 @@
+import SwiftUI
+
+/// NowCoding 卡片：顶部摘要显示可用余额，正文显示余额行 +
+/// 每个活动订阅的额度进度（用量 / 每日额度 + 下次重置）。
+/// 复用标准基础行组件（BalanceMenuRow / QuotaProgressRow）。
+struct NowCodingCardRenderer: ProviderCardRenderer {
+    func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
+        let planRows = snapshot.quotas.filter { $0.kind == .generic }
+        return AnyView(
+            VStack(alignment: .leading, spacing: 10) {
+                if planRows.isEmpty {
+                    Text("暂无活动订阅")
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textSecondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(planRows) { quota in
+                            QuotaProgressRow(
+                                title: quota.name,
+                                quota: quota,
+                                tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota),
+                                valueOverride: "剩余 \(quota.remainingText)"
+                            )
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary? {
+        guard let balance = snapshot.quotas.first(where: { $0.kind == .balance }) else { return nil }
+        let color = SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: balance.name, kind: balance.kind)
+            ? SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: balance)
+            : balance.status.tint
+        return CardSummary(
+            label: "余额",
+            value: balance.remainingText,
+            accessibilityLabel: "可用余额 \(balance.remainingText)",
+            colorRGB: color.tokenMeterRGB
+        )
+    }
+
+    func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus {
+        snapshot.status(for: Set(Quota.Kind.allCases))
+    }
+}
