@@ -14,6 +14,7 @@ struct KimiProviderDefinition: ProviderDefinition {
             tintRGB: 0x5E5CE6,
             capabilityDescription: "支持 Kimi For Coding 订阅额度、网页登录态和 API Key。",
             authPageURL: URL(string: "https://platform.moonshot.cn/console/api-keys"),
+            homepageURL: URL(string: "https://www.kimi.com"),
             authenticationSummary: "API Key、Kimi Code OAuth 或网页登录态",
             overallUsageLabel: "总使用量"
         )

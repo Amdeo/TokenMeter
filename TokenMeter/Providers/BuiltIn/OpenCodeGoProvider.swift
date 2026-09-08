@@ -14,6 +14,7 @@ struct OpenCodeGoProviderDefinition: ProviderDefinition {
             tintRGB: 0x32D74B,
             capabilityDescription: "支持用量窗口接口，可使用 API Key。",
             authPageURL: URL(string: "https://opencode.ai/zen"),
+            homepageURL: URL(string: "https://opencode.ai"),
             authenticationSummary: "API Key · 支持用量窗口接口"
         )
     }

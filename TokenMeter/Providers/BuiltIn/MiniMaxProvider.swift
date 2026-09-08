@@ -14,6 +14,7 @@ struct MiniMaxProviderDefinition: ProviderDefinition {
             tintRGB: 0xFF9F0A,
             capabilityDescription: "支持 MiniMax Coding Plan 套餐额度。",
             authPageURL: URL(string: "https://platform.minimaxi.com/user-center/basic-information/interface-key"),
+            homepageURL: URL(string: "https://platform.minimaxi.com"),
             authenticationSummary: "API Key · 支持 MiniMax Coding Plan 套餐额度"
         )
     }

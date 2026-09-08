@@ -14,6 +14,7 @@ struct ZhipuProviderDefinition: ProviderDefinition {
             tintRGB: 0xBF5AF2,
             capabilityDescription: "支持 GLM Coding Plan 额度窗口（5 小时 / 每周），仅支持 API Key；暂无公开 OAuth 集成。",
             authPageURL: URL(string: "https://www.bigmodel.cn/usercenter/proj-mgmt/apikeys"),
+            homepageURL: URL(string: "https://www.bigmodel.cn"),
             authenticationSummary: "API Key · 支持 GLM Coding Plan 额度窗口"
         )
     }

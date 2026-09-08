@@ -39,6 +39,7 @@ struct <Name>ProviderDefinition: ProviderDefinition {
             tintRGB: 0xRRGGBB,
             capabilityDescription: "<能力说明>",
             authPageURL: URL(string: "<控制台 API Key 页>"),
+            homepageURL: URL(string: "<官网首页>"),
             authenticationSummary: "API Key · <简述>"
         )
     }

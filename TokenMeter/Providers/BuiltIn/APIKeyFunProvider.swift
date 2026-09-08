@@ -14,6 +14,7 @@ struct APIKeyFunProviderDefinition: ProviderDefinition {
             tintRGB: 0x6E6CF0,
             capabilityDescription: "支持账户余额，可通过网页登录态获取。",
             authPageURL: URL(string: "https://apikey.fun/login"),
+            homepageURL: URL(string: "https://apikey.fun"),
             authenticationSummary: "网页登录态 · 支持账户余额"
         )
     }

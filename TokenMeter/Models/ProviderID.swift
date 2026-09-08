@@ -112,6 +112,8 @@ struct ProviderMetadata: Sendable {
     let capabilityDescription: String
     /// 供应商控制台 API Key 页面（编辑页"打开浏览器"入口）。
     let authPageURL: URL?
+    /// 官网首页（编辑页"官网"链接行入口）；无则隐藏。
+    var homepageURL: URL? = nil
     /// 选择供应商卡片副标题。
     let authenticationSummary: String
     /// 存在「总使用量」聚合额度的供应商（如 Kimi）提供该标签，用于编辑页颜色配置。
@@ -125,6 +127,7 @@ struct ProviderMetadata: Sendable {
         iconInsetFraction: Double = 0,
         capabilityDescription: String,
         authPageURL: URL?,
+        homepageURL: URL? = nil,
         authenticationSummary: String,
         overallUsageLabel: String? = nil
     ) {
@@ -135,6 +138,7 @@ struct ProviderMetadata: Sendable {
         self.iconInsetFraction = iconInsetFraction
         self.capabilityDescription = capabilityDescription
         self.authPageURL = authPageURL
+        self.homepageURL = homepageURL
         self.authenticationSummary = authenticationSummary
         self.overallUsageLabel = overallUsageLabel
     }

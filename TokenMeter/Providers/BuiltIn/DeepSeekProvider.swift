@@ -15,6 +15,7 @@ struct DeepSeekProviderDefinition: ProviderDefinition {
             iconInsetFraction: 0.08,
             capabilityDescription: "支持余额接口，可使用 API Key。",
             authPageURL: URL(string: "https://platform.deepseek.com/api_keys"),
+            homepageURL: URL(string: "https://platform.deepseek.com"),
             authenticationSummary: "API Key · 支持余额接口"
         )
     }

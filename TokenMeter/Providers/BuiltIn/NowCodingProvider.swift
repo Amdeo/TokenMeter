@@ -14,6 +14,7 @@ struct NowCodingProviderDefinition: ProviderDefinition {
             tintRGB: 0x6E6CF0,
             capabilityDescription: "支持账户余额与订阅额度，可通过网页登录态获取。",
             authPageURL: NowCodingSite.loginPageURL,
+            homepageURL: NowCodingSite.homePageURL,
             authenticationSummary: "网页登录态 · 余额 + 订阅"
         )
     }
@@ -72,6 +73,7 @@ struct NowCodingProviderDefinition: ProviderDefinition {
 enum NowCodingSite: Sendable {
     static let apiBase = URL(string: "https://nowcoding.ai/api")!
     static let loginPageURL = URL(string: "https://nowcoding.ai/login")!
+    static let homePageURL = URL(string: "https://nowcoding.ai")!
     /// 余额/订阅额度换算：quota / quotaPerUnit = 显示金额（站点 quota_display_type=CNY）。
     static let quotaPerUnit: Double = 500_000
     /// session cookie 名称（HttpOnly，需从 WKWebsiteDataStore 读取）。

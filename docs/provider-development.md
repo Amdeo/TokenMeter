@@ -29,7 +29,7 @@ ProviderRegistry.all                ← 唯一的供应商目录（编译期）
    │  definition(for: ProviderID)
    ▼
 ProviderDefinition                  ← 每家供应商一份定义
-   ├─ metadata: ProviderMetadata    ← 显示名 / 图标 / 颜色 / 能力说明 / 控制台链接
+   ├─ metadata: ProviderMetadata    ← 显示名 / 图标 / 颜色 / 能力说明 / 控制台链接 / 官网首页
    ├─ authMethods: [AuthMethodDefinition] ← 支持的认证方式（flow 由 AuthFlowID 决定）
    ├─ cardRenderer: ProviderCardRenderer  ← 卡片正文 / 摘要 / 状态
    ├─ makeUsageProvider(for:)       ← 生产 provider（fetch 实现）

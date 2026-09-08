@@ -60,6 +60,10 @@ struct SubscriptionEditorSheet: View {
                 subtitle: "配置订阅",
                 onBack: attemptClose
             )
+            if let homepageURL = providerDefinition.metadata.homepageURL {
+                OfficialSiteLink(host: homepageURL.host() ?? homepageURL.absoluteString) { openURL(homepageURL) }
+                    .padding(.bottom, 8)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     SheetSection(title: "订阅信息", subtitle: "名称仅用于本地识别，可稍后修改。") {
@@ -280,6 +284,37 @@ private struct PageHeader: View {
             Spacer()
         }
         .padding(.bottom, 10)
+    }
+}
+
+/// 官网链接行：点击用系统浏览器打开供应商官网首页（仅当 metadata.homepageURL 存在时展示）。
+private struct OfficialSiteLink: View {
+    let host: String
+    let open: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 5) {
+                Image(systemName: "globe")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(host)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(hovering ? TM.accent : TM.textSecondary)
+            .padding(.horizontal, TM.cardContentHorizontal)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(hovering ? TM.cardFillHover : TM.hoverFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("打开官网 \(host)")
     }
 }
 

@@ -14,6 +14,7 @@ struct CCBusProviderDefinition: ProviderDefinition {
             tintRGB: 0x2DD4BF,
             capabilityDescription: "支持账户余额，可通过网页登录态获取。",
             authPageURL: URL(string: "https://ccbus.top/login"),
+            homepageURL: URL(string: "https://ccbus.top"),
             authenticationSummary: "网页登录态 · 支持账户余额"
         )
     }

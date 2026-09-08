@@ -121,6 +121,7 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 | 2 | 稳定 ID（小写短横线，写入订阅元数据，发布后不可改） | 从域名派生：`ccbus.top` → `ccbus` |
 | 3 | 站点域名（含 https） | 如 `https://ccbus.top`，必填 |
 | 4 | 登录页 URL | `{域名}/login`（常见）；若不同请用户提供 |
+| 4b | 官网首页 URL（metadata.homepageURL） | 域名根，如 `https://ccbus.top`（编辑页"官网"链接行入口，与登录页/authPageURL 区分）；新建 provider 必须填 |
 | 5 | 余额接口路径 | 常见 `{api}/auth/me` 或 `{api}/v1/auth/me`；new-api 系通常 `/api/user/self`。需用户确认或探测 |
 | 6 | API 前缀 | `https://ccbus.top/api/v1`（登录/刷新/余额同前缀）；若不同请提供 |
 
@@ -179,6 +180,7 @@ struct <Name>ProviderDefinition: ProviderDefinition {
             tintRGB: <0xRRGGBB>,
             capabilityDescription: "支持账户余额，可通过网页登录态获取。",
             authPageURL: URL(string: "<登录页>"),
+            homepageURL: URL(string: "<域名根>，如 https://ccbus.top"),
             authenticationSummary: "网页登录态 · 支持账户余额"
         )
     }
