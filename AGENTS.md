@@ -54,13 +54,13 @@ Run it with the `xcodebuild ... test` command above.
 
 ## Commits & Pull Requests
 
-No Git history is present in this checkout, so no repository-specific commit
-convention can be inferred. Use short imperative subjects (for example,
-`Add Kimi usage parsing`) and keep unrelated changes separate. Pull requests
-should explain behavior changes, identify affected providers or views, include
-verification commands, and attach screenshots for visible UI changes. Never
-commit API keys, OAuth tokens, or other credentials; credentials belong in the
-private `Application Support/TokenMeter/credentials.json` file managed by the app.
+完成每个独立功能并通过针对性验证后，立即创建一个 Git commit。提交前检查
+差异，只纳入该功能相关改动；用户已有、无关或尚未完成的改动必须保留在工作区，
+不得混入提交。使用简短的祈使句作为提交主题（例如 `Add Kimi usage parsing`），
+并保持不同功能分开提交。Pull request 应说明行为变化、受影响的 provider 或
+view、验证命令；可见 UI 变化应附截图。绝不提交 API key、OAuth token 或其他凭据；
+凭据应保存在应用管理的私有 `Application Support/TokenMeter/credentials.json`
+文件中。
 
 ## Page Index
 
