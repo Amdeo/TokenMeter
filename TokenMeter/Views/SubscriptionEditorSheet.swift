@@ -103,6 +103,7 @@ struct SubscriptionEditorSheet: View {
                     chrome: PanelLayoutMetrics.pageChrome
                 )
             }
+            .scrollIndicators(.hidden)
             HStack(spacing: 10) {
                 if isEditing {
                     Button("删除订阅", role: .destructive) { showDeleteConfirmation = true }
