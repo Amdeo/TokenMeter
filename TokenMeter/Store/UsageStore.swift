@@ -71,6 +71,14 @@ final class UsageStore {
         try migrationService.exportPackage(subscriptions: subscriptions, password: password)
     }
 
+    func exportMigrationPackageAsync(password: String) async throws -> Data {
+        let service = migrationService
+        let subscriptions = subscriptions
+        return try await Task.detached(priority: .userInitiated) {
+            try service.exportPackage(subscriptions: subscriptions, password: password)
+        }.value
+    }
+
     func prepareMigrationImport(data: Data, password: String) throws -> MigrationImportPlan {
         let payload = try migrationService.decryptPackage(data, password: password)
         return migrationService.makeImportPlan(
@@ -78,6 +86,20 @@ final class UsageStore {
             localSubscriptions: subscriptions,
             localCredentials: try credentials.snapshot()
         )
+    }
+
+    func prepareMigrationImportAsync(data: Data, password: String) async throws -> MigrationImportPlan {
+        let service = migrationService
+        let subscriptions = subscriptions
+        let localCredentials = try credentials.snapshot()
+        return try await Task.detached(priority: .userInitiated) {
+            let payload = try service.decryptPackage(data, password: password)
+            return service.makeImportPlan(
+                payload: payload,
+                localSubscriptions: subscriptions,
+                localCredentials: localCredentials
+            )
+        }.value
     }
 
     func commitMigrationImport(_ plan: MigrationImportPlan) async throws {
@@ -91,7 +113,11 @@ final class UsageStore {
             activeRefresh.cancel()
             await activeRefresh.value
         }
-        let imported = try migrationService.commit(plan, localSubscriptions: subscriptions)
+        let service = migrationService
+        let localSubscriptions = subscriptions
+        let imported = try await Task.detached(priority: .userInitiated) {
+            try service.commit(plan, localSubscriptions: localSubscriptions)
+        }.value
         subscriptions = imported
         snapshots.removeAll()
         lastPersistenceError = nil

@@ -25,6 +25,66 @@ struct CredentialMigrationPackageTests {
     }
 
     @Test
+    func exportRejectsShortPassword() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = CredentialMigrationService(
+            metadataURL: directory.appendingPathComponent("subscriptions.json"),
+            credentialStore: CredentialStore(fileURL: directory.appendingPathComponent("credentials.json"))
+        )
+
+        #expect(throws: CredentialMigrationError.passwordTooShort) {
+            try service.exportPackage(
+                subscriptions: [Subscription(providerID: .deepSeek, name: "DeepSeek")],
+                password: "too-short"
+            )
+        }
+    }
+
+    @Test
+    func exportRejectsDuplicateSubscriptionIDs() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = CredentialMigrationService(
+            metadataURL: directory.appendingPathComponent("subscriptions.json"),
+            credentialStore: CredentialStore(fileURL: directory.appendingPathComponent("credentials.json"))
+        )
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek")
+
+        #expect(throws: CredentialMigrationError.invalidPackage) {
+            try service.exportPackage(
+                subscriptions: [subscription, subscription],
+                password: "migration-password"
+            )
+        }
+    }
+
+    @Test
+    func importPlanDoesNotCrashForDuplicateLocalIDs() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let credentialStore = CredentialStore(fileURL: directory.appendingPathComponent("credentials.json"))
+        let duplicate = Subscription(providerID: .deepSeek, name: "重复")
+        try credentialStore.save(apiKey: "local-key", for: duplicate.id)
+        let service = CredentialMigrationService(
+            metadataURL: directory.appendingPathComponent("subscriptions.json"),
+            credentialStore: credentialStore
+        )
+        let imported = Subscription(id: duplicate.id, providerID: .deepSeek, name: "导入")
+        let plan = service.makeImportPlan(
+            payload: CredentialMigrationPayload(subscriptions: [
+                MigrationSubscriptionWire(subscription: imported, credential: nil)
+            ]),
+            localSubscriptions: [duplicate, duplicate],
+            localCredentials: try credentialStore.snapshot()
+        )
+
+        #expect(plan.items.count == 1)
+        #expect(plan.items[0].kind == .update)
+        #expect(plan.items[0].credentialAction == .preserveLocal)
+    }
+
+    @Test
     func wrongPasswordAndTamperedPackageAreRejected() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
