@@ -2,8 +2,7 @@ import CommonCrypto
 import CryptoKit
 import Foundation
 
-@MainActor
-struct CredentialMigrationService {
+struct CredentialMigrationService: Sendable {
     static let currentSchemaVersion = 1
     static let minimumPasswordLength = 12
     static let defaultIterations: UInt32 = 200_000
@@ -24,6 +23,12 @@ struct CredentialMigrationService {
 
     func exportPackage(subscriptions: [Subscription], password: String) throws -> Data {
         try validate(password: password)
+        guard subscriptions.count <= Self.maximumSubscriptionCount else {
+            throw CredentialMigrationError.invalidPackage
+        }
+        guard Set(subscriptions.map(\.id)).count == subscriptions.count else {
+            throw CredentialMigrationError.invalidPackage
+        }
         let credentials: CredentialStore.CredentialFile
         do {
             credentials = try credentialStore.snapshot()
@@ -112,7 +117,11 @@ struct CredentialMigrationService {
                 .filter { $0.value.count > 1 }
                 .keys
         )
-        let localByID = Dictionary(uniqueKeysWithValues: localSubscriptions.map { ($0.id, $0) })
+        var localByID: [UUID: Subscription] = [:]
+        for subscription in localSubscriptions {
+            guard localByID[subscription.id] == nil else { continue }
+            localByID[subscription.id] = subscription
+        }
         var items: [MigrationImportItem] = []
 
         for wire in payload.subscriptions {
@@ -121,7 +130,7 @@ struct CredentialMigrationService {
                 items.append(skip(subscription, "迁移包中存在重复订阅标识"))
                 continue
             }
-            guard ProviderRegistry.definition(for: subscription.providerID) != nil else {
+            guard ProviderRegistry.isSupported(subscription.providerID) else {
                 items.append(skip(subscription, "当前版本不支持该供应商"))
                 continue
             }
@@ -254,7 +263,11 @@ struct CredentialMigrationService {
                     try? FileManager.default.removeItem(at: journalURL)
                 } else if !credentialsWritten || (try? Data(contentsOf: credentialStore.storageURL)).map({ Data(SHA256.hash(data: $0)) != journal.newCredentialsHash }) == true {
                     // 不备份凭据明文；回滚只恢复订阅，凭据由写入顺序和下次启动恢复保持一致。
-                    try? recoverInterruptedTransaction()
+                    do {
+                        try recoverInterruptedTransaction()
+                    } catch {
+                        throw CredentialMigrationError.recoveryFailed
+                    }
                 }
                 throw CredentialMigrationError.transactionFailed
             }
@@ -342,8 +355,7 @@ struct CredentialMigrationService {
     }
 
     private func validatedCredential(_ entry: CredentialEntry, for subscription: Subscription) -> CredentialEntry? {
-        let methods = ProviderRegistry.definition(for: subscription.providerID)?.authMethods ?? []
-        guard let flow = methods.first(where: { $0.id == subscription.authMethodID })?.flowID else { return nil }
+        guard let flow = ProviderRegistry.authFlow(for: subscription.providerID, authMethodID: subscription.authMethodID) else { return nil }
         let present = [entry.apiKey != nil, entry.oauthCredential != nil, entry.browserCredential != nil, entry.cookieCredential != nil]
             .filter { $0 }
             .count

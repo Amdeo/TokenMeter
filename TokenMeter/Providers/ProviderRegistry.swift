@@ -27,6 +27,37 @@ enum ProviderRegistry {
     static func definition(for providerID: ProviderID) -> (any ProviderDefinition)? {
         all.first { $0.id == providerID }
     }
+
+    nonisolated static func isSupported(_ providerID: ProviderID) -> Bool {
+        switch providerID {
+        case .deepSeek, .kimi, .zhipu, .openCodeGo, .miniMax, .ccbus, .apikeyFun, .nowCoding:
+            true
+        default:
+            false
+        }
+    }
+
+    nonisolated static func authFlow(for providerID: ProviderID, authMethodID: AuthMethodID) -> AuthFlowID? {
+        switch providerID {
+        case .deepSeek, .zhipu, .openCodeGo, .miniMax:
+            authMethodID == .apiKey ? .apiKey : nil
+        case .kimi:
+            switch authMethodID {
+            case .apiKey: .apiKey
+            case .kimiDeviceOAuth: .deviceOAuth
+            case .kimiBrowserSession: .browserSession
+            default: nil
+            }
+        case .ccbus:
+            authMethodID == .ccbusBrowserSession ? .browserSession : nil
+        case .apikeyFun:
+            authMethodID == .apikeyFunBrowserSession ? .browserSession : nil
+        case .nowCoding:
+            authMethodID == .nowCodingBrowserSession ? .browserSession : nil
+        default:
+            nil
+        }
+    }
 }
 
 // MARK: - 未支持供应商

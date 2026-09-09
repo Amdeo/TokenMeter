@@ -74,7 +74,7 @@ struct MigrationPanel: View {
                 .font(.system(size: 11))
                 .foregroundStyle(TM.warn)
             passwordFields(confirm: true)
-            Button("选择保存位置") { exportPackage() }
+            Button(isWorking ? "正在生成迁移包…" : "选择保存位置") { exportPackage() }
                 .buttonStyle(.borderedProminent)
                 .disabled(!passwordsMatch || isWorking)
         }
@@ -126,6 +126,15 @@ struct MigrationPanel: View {
             if confirm {
                 SecureField("再次输入密码", text: $confirmation)
                     .textFieldStyle(.roundedBorder)
+                if !password.isEmpty && password.count < CredentialMigrationService.minimumPasswordLength {
+                    Text("密码至少需要 12 个字符")
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.warn)
+                } else if !confirmation.isEmpty && password != confirmation {
+                    Text("两次输入的密码不一致")
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.warn)
+                }
             }
         }
     }
@@ -203,11 +212,11 @@ struct MigrationPanel: View {
         panel.message = "选择 TokenMeter 凭据迁移包"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            guard let size = attributes[.size] as? NSNumber,
-                  size.intValue <= CredentialMigrationService.maximumPackageBytes
-            else { throw CredentialMigrationError.invalidPackage }
-            packageData = try Data(contentsOf: url)
+            let data = try Data(contentsOf: url)
+            guard data.count <= CredentialMigrationService.maximumPackageBytes else {
+                throw CredentialMigrationError.invalidPackage
+            }
+            packageData = data
             reset(clearData: false)
             mode = .importPassword
         } catch {
@@ -216,32 +225,45 @@ struct MigrationPanel: View {
     }
 
     private func exportPackage() {
-        do {
-            let data = try store.exportMigrationPackage(password: password)
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.json]
-            panel.nameFieldStringValue = "TokenMeter-migration.json"
-            guard panel.runModal() == .OK, let url = panel.url else { return }
-            try data.write(to: url, options: .atomic)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            guard (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600 else {
-                throw CocoaError(.fileWriteUnknown)
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "TokenMeter-migration.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        isWorking = true
+        errorMessage = nil
+        Task { @MainActor in
+            defer { isWorking = false }
+            do {
+                let data = try await store.exportMigrationPackageAsync(password: password)
+                try data.write(to: url, options: .atomic)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                guard (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600 else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+                onClose()
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = error.localizedDescription
             }
-            onClose()
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 
     private func prepareImport() {
         guard let packageData else { return }
-        do {
-            plan = try store.prepareMigrationImport(data: packageData, password: password)
-            errorMessage = nil
-            mode = .review
-        } catch {
-            errorMessage = error.localizedDescription
+        isWorking = true
+        errorMessage = nil
+        Task { @MainActor in
+            defer { isWorking = false }
+            do {
+                plan = try await store.prepareMigrationImportAsync(data: packageData, password: password)
+                mode = .review
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
