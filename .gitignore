@@ -16,8 +16,6 @@ xcuserdata/
 !.pi/
 .pi/tasks/
 .pi/skills/*
-!.pi/skills/add-provider/
-!.pi/skills/add-provider/SKILL.md
 !.pi/skills/add-relay-provider/
 !.pi/skills/add-relay-provider/SKILL.md
 .codebase-memory/
