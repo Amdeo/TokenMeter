@@ -15,6 +15,16 @@
 
 - **`anthropic-identity` bootstrap 回退**：`ClaudeOAuthService.credential(from:)` 中 `account.uuid` 只用于展示，额度请求只需要 access token，缺失按可选处理，因此该回退对 TokenMeter 无实际用途，不构成债务。
 
+## 审计后决定不做（复杂度确实存在，但收尾成本 ≥ 收益）
+
+以下来自 `/ponytail-audit` 的全仓扫描。它们**不是代码里的 `ponytail:` 标记**，仅登记结论，避免以后重复评估。
+
+- **合并三个登录态错误枚举**（`KimiBrowserCredentialError` / `APIKeyFunBrowserCredentialError` / `CCBusBrowserCredentialError`，每个约 25 行、逐 case 重复）：合并需要给枚举加供应商维度，波及 34 个 throw 点、3 个 `isInvalid` 闭包和测试里的 `catch` 模式；且 `Views/SubscriptionEditorSheet.swift:315` 会把 `localizedDescription` 直接展示给用户，合并必然改动可见文案。收益约 -50 行。
+  - 重新评估的触发条件：当出现第 4 个同构的浏览器会话供应商时（复制成本开始压过迁移成本）。
+- **合并 APIKeyFun / CCBus 两个提取器**（各 79 行、约 53 行同构）：共享核心只能抽出 `credential(from:)` 的约 25 行，且需要传入 error-factory 闭包；错误枚举本就该各自独立。收益约 -20 行。
+  - 重新评估的触发条件：同上的第 4 个同构供应商，或 localStorage key 约定发生变化导致两份实现不同步时。
+- **合并 APIKeyFun / CCBus 的 Provider 定义骨架**（各 102 行、约 64 行同构）：文件分离本身就是本项目「一个中转站一个文件」的扩展机制（见 `add-relay-provider` skill），只应合骨架、不应合文件，收益低于前两条。
+
 ---
 
 3 markers, 0 with no trigger.
