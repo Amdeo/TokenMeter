@@ -11,7 +11,7 @@ struct ProviderRegistryTests {
     func registryExposesAllBuiltInProvidersWithUniqueIDs() {
         let ids = ProviderRegistry.all.map(\.id.rawValue)
         #expect(Set(ids).count == ids.count)
-        #expect(ids == ["deepseek", "kimi", "zhipu", "opencode-go", "minimax", "ccbus", "apikey-fun", "nowcoding"])
+        #expect(ids == ["deepseek", "kimi", "zhipu", "opencode-go", "minimax", "ccbus", "apikey-fun", "nowcoding", "codex"])
     }
 
     @Test

@@ -120,7 +120,7 @@ enum APIClient {
     private static func statusError(providerID: ProviderID, status: Int) -> UsageProviderError {
         switch status {
         case 401, 403:
-            if providerID == .kimi || providerID == .ccbus || providerID == .apikeyFun || providerID == .nowCoding {
+            if providerID == .kimi || providerID == .ccbus || providerID == .apikeyFun || providerID == .nowCoding || providerID == .codex {
                 return .httpStatus(status)
             }
             return .authenticationRequired(providerID, "凭证无效或无权访问接口")

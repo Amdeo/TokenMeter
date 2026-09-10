@@ -212,7 +212,10 @@ struct SubscriptionEditorSheet: View {
         resetOAuthState(); let sessionID = draft.oauthSessionID; draft.oauthStatus = "正在请求设备授权…"; draft.message = nil
         draft.oauthTask = Task { @MainActor in
             do {
-                let credential = try await KimiOAuthService().authorize { device in
+                let credential = try await DeviceOAuthService.authorize(
+                    providerID: draft.providerID,
+                    authMethodID: draft.authMethodID
+                ) { device in
                     await MainActor.run {
                         guard sessionID == draft.oauthSessionID else { return }
                         draft.oauthDevice = device
@@ -424,7 +427,7 @@ private struct AuthMethodSelection: View {
     @Binding var authMethod: AuthMethodID
     let providerID: ProviderID
     @Binding var apiKey: String
-    let oauthDevice: KimiDeviceAuthorization?
+    let oauthDevice: DeviceOAuthAuthorization?
     let oauthStatus: String?
     let isAuthorizing: Bool
     let onStartOAuth: () -> Void

@@ -166,7 +166,7 @@ final class SubscriptionEditorDraft {
     var oauthCredential: OAuthCredential?
     var browserCredential: KimiBrowserCredential?
     var cookieCredential: CookieSessionCredential?
-    var oauthDevice: KimiDeviceAuthorization?
+    var oauthDevice: DeviceOAuthAuthorization?
     var oauthStatus: String?
     var oauthTask: Task<Void, Never>?
     var browserImportTask: Task<Void, Never>?
@@ -180,7 +180,7 @@ final class SubscriptionEditorDraft {
         originalAuthMethodID = .apiKey
         initialProviderID = providerID
         self.providerID = providerID
-        authMethodID = .apiKey
+        authMethodID = providerID == .codex ? .codexDeviceOAuth : .apiKey
         name = ""
         quotaColors = [:]
     }

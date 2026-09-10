@@ -5,6 +5,15 @@ struct OAuthCredential: Codable, Sendable, Equatable {
     let refreshToken: String
     let expiresAt: Date
     let tokenType: String
+    let accountID: String?
+
+    init(accessToken: String, refreshToken: String, expiresAt: Date, tokenType: String, accountID: String? = nil) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiresAt = expiresAt
+        self.tokenType = tokenType
+        self.accountID = accountID
+    }
 }
 
 struct KimiBrowserCredential: Codable, Sendable, Equatable {

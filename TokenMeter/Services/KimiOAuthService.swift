@@ -1,10 +1,5 @@
 import Foundation
 
-struct KimiDeviceAuthorization: Sendable {
-    let userCode: String
-    let verificationURL: URL
-    let expiresAt: Date
-}
 
 enum KimiOAuthError: LocalizedError, Sendable {
     case requestFailed
@@ -38,7 +33,7 @@ struct KimiOAuthService: Sendable {
     private static let deviceEndpoint = host.appendingPathComponent("/api/oauth/device_authorization")
     private static let tokenEndpoint = host.appendingPathComponent("/api/oauth/token")
 
-    func authorize(onDeviceAuthorization: @escaping @Sendable (KimiDeviceAuthorization) async -> Void = { _ in }) async throws -> OAuthCredential {
+    func authorize(onDeviceAuthorization: @escaping @Sendable (DeviceOAuthAuthorization) async -> Void = { _ in }) async throws -> OAuthCredential {
         let hardDeadline = Date.now.addingTimeInterval(15 * 60)
         var device = try await requestDeviceAuthorization()
         // 以服务端 expires_in 为准：更早到期时不应继续轮询已失效的设备码。
@@ -203,8 +198,8 @@ struct KimiOAuthService: Sendable {
             case interval
         }
 
-        var publicValue: KimiDeviceAuthorization {
-            KimiDeviceAuthorization(userCode: userCode, verificationURL: verificationURL, expiresAt: Date.now.addingTimeInterval(TimeInterval(expiresIn)))
+        var publicValue: DeviceOAuthAuthorization {
+            DeviceOAuthAuthorization(userCode: userCode, verificationURL: verificationURL, expiresAt: Date.now.addingTimeInterval(TimeInterval(expiresIn)))
         }
 
         func with(verificationURL: URL) -> DeviceAuthorizationResponse {

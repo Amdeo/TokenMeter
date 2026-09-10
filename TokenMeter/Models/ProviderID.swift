@@ -22,6 +22,7 @@ extension ProviderID {
     static let ccbus = ProviderID(rawValue: "ccbus")
     static let apikeyFun = ProviderID(rawValue: "apikey-fun")
     static let nowCoding = ProviderID(rawValue: "nowcoding")
+    static let codex = ProviderID(rawValue: "codex")
 
     /// 兼容旧 `Platform` 枚举的原始值映射。
     static func legacyPlatformMapping(_ rawValue: String) -> ProviderID {
@@ -55,6 +56,7 @@ extension AuthMethodID {
     static let ccbusBrowserSession = AuthMethodID(rawValue: "ccbus-browser-session")
     static let apikeyFunBrowserSession = AuthMethodID(rawValue: "apikey-fun-browser-session")
     static let nowCodingBrowserSession = AuthMethodID(rawValue: "nowcoding-browser-session")
+    static let codexDeviceOAuth = AuthMethodID(rawValue: "codex-device-oauth")
 
     /// 兼容旧认证枚举值：`manualAPIKey` / `piAuth` / `officialAuth` → api-key，
     /// `kimiOAuth` → kimi-device-oauth，`kimiBrowserSession` → kimi-browser-session。
