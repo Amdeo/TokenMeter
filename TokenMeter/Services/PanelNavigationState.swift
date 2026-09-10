@@ -167,6 +167,13 @@ final class SubscriptionEditorDraft {
     var browserCredential: KimiBrowserCredential?
     var cookieCredential: CookieSessionCredential?
     var oauthDevice: DeviceOAuthAuthorization?
+    /// 授权码流程（Claude）：浏览器授权后粘贴回来的授权码或回调地址。
+    var oauthCodeInput = ""
+    /// 已生成的授权页面地址，供「重新打开」与复制。
+    var oauthCodeAuthorizeURL: URL?
+    /// 待兑换令牌的 PKCE 参数；离开该认证方式时清空。
+    var oauthCodeVerifier: String?
+    var oauthCodeState: String?
     var oauthStatus: String?
     var oauthTask: Task<Void, Never>?
     var browserImportTask: Task<Void, Never>?
@@ -180,7 +187,11 @@ final class SubscriptionEditorDraft {
         originalAuthMethodID = .apiKey
         initialProviderID = providerID
         self.providerID = providerID
-        authMethodID = providerID == .codex ? .codexDeviceOAuth : .apiKey
+        authMethodID = switch providerID {
+        case .codex: .codexDeviceOAuth
+        case .claude: .claudeOAuth
+        default: .apiKey
+        }
         name = ""
         quotaColors = [:]
     }
@@ -221,6 +232,15 @@ final class SubscriptionEditorDraft {
         browserImportTask?.cancel()
         oauthTask = nil
         browserImportTask = nil
+        leaveCodeOAuth()
+    }
+
+    /// 清空待兑换的授权码流程参数（切换认证方式或放弃编辑时调用）。
+    func leaveCodeOAuth() {
+        oauthCodeVerifier = nil
+        oauthCodeState = nil
+        oauthCodeAuthorizeURL = nil
+        oauthCodeInput = ""
     }
 
     func leaveBrowserAuthentication() {

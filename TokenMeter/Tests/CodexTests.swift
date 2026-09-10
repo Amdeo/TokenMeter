@@ -304,7 +304,7 @@ struct CodexTests {
 }
 
 /// 按 URL path 返回脚本化响应的传输桩，并记录每个 path 的调用次数。
-private actor HTTPStub {
+actor HTTPStub {
     private var counts: [String: Int] = [:]
     private let handler: @Sendable (String, Int) -> (Int, Data)
 

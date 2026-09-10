@@ -109,12 +109,12 @@ enum APIClient {
     }
 
     /// 状态码 → 错误分类。401/403 对多数供应商是凭证无效（进入认证失效状态）；
-    /// 但回退余额（Kimi）与续期重试（CCBus/APIKEY.FUN/NowCoding）的 Provider 层
+    /// 但回退余额（Kimi）与续期重试（CCBus/APIKEY.FUN/NowCoding/Codex/Claude）的 Provider 层
     /// 自己处理 401/403 语义，这里保持 `httpStatus` 原样抛出。
     private static func statusError(providerID: ProviderID, status: Int) -> UsageProviderError {
         switch status {
         case 401, 403:
-            if providerID == .kimi || providerID == .ccbus || providerID == .apikeyFun || providerID == .nowCoding || providerID == .codex {
+            if providerID == .kimi || providerID == .ccbus || providerID == .apikeyFun || providerID == .nowCoding || providerID == .codex || providerID == .claude {
                 return .httpStatus(status)
             }
             return .authenticationRequired(providerID, "凭证无效或无权访问接口")

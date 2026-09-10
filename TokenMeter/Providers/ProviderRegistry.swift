@@ -17,6 +17,7 @@ enum ProviderRegistry {
             APIKeyFunProviderDefinition(),
             NowCodingProviderDefinition(),
             CodexProviderDefinition(),
+            ClaudeProviderDefinition(),
         ]
         var seen = Set<String>()
         for definition in definitions {
@@ -31,7 +32,7 @@ enum ProviderRegistry {
 
     nonisolated static func isSupported(_ providerID: ProviderID) -> Bool {
         switch providerID {
-        case .deepSeek, .kimi, .zhipu, .openCodeGo, .miniMax, .ccbus, .apikeyFun, .nowCoding, .codex:
+        case .deepSeek, .kimi, .zhipu, .openCodeGo, .miniMax, .ccbus, .apikeyFun, .nowCoding, .codex, .claude:
             true
         default:
             false
@@ -57,6 +58,8 @@ enum ProviderRegistry {
             authMethodID == .nowCodingBrowserSession ? .browserSession : nil
         case .codex:
             authMethodID == .codexDeviceOAuth ? .deviceOAuth : nil
+        case .claude:
+            authMethodID == .claudeOAuth ? .oauthCode : nil
         default:
             nil
         }

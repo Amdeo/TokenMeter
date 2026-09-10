@@ -302,7 +302,12 @@ struct CredentialMigrationService: Sendable {
             try? FileManager.default.removeItem(at: journalURL)
         }
     }
+}
 
+// MARK: - 加密与 IO 辅助
+
+/// 同文件的私有辅助方法单独放在扩展里，避免主类型体过长（行为与访问范围不变）。
+extension CredentialMigrationService {
     private func encrypt(_ plaintext: Data, password: String) throws -> Data {
         let salt = randomData(count: 16)
         let iterations = calibratedIterations(password: password, salt: salt)
@@ -364,7 +369,7 @@ struct CredentialMigrationService: Sendable {
         case .apiKey:
             guard let key = entry.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty else { return nil }
             return CredentialEntry(apiKey: key, oauthCredential: nil, browserCredential: nil, cookieCredential: nil)
-        case .deviceOAuth:
+        case .deviceOAuth, .oauthCode:
             guard let credential = entry.oauthCredential,
                   !credential.accessToken.isEmpty, !credential.refreshToken.isEmpty, !credential.tokenType.isEmpty
             else { return nil }

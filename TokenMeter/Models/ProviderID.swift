@@ -23,6 +23,7 @@ extension ProviderID {
     static let apikeyFun = ProviderID(rawValue: "apikey-fun")
     static let nowCoding = ProviderID(rawValue: "nowcoding")
     static let codex = ProviderID(rawValue: "codex")
+    static let claude = ProviderID(rawValue: "claude")
 
     /// 兼容旧 `Platform` 枚举的原始值映射。
     static func legacyPlatformMapping(_ rawValue: String) -> ProviderID {
@@ -57,6 +58,7 @@ extension AuthMethodID {
     static let apikeyFunBrowserSession = AuthMethodID(rawValue: "apikey-fun-browser-session")
     static let nowCodingBrowserSession = AuthMethodID(rawValue: "nowcoding-browser-session")
     static let codexDeviceOAuth = AuthMethodID(rawValue: "codex-device-oauth")
+    static let claudeOAuth = AuthMethodID(rawValue: "claude-oauth")
 
     /// 兼容旧认证枚举值：`manualAPIKey` / `piAuth` / `officialAuth` → api-key，
     /// `kimiOAuth` → kimi-device-oauth，`kimiBrowserSession` → kimi-browser-session。
@@ -77,6 +79,8 @@ enum AuthFlowID: String, Codable, Sendable {
     case apiKey
     case deviceOAuth
     case browserSession
+    /// OAuth 授权码（PKCE）：在系统浏览器完成授权后把授权码（或回调地址）粘贴回来。
+    case oauthCode
 }
 
 /// 供应商支持的认证方式定义（编辑页选项 + 表单驱动）。

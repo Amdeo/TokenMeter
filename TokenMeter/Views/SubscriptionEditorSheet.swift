@@ -83,6 +83,9 @@ struct SubscriptionEditorSheet: View {
                             isImportingBrowser: draft.browserImportTask != nil,
                             onStartEmbeddedLogin: { startEmbeddedLogin() },
                             onSwitchBrowserAccount: { startEmbeddedLogin(switchingAccount: true) },
+                            oauthCodeAuthorizeURL: draft.oauthCodeAuthorizeURL,
+                            oauthCodeInput: $draft.oauthCodeInput,
+                            onCompleteOAuthCode: completeOAuthCode,
                             onOpenURL: { openURL($0) },
                             onCopy: copy
                         )
@@ -119,7 +122,7 @@ struct SubscriptionEditorSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: draft.authMethodID) { _, _ in
-            if authFlowID != .deviceOAuth { resetOAuthState() }
+            if authFlowID != .deviceOAuth, authFlowID != .oauthCode { resetOAuthState() }
             if authFlowID != .browserSession { draft.leaveBrowserAuthentication() }
         }
         .overlay {
@@ -205,10 +208,19 @@ struct SubscriptionEditorSheet: View {
     }
 
     private func deleteSubscription() { guard let subscription else { return }; store.remove(subscription); onClose() }
-    private func resetOAuthState() { draft.oauthSessionID = UUID(); draft.oauthTask?.cancel(); draft.oauthTask = nil; draft.oauthCredential = nil; draft.oauthDevice = nil; draft.oauthStatus = nil }
+    private func resetOAuthState() {
+        draft.oauthSessionID = UUID()
+        draft.oauthTask?.cancel()
+        draft.oauthTask = nil
+        draft.oauthCredential = nil
+        draft.oauthDevice = nil
+        draft.oauthStatus = nil
+        draft.leaveCodeOAuth()
+    }
     private func cancelOAuth() { resetOAuthState() }
 
     private func startOAuth() {
+        if authFlowID == .oauthCode { startCodeOAuth(); return }
         resetOAuthState(); let sessionID = draft.oauthSessionID; draft.oauthStatus = "正在请求设备授权…"; draft.message = nil
         draft.oauthTask = Task { @MainActor in
             do {
@@ -228,6 +240,58 @@ struct SubscriptionEditorSheet: View {
             guard sessionID == draft.oauthSessionID else { return }; draft.oauthTask = nil
         }
     }
+
+    /// 授权码流程：复用尚未兑换的 PKCE（重复点击不会作废已完成的授权），否则新建。
+    private func startCodeOAuth() {
+        draft.message = nil
+        if let url = draft.oauthCodeAuthorizeURL {
+            draft.oauthStatus = Self.codeOAuthPendingStatus
+            openURL(url)
+            return
+        }
+        let pkce = ClaudeOAuthService.makePKCE()
+        let url = ClaudeOAuthService.authorizationURL(pkce: pkce)
+        draft.oauthCodeVerifier = pkce.verifier
+        draft.oauthCodeState = pkce.state
+        draft.oauthCodeAuthorizeURL = url
+        draft.oauthCredential = nil
+        draft.oauthStatus = Self.codeOAuthPendingStatus
+        openURL(url)
+    }
+
+    /// 把用户粘贴的授权码/回调地址兑换成令牌。
+    private func completeOAuthCode() {
+        guard let verifier = draft.oauthCodeVerifier, let state = draft.oauthCodeState else {
+            draft.message = "请先点「打开授权页面」开始授权。"
+            return
+        }
+        let input = draft.oauthCodeInput
+        let sessionID = draft.oauthSessionID
+        draft.message = nil
+        draft.oauthStatus = "正在用授权码换取令牌…"
+        draft.oauthTask = Task { @MainActor in
+            do {
+                let credential = try await ClaudeOAuthService().completeAuthorization(
+                    pastedText: input,
+                    verifier: verifier,
+                    state: state
+                )
+                guard sessionID == draft.oauthSessionID else { return }
+                draft.oauthCredential = credential
+                draft.oauthCodeInput = ""
+                draft.oauthStatus = "已完成 claude.ai 授权"
+            } catch is CancellationError {
+            } catch {
+                guard sessionID == draft.oauthSessionID else { return }
+                draft.oauthStatus = Self.codeOAuthPendingStatus
+                draft.message = error.localizedDescription
+            }
+            guard sessionID == draft.oauthSessionID else { return }
+            draft.oauthTask = nil
+        }
+    }
+
+    private static let codeOAuthPendingStatus = "已在浏览器打开授权页面；完成后把地址栏整段地址粘贴到下方。"
 
     private func startEmbeddedLogin(switchingAccount: Bool = false) {
         resetOAuthState(); draft.leaveBrowserAuthentication(); let sessionID = draft.browserImportSessionID; draft.message = nil
@@ -435,6 +499,9 @@ private struct AuthMethodSelection: View {
     let isImportingBrowser: Bool
     let onStartEmbeddedLogin: () -> Void
     let onSwitchBrowserAccount: () -> Void
+    let oauthCodeAuthorizeURL: URL?
+    @Binding var oauthCodeInput: String
+    let onCompleteOAuthCode: () -> Void
     let onOpenURL: (URL) -> Void
     let onCopy: (String) -> Void
 
@@ -470,6 +537,8 @@ private struct AuthMethodSelection: View {
                 }
             case .deviceOAuth:
                 deviceOAuthForm
+            case .oauthCode:
+                oauthCodeForm
             case .browserSession:
                 browserSessionForm
             }
@@ -540,6 +609,52 @@ private struct AuthMethodSelection: View {
             Text("实验性 Device OAuth，令牌不会显示在界面，只保存到 TokenMeter 本地私有文件。")
                 .font(.system(size: 10))
                 .foregroundStyle(TM.textTertiary)
+        }
+    }
+
+    @ViewBuilder
+    private var oauthCodeForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                EditorSoftButton(
+                    title: oauthCodeAuthorizeURL == nil ? "打开授权页面" : "重新打开授权页面",
+                    systemImage: "safari",
+                    prominent: true
+                ) { onStartOAuth() }
+                if let url = oauthCodeAuthorizeURL {
+                    EditorSoftButton(title: "复制链接", systemImage: "doc.on.doc") {
+                        onCopy(url.absoluteString)
+                    }
+                }
+            }
+            if let oauthStatus {
+                HStack(spacing: 8) {
+                    if isAuthorizing {
+                        ProgressView().controlSize(.small)
+                    } else if oauthCredentialDone {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(TM.ok)
+                            .font(.system(size: 11))
+                    }
+                    Text(oauthStatus)
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if !oauthCredentialDone {
+                VStack(alignment: .leading, spacing: 7) {
+                    FormField("粘贴授权码或回调地址", text: $oauthCodeInput)
+                    EditorSoftButton(title: "使用授权码完成", systemImage: "checkmark", prominent: true) {
+                        onCompleteOAuthCode()
+                    }
+                    .disabled(oauthCodeInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            Text("授权页会跳转到本机回调地址而无法打开，这是预期行为：请把浏览器地址栏里的整段地址复制回来。令牌只写入 TokenMeter 本地私有文件。")
+                .font(.system(size: 10))
+                .foregroundStyle(TM.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

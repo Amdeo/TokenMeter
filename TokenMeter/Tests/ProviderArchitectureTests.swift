@@ -11,7 +11,7 @@ struct ProviderRegistryTests {
     func registryExposesAllBuiltInProvidersWithUniqueIDs() {
         let ids = ProviderRegistry.all.map(\.id.rawValue)
         #expect(Set(ids).count == ids.count)
-        #expect(ids == ["deepseek", "kimi", "zhipu", "opencode-go", "minimax", "ccbus", "apikey-fun", "nowcoding", "codex"])
+        #expect(ids == ["deepseek", "kimi", "zhipu", "opencode-go", "minimax", "ccbus", "apikey-fun", "nowcoding", "codex", "claude"])
     }
 
     @Test
@@ -31,6 +31,14 @@ struct ProviderRegistryTests {
             let definition = ProviderRegistry.definition(for: providerID)
             #expect(definition?.authMethods.map(\.id.rawValue) == ["api-key"])
         }
+    }
+
+    @Test
+    func oauthOnlyProvidersExposeTheirSingleFlow() {
+        #expect(ProviderRegistry.definition(for: .codex)?.authMethods.map(\.id.rawValue) == ["codex-device-oauth"])
+        #expect(ProviderRegistry.definition(for: .claude)?.authMethods.map(\.id.rawValue) == ["claude-oauth"])
+        #expect(ProviderRegistry.authFlow(for: .codex, authMethodID: .codexDeviceOAuth) == .deviceOAuth)
+        #expect(ProviderRegistry.authFlow(for: .claude, authMethodID: .claudeOAuth) == .oauthCode)
     }
 
     @Test
