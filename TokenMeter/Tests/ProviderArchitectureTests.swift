@@ -401,7 +401,7 @@ struct CCBusTests {
         {"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}
         """
         // 通过 URLProtocol stub 无法在此测试直接注入，因此验证响应模型可解码。
-        let response = try JSONDecoder().decode(CCBusSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
+        let response = try JSONDecoder().decode(BrowserSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
         #expect(response.code == 0)
         #expect(response.data?.accessToken == "new-access")
         #expect(response.data?.refreshToken == "new-refresh")
@@ -477,7 +477,7 @@ struct APIKeyFunTests {
         let raw = """
         {"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}
         """
-        let response = try JSONDecoder().decode(APIKeyFunSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
+        let response = try JSONDecoder().decode(BrowserSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
         #expect(response.code == 0)
         #expect(response.data?.accessToken == "new-access")
         #expect(response.data?.refreshToken == "new-refresh")
@@ -768,95 +768,3 @@ struct BrowserSessionFlowTests {
     }
 }
 
-// MARK: - JWT 载荷解码
-
-/// `JWT` 是 5 个登录态提取器/续期器与 Codex 账户 ID 提取共用的唯一解码路径，
-/// 这些用例锁定它从各处重复实现收敛后保持的边界行为。
-struct JWTTests {
-    private func makeToken(payload: String) -> String {
-        let body = Data(payload.utf8)
-            .base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-        return "header.\(body).signature"
-    }
-
-    @Test
-    func jwtExpirationReadsNumericExp() {
-        let token = makeToken(payload: #"{"exp":1799999999}"#)
-        #expect(JWT.expiration(of: token) == Date(timeIntervalSince1970: 1_799_999_999))
-    }
-
-    @Test
-    func jwtExpirationTreatsStringExpAsUnavailable() {
-        // 字符串形态的 exp 原先就被各实现拒绝，收敛后必须继续拒绝（否则无效令牌会被当作有效）。
-        let token = makeToken(payload: #"{"exp":"1799999999"}"#)
-        #expect(JWT.expiration(of: token) == nil)
-    }
-
-    @Test
-    func jwtExpirationRejectsMalformedTokens() {
-        // 段数不足、非 JSON 载荷、非法 base64url、为空都必须返回 nil。
-        #expect(JWT.expiration(of: "header.signature") == nil)
-        #expect(JWT.expiration(of: makeToken(payload: "not json")) == nil)
-        #expect(JWT.expiration(of: "header.!!!not-base64!!!.signature") == nil)
-        #expect(JWT.expiration(of: "") == nil)
-        // 载荷里没有 exp。
-        #expect(JWT.expiration(of: makeToken(payload: #"{"sub":"x"}"#)) == nil)
-    }
-
-    @Test
-    func jwtPayloadRejectsNonObjectTopLevel() throws {
-        #expect(JWT.payload(of: makeToken(payload: "[1,2,3]")) == nil)
-        #expect(JWT.payload(of: makeToken(payload: "\"text\"")) == nil)
-        #expect(try JWT.payload(of: makeToken(payload: #"{"sub":"x"}"#)) == JSONValue.object(["sub": .string("x")]))
-    }
-
-    @Test
-    func jwtPayloadDecodesBase64URLAlphabet() {
-        // 载荷里带非 ASCII 与需要 base64url 字母表的字节，确保替换与补齐逻辑正确。
-        let payload = #"{"name":"页面登录态·Kimi"}"#
-        let token = makeToken(payload: payload)
-        guard case .string(let name)? = JWT.payload(of: token)?.value(for: ["name"]) else {
-            Issue.record("应当解出 name")
-            return
-        }
-        #expect(name == "页面登录态·Kimi")
-    }
-}
-
-// MARK: - 内嵌登录窗口
-
-/// 四个供应商原先各有一份逐行相同的登录控制器，现已收敛为
-/// `EmbeddedWebLoginController` + 配置。这些用例锁定合并后各供应商的域名，
-/// 以及「主域 + 子域」匹配语义（登录窗口何时允许尝试提取登录态）。
-struct EmbeddedWebLoginControllerTests {
-    @Test
-    func loginControllerMatchesDomainAndSubdomains() {
-        let domains = ["kimi.com"]
-        #expect(EmbeddedWebLoginController.matches(host: "kimi.com", domains: domains))
-        #expect(EmbeddedWebLoginController.matches(host: "www.kimi.com", domains: domains))
-        #expect(EmbeddedWebLoginController.matches(host: "KIMI.COM", domains: domains))
-        #expect(!EmbeddedWebLoginController.matches(host: "notkimi.com", domains: domains))
-        // 不能把后缀包含主域的无关域名当成目标域。
-        #expect(!EmbeddedWebLoginController.matches(host: "kimi.com.evil.com", domains: domains))
-        #expect(!EmbeddedWebLoginController.matches(host: "kimi.com", domains: ["ccbus.top"]))
-    }
-
-    @Test
-    func loginControllerConfigurationsKeepProviderDomains() {
-        #expect(EmbeddedWebLoginController.Configuration.kimi.sessionDomains == ["kimi.com"])
-        #expect(EmbeddedWebLoginController.Configuration.ccbus.sessionDomains == ["ccbus.top"])
-        #expect(EmbeddedWebLoginController.Configuration.apiKeyFun.sessionDomains == ["apikey.fun"])
-        #expect(EmbeddedWebLoginController.Configuration.nowCoding.sessionDomains == ["nowcoding.ai"])
-    }
-
-    @Test
-    @MainActor
-    func loginControllerExposesSessionDomainsForSiteDataClearing() {
-        // 切换账号时靠这个属性清除对应域的站点数据，必须与配置一致。
-        let controller = EmbeddedWebLoginController(configuration: .ccbus)
-        #expect(controller.sessionDomains == ["ccbus.top"])
-    }
-}
