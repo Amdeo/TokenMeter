@@ -320,10 +320,10 @@ struct SubscriptionEditorSheet: View {
     @MainActor
     private static func makeBrowserLoginController(for providerID: ProviderID) -> any BrowserSessionLogining {
         switch providerID {
-        case .ccbus: EmbeddedCCBusLoginController()
-        case .apikeyFun: EmbeddedAPIKeyFunLoginController()
-        case .nowCoding: EmbeddedNowCodingLoginController()
-        default: EmbeddedKimiLoginController()
+        case .ccbus: EmbeddedWebLoginController(configuration: .ccbus)
+        case .apikeyFun: EmbeddedWebLoginController(configuration: .apiKeyFun)
+        case .nowCoding: EmbeddedWebLoginController(configuration: .nowCoding)
+        default: EmbeddedWebLoginController(configuration: .kimi)
         }
     }
 

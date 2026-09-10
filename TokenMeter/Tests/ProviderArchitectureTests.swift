@@ -825,3 +825,38 @@ struct JWTTests {
         #expect(name == "页面登录态·Kimi")
     }
 }
+
+// MARK: - 内嵌登录窗口
+
+/// 四个供应商原先各有一份逐行相同的登录控制器，现已收敛为
+/// `EmbeddedWebLoginController` + 配置。这些用例锁定合并后各供应商的域名，
+/// 以及「主域 + 子域」匹配语义（登录窗口何时允许尝试提取登录态）。
+struct EmbeddedWebLoginControllerTests {
+    @Test
+    func loginControllerMatchesDomainAndSubdomains() {
+        let domains = ["kimi.com"]
+        #expect(EmbeddedWebLoginController.matches(host: "kimi.com", domains: domains))
+        #expect(EmbeddedWebLoginController.matches(host: "www.kimi.com", domains: domains))
+        #expect(EmbeddedWebLoginController.matches(host: "KIMI.COM", domains: domains))
+        #expect(!EmbeddedWebLoginController.matches(host: "notkimi.com", domains: domains))
+        // 不能把后缀包含主域的无关域名当成目标域。
+        #expect(!EmbeddedWebLoginController.matches(host: "kimi.com.evil.com", domains: domains))
+        #expect(!EmbeddedWebLoginController.matches(host: "kimi.com", domains: ["ccbus.top"]))
+    }
+
+    @Test
+    func loginControllerConfigurationsKeepProviderDomains() {
+        #expect(EmbeddedWebLoginController.Configuration.kimi.sessionDomains == ["kimi.com"])
+        #expect(EmbeddedWebLoginController.Configuration.ccbus.sessionDomains == ["ccbus.top"])
+        #expect(EmbeddedWebLoginController.Configuration.apiKeyFun.sessionDomains == ["apikey.fun"])
+        #expect(EmbeddedWebLoginController.Configuration.nowCoding.sessionDomains == ["nowcoding.ai"])
+    }
+
+    @Test
+    @MainActor
+    func loginControllerExposesSessionDomainsForSiteDataClearing() {
+        // 切换账号时靠这个属性清除对应域的站点数据，必须与配置一致。
+        let controller = EmbeddedWebLoginController(configuration: .ccbus)
+        #expect(controller.sessionDomains == ["ccbus.top"])
+    }
+}

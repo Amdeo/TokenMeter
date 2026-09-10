@@ -29,7 +29,7 @@ enum KimiBrowserCredentialError: LocalizedError, Sendable {
 }
 
 /// Kimi 网页登录态的续期服务与共享页面地址。
-/// 登录态获取由 `EmbeddedKimiLoginController`（内嵌 WKWebView）负责，
+/// 登录态获取由 `EmbeddedWebLoginController`（内嵌 WKWebView）负责，
 /// 本类型仅承担 access_token 到期后的 RefreshToken RPC 续期。
 struct ChromeSessionImporter: Sendable {
     static let quotaURL = "https://www.kimi.com/settings/subscription?tab=quota"

@@ -1,7 +1,7 @@
 import Foundation
 
 /// CCBus（AI 巴士）网页登录态的续期服务。
-/// 登录态获取由 `EmbeddedCCBusLoginController`（内嵌 WKWebView）负责，
+/// 登录态获取由 `EmbeddedWebLoginController`（内嵌 WKWebView）负责，
 /// 本类型仅承担 access_token 到期后的 refresh_token 续期。
 /// 参考前端实现：`POST {api}/auth/refresh`，body `{"refresh_token": ...}`。
 struct CCBusSessionRefresher: Sendable {
