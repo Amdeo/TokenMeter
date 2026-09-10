@@ -113,6 +113,7 @@ struct ClaudeUsageProvider: UsageProvider {
             }
         } catch UsageProviderError.httpStatus(429) {
             // 额度接口按来源 IP 限流：重试只会加深限流，直接提示稍后再试。
+            // ponytail: 不重试不刷新，偶发限流即本次刷新失败。升级：若真实账号频繁撞 429，再加指数退避或降低刷新频率。
             throw UsageProviderError.requestFailed(subscription.providerID, "额度接口被限流，请稍后重试")
         }
     }
@@ -160,6 +161,7 @@ struct ClaudeUsageProvider: UsageProvider {
         }
 
         // 当前模型级周额度的承载方式是 `limits[]` 的 weekly_scoped + display_name。
+        // ponytail: weekly_scoped 只展示不门控，模型级周额度耗尽不会阻止使用。升级：其他供应商引入阻塞语义时同步。
         var seenScoped = Set<String>()
         for entry in entries where entry.kind == "weekly_scoped" {
             guard let displayName = entry.displayName, !displayName.isEmpty,

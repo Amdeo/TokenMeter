@@ -612,6 +612,7 @@ private struct AuthMethodSelection: View {
         }
     }
 
+    // ponytail: 无本地回调监听，授权码需手动粘贴一次。升级：粘贴体验被反馈麻烦时，加 54545 端口监听自动回填。
     @ViewBuilder
     private var oauthCodeForm: some View {
         VStack(alignment: .leading, spacing: 12) {
