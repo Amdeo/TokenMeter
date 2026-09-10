@@ -767,3 +767,61 @@ struct BrowserSessionFlowTests {
         #expect(refreshCount == 1)
     }
 }
+
+// MARK: - JWT 载荷解码
+
+/// `JWT` 是 5 个登录态提取器/续期器与 Codex 账户 ID 提取共用的唯一解码路径，
+/// 这些用例锁定它从各处重复实现收敛后保持的边界行为。
+struct JWTTests {
+    private func makeToken(payload: String) -> String {
+        let body = Data(payload.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "header.\(body).signature"
+    }
+
+    @Test
+    func jwtExpirationReadsNumericExp() {
+        let token = makeToken(payload: #"{"exp":1799999999}"#)
+        #expect(JWT.expiration(of: token) == Date(timeIntervalSince1970: 1_799_999_999))
+    }
+
+    @Test
+    func jwtExpirationTreatsStringExpAsUnavailable() {
+        // 字符串形态的 exp 原先就被各实现拒绝，收敛后必须继续拒绝（否则无效令牌会被当作有效）。
+        let token = makeToken(payload: #"{"exp":"1799999999"}"#)
+        #expect(JWT.expiration(of: token) == nil)
+    }
+
+    @Test
+    func jwtExpirationRejectsMalformedTokens() {
+        // 段数不足、非 JSON 载荷、非法 base64url、为空都必须返回 nil。
+        #expect(JWT.expiration(of: "header.signature") == nil)
+        #expect(JWT.expiration(of: makeToken(payload: "not json")) == nil)
+        #expect(JWT.expiration(of: "header.!!!not-base64!!!.signature") == nil)
+        #expect(JWT.expiration(of: "") == nil)
+        // 载荷里没有 exp。
+        #expect(JWT.expiration(of: makeToken(payload: #"{"sub":"x"}"#)) == nil)
+    }
+
+    @Test
+    func jwtPayloadRejectsNonObjectTopLevel() throws {
+        #expect(JWT.payload(of: makeToken(payload: "[1,2,3]")) == nil)
+        #expect(JWT.payload(of: makeToken(payload: "\"text\"")) == nil)
+        #expect(try JWT.payload(of: makeToken(payload: #"{"sub":"x"}"#)) == JSONValue.object(["sub": .string("x")]))
+    }
+
+    @Test
+    func jwtPayloadDecodesBase64URLAlphabet() {
+        // 载荷里带非 ASCII 与需要 base64url 字母表的字节，确保替换与补齐逻辑正确。
+        let payload = #"{"name":"页面登录态·Kimi"}"#
+        let token = makeToken(payload: payload)
+        guard case .string(let name)? = JWT.payload(of: token)?.value(for: ["name"]) else {
+            Issue.record("应当解出 name")
+            return
+        }
+        #expect(name == "页面登录态·Kimi")
+    }
+}

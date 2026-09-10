@@ -58,27 +58,11 @@ struct CCBusSessionRefresher: Sendable {
         let expiresAt: Date
         if let expiresIn = data.expiresIn, expiresIn > 0 {
             expiresAt = Date.now.addingTimeInterval(expiresIn)
-        } else if let parsed = Self.expiration(of: accessToken) {
+        } else if let parsed = JWT.expiration(of: accessToken) {
             expiresAt = parsed
         } else {
             throw CCBusBrowserCredentialError.invalidCredentials
         }
         return KimiBrowserCredential(accessToken: accessToken, refreshToken: refreshToken, expiresAt: expiresAt, tokenType: "Bearer")
-    }
-
-    /// 从 JWT 载荷解析 exp 过期时间（前端 refresh 响应无 expires_in 时兜底）。
-    private static func expiration(of token: String) -> Date? {
-        let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return nil }
-        var encoded = String(parts[1])
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        encoded += String(repeating: "=", count: (4 - encoded.count % 4) % 4)
-        guard let data = Data(base64Encoded: encoded),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let value = object["exp"] as? NSNumber else {
-            return nil
-        }
-        return Date(timeIntervalSince1970: value.doubleValue)
     }
 }

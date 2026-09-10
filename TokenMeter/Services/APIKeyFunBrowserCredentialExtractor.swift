@@ -47,29 +47,13 @@ enum APIKeyFunBrowserCredentialExtractor {
               !accessToken.isEmpty, !refreshToken.isEmpty else {
             throw APIKeyFunBrowserCredentialError.credentialsMissing
         }
-        guard let expiresAt = Self.expiration(of: accessToken) else {
+        guard let expiresAt = JWT.expiration(of: accessToken) else {
             throw APIKeyFunBrowserCredentialError.invalidCredentials
         }
         guard expiresAt > .now else {
             throw APIKeyFunBrowserCredentialError.expired
         }
         return KimiBrowserCredential(accessToken: accessToken, refreshToken: refreshToken, expiresAt: expiresAt, tokenType: "Bearer")
-    }
-
-    /// 从 JWT 载荷解析 exp 过期时间。
-    private static func expiration(of token: String) -> Date? {
-        let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return nil }
-        var encoded = String(parts[1])
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        encoded += String(repeating: "=", count: (4 - encoded.count % 4) % 4)
-        guard let data = Data(base64Encoded: encoded),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let value = object["exp"] as? NSNumber else {
-            return nil
-        }
-        return Date(timeIntervalSince1970: value.doubleValue)
     }
 
     private struct TokenPayload: Decodable {

@@ -206,14 +206,8 @@ struct CodexOAuthService: Sendable {
     /// 读取 JWT payload 中的嵌套账户 ID claim：
     /// `payload["https://api.openai.com/auth"]["chatgpt_account_id"]`。
     static func accountID(fromJWT token: String) -> String? {
-        let parts = token.split(separator: ".")
-        guard parts.count >= 2 else { return nil }
-        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
-        guard let data = Data(base64Encoded: payload),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let auth = object["https://api.openai.com/auth"] as? [String: Any],
-              let accountID = auth["chatgpt_account_id"] as? String else { return nil }
+        guard case .object(let auth)? = JWT.payload(of: token)?.value(for: ["https://api.openai.com/auth"]),
+              case .string(let accountID)? = auth["chatgpt_account_id"] else { return nil }
         return accountID
     }
 
