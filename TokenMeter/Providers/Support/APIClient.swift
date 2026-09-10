@@ -26,7 +26,7 @@ struct FlexibleNumber: Decodable, Sendable {
 
 /// 共享 HTTP 客户端：GET/POST JSON，统一的日志、状态码错误分类。
 enum APIClient {
-    static func get<Response: Decodable>(_ url: URL, providerID: ProviderID, authorization: String, headers: [String: String] = [:]) async throws -> Response {
+    static func get<Response: Decodable>(_ url: URL, providerID: ProviderID, authorization: String, headers: [String: String] = [:], transport: HTTPTransport = .live) async throws -> Response {
         UsageLogger.logger.debug("request started provider=\(providerID.rawValue, privacy: .public) type=\(String(describing: Response.self), privacy: .public)")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -35,17 +35,7 @@ enum APIClient {
         for (field, value) in headers {
             request.setValue(value, forHTTPHeaderField: field)
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            UsageLogger.logger.error("""
-                response invalid \
-                provider=\(providerID.rawValue, privacy: .public) \
-                byteCount=\(data.count, privacy: .public) \
-                type=\(String(describing: Response.self), privacy: .public) \
-                errorClass=nonHTTPResponse
-                """)
-            throw UsageProviderError.requestFailed(providerID, "服务器返回了无效响应")
-        }
+        let (data, httpResponse) = try await transport.send(request)
         guard (200..<300).contains(httpResponse.statusCode) else {
             UsageLogger.logger.error("""
                 response rejected \
@@ -89,7 +79,14 @@ enum APIClient {
         }
     }
 
-    static func post<Response: Decodable>(_ url: URL, providerID: ProviderID, authorization: String, headers: [String: String] = [:], body: Data = Data("{}".utf8)) async throws -> Response {
+    static func post<Response: Decodable>(
+        _ url: URL,
+        providerID: ProviderID,
+        authorization: String,
+        headers: [String: String] = [:],
+        body: Data = Data("{}".utf8),
+        transport: HTTPTransport = .live
+    ) async throws -> Response {
         UsageLogger.logger.debug("request started provider=\(providerID.rawValue, privacy: .public) type=\(String(describing: Response.self), privacy: .public)")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -100,10 +97,7 @@ enum APIClient {
             request.setValue(value, forHTTPHeaderField: field)
         }
         request.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw UsageProviderError.requestFailed(providerID, "服务器返回了无效响应")
-        }
+        let (data, httpResponse) = try await transport.send(request)
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw statusError(providerID: providerID, status: httpResponse.statusCode)
         }

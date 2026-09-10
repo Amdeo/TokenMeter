@@ -168,4 +168,166 @@ struct CodexTests {
         #expect(!CodexOAuthService.continuePolling(after: CodexOAuthError.authorizationRequired))
         #expect(!CodexOAuthService.continuePolling(after: CodexOAuthError.invalidResponse("x")))
     }
+
+    // MARK: - 网络路径（注入传输层）
+
+    private func makeTemporaryCredentialStore() -> (CredentialStore, URL) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TokenMeterCodexTests-\(UUID().uuidString)")
+            .appendingPathComponent("credentials.json")
+        return (CredentialStore(fileURL: url), url)
+    }
+
+    /// 注入桩传输层，使真实的 fetchUsage 状态机在无网络的情况下被驱动。
+    private func makeStubbedProvider(
+        stub: HTTPStub,
+        store: CredentialStore,
+        subscriptionID: UUID
+    ) async -> CodexUsageProvider {
+        let transport = await stub.transport
+        return CodexUsageProvider(
+            subscription: Subscription(id: subscriptionID, providerID: .codex, name: "Codex", authMethodID: .codexDeviceOAuth),
+            credentials: store,
+            oauthService: CodexOAuthService(transport: transport),
+            transport: transport
+        )
+    }
+
+    private func storeStaleCredential(_ store: CredentialStore, _ subscriptionID: UUID) throws {
+        try store.save(oauthCredential: OAuthCredential(
+            accessToken: "stale",
+            refreshToken: "refresh-1",
+            expiresAt: .distantFuture,
+            tokenType: "Bearer",
+            accountID: "u-codex"
+        ), for: subscriptionID)
+    }
+
+    private func makeTokenResponseBody() -> Data {
+        let jwt = makeCodexJWT(payload: #"{"https://api.openai.com/auth":{"chatgpt_account_id":"u-codex"}}"#)
+        return Data("{\"access_token\":\"\(jwt)\",\"refresh_token\":\"refresh-2\",\"expires_in\":3600,\"token_type\":\"Bearer\"}".utf8)
+    }
+
+    @Test
+    func codexUsageRefreshesOnceAfterUnauthorizedAndRetries() async throws {
+        let (store, url) = makeTemporaryCredentialStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let subscriptionID = UUID()
+        try storeStaleCredential(store, subscriptionID)
+
+        let tokenBody = makeTokenResponseBody()
+        let stub = HTTPStub { path, index in
+            switch path {
+            case "/backend-api/wham/usage":
+                guard index > 0 else { return (401, Data()) }
+                return (200, Data(#"{"rate_limit":{"primary_window":{"used_percent":10,"limit_window_seconds":18000}}}"#.utf8))
+            case "/oauth/token":
+                return (200, tokenBody)
+            default:
+                return (404, Data())
+            }
+        }
+
+        let provider = await makeStubbedProvider(stub: stub, store: store, subscriptionID: subscriptionID)
+        let snapshot = try await provider.fetchUsage()
+
+        #expect(snapshot.quotas.map(\.kind) == [.fiveHour])
+        let usageCalls = await stub.callCount(path: "/backend-api/wham/usage")
+        let tokenCalls = await stub.callCount(path: "/oauth/token")
+        #expect(usageCalls == 2)
+        #expect(tokenCalls == 1)
+        #expect(store.oauthCredential(for: subscriptionID)?.refreshToken == "refresh-2")
+    }
+
+    @Test
+    func codexUsageStopsAfterOneRefreshWhenStillUnauthorized() async throws {
+        let (store, url) = makeTemporaryCredentialStore()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let subscriptionID = UUID()
+        try storeStaleCredential(store, subscriptionID)
+        let tokenBody = makeTokenResponseBody()
+
+        // 刷新后仍 401：必须只刷新一次并以认证失效结束，不得无限重试。
+        let stub = HTTPStub { path, _ in
+            switch path {
+            case "/backend-api/wham/usage":
+                return (401, Data())
+            case "/oauth/token":
+                return (200, tokenBody)
+            default:
+                return (404, Data())
+            }
+        }
+
+        let provider = await makeStubbedProvider(stub: stub, store: store, subscriptionID: subscriptionID)
+        do {
+            _ = try await provider.fetchUsage()
+            Issue.record("应当以认证失效结束")
+        } catch let error as UsageProviderError {
+            guard case .authenticationRequired = error else {
+                Issue.record("错误的分类：\(error)")
+                return
+            }
+        }
+
+        let usageCalls = await stub.callCount(path: "/backend-api/wham/usage")
+        let tokenCalls = await stub.callCount(path: "/oauth/token")
+        #expect(usageCalls == 2)
+        #expect(tokenCalls == 1)
+    }
+
+    @Test
+    func codexOAuthAuthorizationPollsPendingUntilDeadline() async throws {
+        // interval 1s / expires_in 2s：至少轮询一次 pending，然后按截止时间超时。
+        let stub = HTTPStub { path, _ in
+            switch path {
+            case "/api/accounts/deviceauth/usercode":
+                return (200, Data(#"{"device_auth_id":"device-1","user_code":"ABCD-1234","interval":1,"expires_in":2}"#.utf8))
+            case "/api/accounts/deviceauth/token":
+                return (403, Data())
+            default:
+                return (404, Data())
+            }
+        }
+        let service = CodexOAuthService(transport: await stub.transport)
+
+        do {
+            _ = try await service.authorize()
+            Issue.record("应当以超时结束")
+        } catch CodexOAuthError.timedOut {
+            // 预期
+        }
+
+        let pendingPolls = await stub.callCount(path: "/api/accounts/deviceauth/token")
+        #expect(pendingPolls >= 1)
+    }
+}
+
+/// 按 URL path 返回脚本化响应的传输桩，并记录每个 path 的调用次数。
+private actor HTTPStub {
+    private var counts: [String: Int] = [:]
+    private let handler: @Sendable (String, Int) -> (Int, Data)
+
+    init(handler: @escaping @Sendable (String, Int) -> (Int, Data)) {
+        self.handler = handler
+    }
+
+    var transport: HTTPTransport {
+        HTTPTransport { request in
+            let (status, body) = await self.respond(path: request.url?.path ?? "")
+            guard let url = request.url,
+                  let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil) else {
+                throw URLError(.badServerResponse)
+            }
+            return (body, response)
+        }
+    }
+
+    func callCount(path: String) -> Int { counts[path] ?? 0 }
+
+    private func respond(path: String) -> (Int, Data) {
+        let index = counts[path, default: 0]
+        counts[path] = index + 1
+        return handler(path, index)
+    }
 }

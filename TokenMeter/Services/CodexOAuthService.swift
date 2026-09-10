@@ -19,6 +19,8 @@ enum CodexOAuthError: LocalizedError, Sendable {
 }
 
 struct CodexOAuthService: Sendable {
+    var transport: HTTPTransport = .live
+
     static let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
     private static let deviceAuthorizationURL = URL(string: "https://auth.openai.com/api/accounts/deviceauth/usercode")!
     private static let deviceTokenURL = URL(string: "https://auth.openai.com/api/accounts/deviceauth/token")!
@@ -178,8 +180,7 @@ struct CodexOAuthService: Sendable {
 
     private func perform(_ request: URLRequest) async throws -> Data {
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let response = response as? HTTPURLResponse else { throw CodexOAuthError.networkFailed }
+            let (data, response) = try await transport.send(request)
             guard (200..<300).contains(response.statusCode) else { throw CodexOAuthError.httpStatus(response.statusCode) }
             return data
         } catch let error as CodexOAuthError {

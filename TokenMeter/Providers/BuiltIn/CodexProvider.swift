@@ -37,7 +37,21 @@ struct CodexProviderDefinition: ProviderDefinition {
 
 struct CodexUsageProvider: UsageProvider {
     let subscription: Subscription
-    private let credentials = CredentialStore()
+    private let credentials: CredentialStore
+    private let oauthService: CodexOAuthService
+    private let transport: HTTPTransport
+
+    init(
+        subscription: Subscription,
+        credentials: CredentialStore = CredentialStore(),
+        oauthService: CodexOAuthService = CodexOAuthService(),
+        transport: HTTPTransport = .live
+    ) {
+        self.subscription = subscription
+        self.credentials = credentials
+        self.oauthService = oauthService
+        self.transport = transport
+    }
 
     func fetchUsage() async throws -> UsageSnapshot {
         guard let credential = credentials.oauthCredential(for: subscription.id) else {
@@ -68,7 +82,8 @@ struct CodexUsageProvider: UsageProvider {
                 URL(string: "https://chatgpt.com/backend-api/wham/usage")!,
                 providerID: subscription.providerID,
                 authorization: "\(credential.tokenType) \(credential.accessToken)",
-                headers: ["ChatGPT-Account-Id": accountID]
+                headers: ["ChatGPT-Account-Id": accountID],
+                transport: transport
             )
             return try Self.parseUsage(response, subscription: subscription)
         } catch UsageProviderError.httpStatus(let status) where [401, 403].contains(status) {
@@ -93,7 +108,7 @@ struct CodexUsageProvider: UsageProvider {
 
     private func refreshAndSave(_ credential: OAuthCredential) async throws -> OAuthCredential {
         do {
-            let refreshed = try await CodexOAuthService().refresh(credential)
+            let refreshed = try await oauthService.refresh(credential)
             try Task.checkCancellation()
             try credentials.save(oauthCredential: refreshed, for: subscription.id)
             return refreshed
