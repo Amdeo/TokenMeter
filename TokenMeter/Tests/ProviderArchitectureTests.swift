@@ -11,7 +11,7 @@ struct ProviderRegistryTests {
     func registryExposesAllBuiltInProvidersWithUniqueIDs() {
         let ids = ProviderRegistry.all.map(\.id.rawValue)
         #expect(Set(ids).count == ids.count)
-        #expect(ids == ["deepseek", "kimi", "zhipu", "opencode-go", "minimax", "ccbus", "apikey-fun", "nowcoding", "codex", "claude"])
+        #expect(ids == ["deepseek", "kimi", "zhipu", "opencode-go", "minimax", "ccbus", "apikey-fun", "nowcoding", "siyu", "codex", "claude"])
     }
 
     @Test
@@ -551,6 +551,121 @@ struct NowCodingTests {
         #expect(snapshot.quotas.filter { $0.kind == .generic }.count == 2)
     }
 
+}
+
+// MARK: - Siyu API 集成
+
+@MainActor
+struct SiyuTests {
+    private func makeJWT(exp: TimeInterval) -> String {
+        let payload = Data("{\"exp\":\(Int(exp))}".utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "header.\(payload).signature"
+    }
+
+    @Test
+    func siyuIsRegisteredWithBrowserSessionAuth() {
+        let definition = ProviderRegistry.definition(for: .siyu)
+        #expect(definition != nil)
+        #expect(definition?.metadata.displayName == "Siyu API")
+        #expect(definition?.authMethods.map(\.id.rawValue) == ["siyu-browser-session"])
+        #expect(definition?.authMethods.first?.flowID == .browserSession)
+    }
+
+    @Test
+    func siyuExtractorBuildsCredentialFromLocalStoragePayload() throws {
+        let future = Date.now.addingTimeInterval(3_600).timeIntervalSince1970
+        let access = makeJWT(exp: future)
+        let refresh = makeJWT(exp: future + 86_400)
+        let raw = "{\"accessToken\":\"\(access)\",\"refreshToken\":\"\(refresh)\"}"
+
+        let credential = try SiyuBrowserCredentialExtractor.credential(from: raw)
+
+        #expect(credential.tokenType == "Bearer")
+        #expect(credential.expiresAt.timeIntervalSince1970 == Double(Int(future)))
+    }
+
+    @Test
+    func siyuExtractorRejectsExpiredToken() {
+        let token = makeJWT(exp: Date.now.addingTimeInterval(-60).timeIntervalSince1970)
+        let raw = "{\"accessToken\":\"\(token)\",\"refreshToken\":\"\(token)\"}"
+
+        #expect(throws: SiyuBrowserCredentialError.expired) {
+            _ = try SiyuBrowserCredentialExtractor.credential(from: raw)
+        }
+    }
+
+    @Test
+    func siyuExtractorRejectsEmptyTokens() {
+        #expect(throws: SiyuBrowserCredentialError.credentialsMissing) {
+            _ = try SiyuBrowserCredentialExtractor.credential(from: "{\"accessToken\":\"  \",\"refreshToken\":\"\"}")
+        }
+    }
+
+    @Test
+    func siyuRefreshResponseParsesTokensAndExpiry() throws {
+        let raw = """
+        {"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}
+        """
+        let response = try JSONDecoder().decode(BrowserSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
+        #expect(response.code == 0)
+        #expect(response.data?.accessToken == "new-access")
+        #expect(response.data?.refreshToken == "new-refresh")
+        #expect(response.data?.expiresIn == 7200)
+    }
+
+    @Test
+    func siyuDemoSnapshotShowsBalanceAndPlans() {
+        let definition = ProviderRegistry.definition(for: .siyu)!
+        let subscription = Subscription(providerID: .siyu, name: "Siyu API")
+        let snapshot = definition.makeDemoSnapshot(for: subscription, now: .now)
+        #expect(snapshot.state == .realtime)
+        #expect(snapshot.quotas.contains { $0.kind == .balance })
+        #expect(snapshot.quotas.filter { $0.kind == .generic }.count == 2)
+    }
+
+    // MARK: - 过期订阅排除
+
+    private func makeItem(status: String, expiresAt: String?, monthUsage: Double = 2472, limit: Double = 35000) -> SubscriptionsResponse.Item {
+        let json = SubscriptionsResponse.Item(
+            status: status,
+            monthlyUsageUSD: monthUsage,
+            expiresAt: expiresAt,
+            group: SubscriptionsResponse.Item.Group(name: "DeepSeek大月卡", monthlyLimitUSD: limit)
+        )
+        return json
+    }
+
+    @Test
+    func siyuFiltersOutExpiredSubscriptions() {
+        let now = Date.now
+        let future = SiyuDate.parse("2099-01-01T00:00:00.000000+08:00")!
+        let past = SiyuDate.parse("2020-01-01T00:00:00.000000+08:00")!
+
+        let items = [
+            makeItem(status: "active", expiresAt: "2099-01-01T00:00:00.000000+08:00"),
+            makeItem(status: "active", expiresAt: "2020-01-01T00:00:00.000000+08:00"),
+            makeItem(status: "expired", expiresAt: "2099-01-01T00:00:00.000000+08:00"),
+            makeItem(status: "active", expiresAt: nil),
+        ]
+
+        let active = SiyuUsageProvider.activeSubscriptions(items, now: now)
+
+        #expect(active.count == 1)
+        #expect(active.first?.expiresAt == future)
+        #expect(active.first?.name == "DeepSeek大月卡")
+        _ = past
+    }
+
+    @Test
+    func siyuParsesFractionalSecondDates() {
+        #expect(SiyuDate.parse("2026-10-07T16:34:37.662424+08:00") != nil)
+        #expect(SiyuDate.parse("2099-01-01T00:00:00.000000+08:00") != nil)
+        #expect(SiyuDate.parse("not-a-date") == nil)
+    }
 }
 
 // MARK: - BrowserSessionFlow 通用会话流程

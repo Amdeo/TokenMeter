@@ -178,6 +178,21 @@ extension EmbeddedWebLoginController.Configuration {
         )
     }
 
+    /// Siyu API：登录态在 localStorage 的 auth_token/refresh_token（与 CCBus 同构）。
+    static var siyu: Self {
+        .init(
+            title: "登录 Siyu API 账号",
+            sessionDomains: ["siyu.site"],
+            loginPageURL: SiyuSessionRefresher.loginPageURL,
+            extract: { webView in
+                guard let raw = try? await webView.evaluateJavaScript(
+                    SiyuBrowserCredentialExtractor.extractionJavaScript
+                ) as? String, !raw.isEmpty else { return nil }
+                return (try? SiyuBrowserCredentialExtractor.credential(from: raw)).map(BrowserLoginResult.token)
+            }
+        )
+    }
+
     /// APIKEY.FUN：登录态在 localStorage 的 auth_token/refresh_token。
     static var apiKeyFun: Self {
         .init(

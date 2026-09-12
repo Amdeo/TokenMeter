@@ -22,6 +22,7 @@ extension ProviderID {
     static let ccbus = ProviderID(rawValue: "ccbus")
     static let apikeyFun = ProviderID(rawValue: "apikey-fun")
     static let nowCoding = ProviderID(rawValue: "nowcoding")
+    static let siyu = ProviderID(rawValue: "siyu")
     static let codex = ProviderID(rawValue: "codex")
     static let claude = ProviderID(rawValue: "claude")
 
@@ -57,6 +58,7 @@ extension AuthMethodID {
     static let ccbusBrowserSession = AuthMethodID(rawValue: "ccbus-browser-session")
     static let apikeyFunBrowserSession = AuthMethodID(rawValue: "apikey-fun-browser-session")
     static let nowCodingBrowserSession = AuthMethodID(rawValue: "nowcoding-browser-session")
+    static let siyuBrowserSession = AuthMethodID(rawValue: "siyu-browser-session")
     static let codexDeviceOAuth = AuthMethodID(rawValue: "codex-device-oauth")
     static let claudeOAuth = AuthMethodID(rawValue: "claude-oauth")
 

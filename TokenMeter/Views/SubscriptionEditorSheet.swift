@@ -358,6 +358,7 @@ struct SubscriptionEditorSheet: View {
         case .ccbus: EmbeddedWebLoginController(configuration: .ccbus)
         case .apikeyFun: EmbeddedWebLoginController(configuration: .apiKeyFun)
         case .nowCoding: EmbeddedWebLoginController(configuration: .nowCoding)
+        case .siyu: EmbeddedWebLoginController(configuration: .siyu)
         default: EmbeddedWebLoginController(configuration: .kimi)
         }
     }
