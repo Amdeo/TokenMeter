@@ -649,6 +649,21 @@ struct PanelNavigationTests {
     }
 
     @Test
+    func panelSizeIsRememberedPerRoute() {
+        let navigation = freshPanelNavigationState()
+        navigation.route = .settings
+        navigation.reportMeasuredHeight(700, for: .settings)
+        navigation.route = .addProvider
+        navigation.reportMeasuredHeight(500, for: .addProvider)
+
+        // 弹出/切回某个页面时取它自己的高度：借用别的页面的尺寸会让内容被居中裁掉上下两端。
+        #expect(navigation.size(for: .settings).height == 700)
+        #expect(navigation.size(for: .addProvider).height == 500)
+        // 没量过的页面沿用当前尺寸，内容随后报出的测量值再校准。
+        #expect(navigation.size(for: .migration).height == navigation.panelSize.height)
+    }
+
+    @Test
     func panelFrameCentersBelowAnchorWhenSpaceAllows() {
         let frame = PanelFramePositioner.frame(
             contentSize: NSSize(width: 398, height: 420),

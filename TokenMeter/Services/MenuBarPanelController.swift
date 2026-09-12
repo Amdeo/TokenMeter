@@ -247,7 +247,7 @@ final class MenuBarPanelController: NSObject {
         let container = NSView(frame: NSRect(origin: .zero, size: panel.frame.size))
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor.clear.cgColor
-        container.layer?.cornerRadius = 14
+        container.layer?.cornerRadius = PanelLayoutMetrics.cornerRadius
         container.layer?.cornerCurve = .continuous
         container.layer?.masksToBounds = true
         container.autoresizingMask = [.width, .height]
@@ -339,8 +339,19 @@ final class MenuBarPanelController: NSObject {
         }
     }
 
+    /// 面板圆角靠 contentView 的图层遮罩；每次改尺寸与弹出前重申一次，
+    /// 避免中途替换图层的操作把面板掉回直角。
+    private func applyPanelShape() {
+        guard let contentView = panel.contentView else { return }
+        contentView.wantsLayer = true
+        contentView.layer?.cornerRadius = PanelLayoutMetrics.cornerRadius
+        contentView.layer?.cornerCurve = .continuous
+        contentView.layer?.masksToBounds = true
+    }
+
     private func updatePanelSize(_ size: PanelSize) {
         panelSize = size
+        applyPanelShape()
         // 不按可见性跳过：从右击菜单触发的导航发生在菜单跟踪循环里，
         // orderFrontRegardless 会被推迟到菜单关闭后才生效，此时内容已经
         // 报出新高度。若此时丢弃，窗口就会停在旧高度，内容上下被裁。
@@ -411,7 +422,9 @@ final class MenuBarPanelController: NSObject {
 
     private func showPanel() {
         guard isStarted else { return }
-        panelSize = navigation.panelSize
+        // 用当前路由记住的高度：借用别的页面的尺寸会让内容被居中裁掉上下两端。
+        panelSize = navigation.size(for: navigation.route)
+        applyPanelShape()
         guard let frame = frame(for: panelSize) else { return }
 
         // 先设置最终 frame，再显示窗口；自有面板不会经过系统的二次重摆。

@@ -14,6 +14,8 @@ struct PanelVisibilityGate {
 }
 
 enum PanelLayoutMetrics {
+    /// 面板窗口圆角；由 contentView 的图层遮罩实现，见 `MenuBarPanelController.applyPanelShape()`。
+    static let cornerRadius: CGFloat = 14
     static let rootVerticalChrome: CGFloat = 16
     static let pageChrome: CGFloat = 116
     static let providerChrome: CGFloat = 66
