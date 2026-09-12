@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select Xcode 26
+        run: |
+          sudo xcode-select --switch "$DEVELOPER_DIR"
+          xcodebuild -version
+          case "$(xcodebuild -version)" in
+            "Xcode 26."*) ;;
+            *) echo "macos-26 must provide Xcode 26" >&2; exit 1 ;;
+          esac
+      - name: Test Debug configuration
+        run: >-
+          xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter
+          -configuration Debug -destination 'platform=macOS,arch=arm64'
+          test CODE_SIGNING_ALLOWED=NO
+      - name: Build Release configuration
+        run: >-
+          xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter
+          -configuration Release -destination 'platform=macOS,arch=arm64'
+          build CODE_SIGNING_ALLOWED=NO
+
+  secret-scan:
+    name: Secret scan
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Install verified Gitleaks release
+        env:
+          GITLEAKS_SHA256: d942f3ad147250c9edbaab3fed9e482f98d3b59ba10ae97b8d75647e3ade492c
+          GITLEAKS_URL: https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_darwin_arm64.tar.gz
+        run: |
+          curl --fail --location --retry 3 --output gitleaks.tar.gz "$GITLEAKS_URL"
+          printf '%s  %s\n' "$GITLEAKS_SHA256" gitleaks.tar.gz | shasum -a 256 --check --status
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git --redact --verbose

@@ -5,6 +5,7 @@ DerivedData/
 *.xcodebuild.log
 # Release 打包产物
 TokenMeter-*.zip
+dist/
 
 # Xcode 用户状态
 xcuserdata/

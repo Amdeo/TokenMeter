@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-> Track quota and balance for your AI coding subscriptions right from the macOS menu bar.
+> View usage and balances for configured AI coding accounts from the macOS menu bar.
 
 ![Screenshot](docs/images/menubar-screenshot.png)
 
@@ -10,131 +10,82 @@
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![License](https://img.shields.io/badge/License-GPL--3.0-blue)
 
-## Why TokenMeter
+## Current capabilities
 
-If you juggle several AI coding subscriptions (DeepSeek, Kimi, Zhipu GLM, Claude,
-Codex...), each provider surfaces its usage in a different console with its own
-refresh cycle. TokenMeter pulls them all into one menu-bar panel: live progress
-bars, remaining balance, and alerts when a quota runs low — no console-hopping.
+- Menu-bar overview of configured accounts' usage windows, usage, or balances; add, edit, delete, and reorder subscriptions.
+- Background refresh from 60 seconds to 30 minutes, with a two-minute default and an off switch.
+- System notifications only for low balances, failed authentication, and repeated service errors. It does **not** alert on quota exhaustion, plan expiry, or subscription renewal.
+- Settings for notification thresholds, launch at login, and system/light/dark appearance.
 
-## Features
+The app UI is currently Simplified Chinese only; these docs are available in Chinese and English. There is no per-account refresh toggle. TokenMeter does not manage plan purchases or billing.
 
-- **Menu-bar overview** — progress for every subscription at a glance, drag to reorder
-- **Multiple subscriptions** — add several accounts per provider; edit, toggle, delete, rename
-- **Various quota shapes** — 5-hour windows, weekly windows, monthly windows, total usage, account balance
-- **Custom quota colors** — per-quota colors, adapting to light/dark mode
-- **Smart notifications** — low balance, expired authentication, repeated service errors
-- **Background refresh** — 60 s to 30 min, 2 min by default
-- **Launch at login** — one-click login item registration
-- **Appearance** — follow system / light / dark
-- **Privacy-first** — credentials stay on your machine; no telemetry, no third-party dependencies
+## Supported providers
 
-## Supported Providers
-
-| Provider | Quota | Auth |
+| Provider | Data it can read | Authentication |
 | --- | --- | --- |
-| **DeepSeek** | Account balance | API Key |
-| **Kimi** | Coding plan quota (5-hour / weekly), balance | API Key / Kimi Code OAuth / web session |
-| **Zhipu AI** | GLM Coding Plan windows (5-hour / weekly) | API Key |
-| **OpenCode Go** | Usage windows (5-hour / weekly / monthly) | API Key |
-| **MiniMax** | MiniMax Coding Plan quota | API Key |
-| **Claude** | Pro/Max plan quota (5-hour / weekly) | Claude OAuth |
-| **OpenAI Codex** | Codex plan quota (5-hour / weekly) | Codex device OAuth (experimental) |
-| **CCBus** | Account balance | Web session |
-| **APIKEY.FUN** | Account balance | Web session |
-| **NowCoding** | Balance + plan quotas | Web session |
+| DeepSeek | Account balance | API key |
+| Kimi | Coding usage windows/balance, depending on auth method | API key, Kimi Code OAuth, web session |
+| Zhipu AI | GLM Coding Plan usage windows | API key |
+| OpenCode Go | Usage windows | API key |
+| MiniMax | Coding Plan quotas | API key |
+| Claude | Pro/Max usage windows | Claude OAuth |
+| OpenAI Codex | Codex usage windows | Codex device OAuth (experimental) |
+| CCBus | Account balance | Web session |
+| APIKEY.FUN | Account balance | Web session |
+| NowCoding | Account balance and subscription quotas | Web session |
 
-> Want to add a provider? See the [provider development guide](docs/provider-development.md).
-> Relay/gateway sites (new-api / one-api family) have dedicated scaffolding support —
-> see the guide for details.
+Provider APIs and account permissions determine what can be displayed; TokenMeter does not guarantee that every account exposes every item. To add a provider, read the [provider development guide](docs/provider-development.md).
 
 ## Installation
 
-Build from source (no official release package yet — contributions welcome):
+### Published release
+
+[v0.1.0](https://github.com/Amdeo/TokenMeter/releases/tag/v0.1.0) provides `TokenMeter-0.1.0-macOS.zip`. It is an unsigned build: download it from the GitHub Release, unpack it, and follow macOS security prompts. The release and `main` are different: `main` contains development changes made after the release and is intended for users building from source.
+
+### Build from source
+
+Use macOS 14 or later and Xcode 26 or later; the project uses macOS 26 SDK symbols.
 
 ```bash
-git clone https://github.com/<your-org>/TokenMeter.git
+git clone https://github.com/Amdeo/TokenMeter.git
 cd TokenMeter
 open TokenMeter.xcodeproj
 ```
 
-Select the `TokenMeter` scheme in Xcode and run. Or build from the command line:
+Select the `TokenMeter` scheme and run in Xcode. To build from the command line:
 
 ```bash
 xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
   -configuration Debug build CODE_SIGNING_ALLOWED=NO
 ```
 
-> The repo ships no code-signing configuration; configure your Team and signing
-> in Xcode if you want to distribute builds.
+Running or distributing an unsigned source build may require your own Xcode Team and signing configuration.
 
-## Getting Started
+## Get started
 
-1. Click the TokenMeter icon in the menu bar to open the overview panel.
-2. Click "Add subscription" and pick a provider.
-3. Complete authentication for the provider:
-   - **API Key**: create a key in the provider console and paste it
-     ([DeepSeek](https://platform.deepseek.com/api_keys) ·
-     [Kimi](https://platform.moonshot.cn/console/api-keys) ·
-     [Zhipu](https://www.bigmodel.cn/usercenter/proj-mgmt/apikeys) ·
-     [OpenCode Go](https://opencode.ai/zen) ·
-     [MiniMax](https://platform.minimaxi.com/user-center/basic-information/interface-key))
-   - **OAuth** (Claude / Codex / Kimi Code): follow the in-app browser authorization flow
-   - **Web session** (CCBus / APIKEY.FUN / NowCoding / Kimi): authorize in the embedded
-     login page; tokens are never shown in the UI
-4. Back on the overview, watch live progress; configure refresh interval,
-   notification thresholds, and launch-at-login in Settings.
+1. Click the TokenMeter menu-bar icon to open the overview.
+2. Choose **Add subscription**, then choose a provider.
+3. Complete that provider's API-key, OAuth, or web-login flow.
+4. Return to the overview to see available data; adjust refresh and notification settings as needed.
 
-## Settings
+Create API keys only through a provider's official interface. OAuth and web sessions are completed on the authorization page used by the app; see [SECURITY.md](SECURITY.md) for limits around experimental OAuth.
 
-- **Background refresh**: 60 s / 2 min / 5 min / 10 min / 30 min, can be disabled
-- **Notifications**: low balance (separate CNY / USD thresholds), expired auth, repeated service errors
-- **Launch at login**: via system login items; some systems require approval in
-  "System Settings → General → Login Items"
-- **Appearance**: follow system / light / dark
+## Data and privacy
 
-## Privacy & Data
+TokenMeter has no telemetry, crash-reporting, or advertising code, but it directly contacts the endpoints of providers that you configure. Review each provider's service and privacy terms before adding an account.
 
-- All subscription data and credentials are stored locally in
-  `~/Library/Application Support/TokenMeter/credentials.json` (private-permission
-  file). Nothing goes through third-party servers.
-- The app only talks to the official APIs of the providers you configure;
-  no telemetry, no crash reporting, no ads.
+The app persistently stores the following on your Mac:
 
-## Development
+- `~/Library/Application Support/TokenMeter/credentials.json`: API keys, OAuth access/refresh tokens, or browser-login tokens/session cookies. This is **plaintext JSON**, not Keychain storage. On write, the app sets the directory to `0700` and file to `0600`; the macOS user and any local software able to read this file should still be treated as able to access the credentials.
+- `~/Library/Application Support/TokenMeter/subscriptions.json`: subscription names, providers, authentication methods, enabled state, colors, and other metadata. It should not contain credentials.
+- `UserDefaults`: refresh and notification preferences and thresholds, appearance, launch-at-login state, notification de-duplication records, and panel sizing.
+- WebKit's default website-data store: sites used for embedded login can retain cookies, local storage, and other website data for later sign-in. The app can clear relevant site data when needed.
 
-Stack: Swift 6 · SwiftUI · AppKit · ServiceManagement · UserNotifications,
-zero third-party dependencies.
+Do not publish these files, screenshots, logs, or browser exports. See [SECURITY.md](SECURITY.md) for security boundaries and reporting instructions.
 
-```bash
-# Build
-xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
-  -configuration Debug build CODE_SIGNING_ALLOWED=NO
+## Development and contributing
 
-# Test (Swift Testing)
-xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
-  -configuration Debug test CODE_SIGNING_ALLOWED=NO
-```
-
-Project layout:
-
-```text
-TokenMeter/
-├── TokenMeterApp.swift        # App entry point
-├── Models/                    # Domain models: subscriptions, quotas, snapshots
-├── Providers/                 # Provider protocol and built-in providers
-├── Services/                  # Credential storage, OAuth, notifications
-├── Store/                     # UsageStore: shared state and refresh orchestration
-├── Views/                     # SwiftUI menu-bar panel and components
-├── Resources/PlatformIcons/   # Provider icons
-└── Tests/                     # Swift Testing suite
-```
-
-## Contributing
-
-Issues and pull requests are welcome. Keep changes focused, include verification
-commands, and attach screenshots for UI changes. For new providers, see
-[docs/provider-development.md](docs/provider-development.md).
+The project uses Swift 6, SwiftUI, AppKit, ServiceManagement, and UserNotifications, with no third-party dependencies. The offline test requirement and contribution process are in [CONTRIBUTING.md](CONTRIBUTING.md); provider changes must also follow the [provider development guide](docs/provider-development.md). Public reports belong in GitHub Issues—never attach API keys, tokens, cookies, or a complete credential file.
 
 ## License
 

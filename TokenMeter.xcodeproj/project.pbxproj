@@ -20,7 +20,6 @@
 		A10000010000000000000028 /* PanelLayoutSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000028 /* PanelLayoutSupport.swift */; };
 		A10000010000000000000031 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000031 /* SettingsPanel.swift */; };
 
-			A10000010000000000000007 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* MenuBarView.swift */; };
 		A10000010000000000000014 /* PlatformLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000014 /* PlatformLogo.swift */; };
 		A10000010000000000000023 /* SubscriptionUsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000023 /* SubscriptionUsageView.swift */; };
 			A10000010000000000000024 /* SubscriptionEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000024 /* SubscriptionEditorSheet.swift */; };
@@ -79,6 +78,7 @@
 		A10000010000000000000068 /* DeviceOAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000068 /* DeviceOAuthService.swift */; };
 		A10000010000000000000069 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000069 /* CodexProvider.swift */; };
 		A10000010000000000000070 /* HTTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000070 /* HTTPTransport.swift */; };
+		A10000010000000000000076 /* TokenMeter.icns in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000076 /* TokenMeter.icns */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -99,7 +99,6 @@
 			A20000010000000000000025 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 			A20000010000000000000026 /* NotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
 			A20000010000000000000027 /* PanelNavigationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelNavigationState.swift; sourceTree = "<group>"; };
-			A20000010000000000000011 /* LiveUsageProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveUsageProviders.swift; sourceTree = "<group>"; };
 			A20000010000000000000014 /* PlatformLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformLogo.swift; sourceTree = "<group>"; };
 			A20000010000000000000015 /* icon-deepseek.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-deepseek.png"; sourceTree = "<group>"; };
 			A20000010000000000000016 /* icon-zhipu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-zhipu.png"; sourceTree = "<group>"; };
@@ -156,6 +155,7 @@
 		A20000010000000000000070 /* HTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransport.swift; sourceTree = "<group>"; };
 		A20000010000000000000068 /* DeviceOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOAuthService.swift; sourceTree = "<group>"; };
 		A20000010000000000000069 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
+		A20000010000000000000076 /* TokenMeter.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = TokenMeter.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -168,7 +168,7 @@
 		A30000010000000000000012 = {isa = PBXGroup; children = (A20000010000000000000037, A20000010000000000000038, A20000010000000000000039, A20000010000000000000040, A20000010000000000000041, A20000010000000000000048, A20000010000000000000053, A20000010000000000000058, A20000010000000000000069, A20000010000000000000072, ); name = BuiltIn; path = BuiltIn; sourceTree = "<group>"; };
 		A30000010000000000000013 = {isa = PBXGroup; children = (A20000010000000000000042, A20000010000000000000063, A20000010000000000000070, ); name = Support; path = Support; sourceTree = "<group>"; };
 		A30000010000000000000014 = {isa = PBXGroup; children = (A20000010000000000000044, A20000010000000000000045, A20000010000000000000061, ); name = ProviderCards; path = ProviderCards; sourceTree = "<group>"; };
-			A30000010000000000000010 = {isa = PBXGroup; children = (A30000010000000000000011, ); name = Resources; path = Resources; sourceTree = "<group>"; };
+			A30000010000000000000010 = {isa = PBXGroup; children = (A30000010000000000000011, A20000010000000000000076, ); name = Resources; path = Resources; sourceTree = "<group>"; };
 			A30000010000000000000011 = {isa = PBXGroup; children = (A20000010000000000000015, A20000010000000000000016, A20000010000000000000017, A20000010000000000000018, A20000010000000000000019, A20000010000000000000052, A20000010000000000000057, A20000010000000000000062, ); name = PlatformIcons; path = PlatformIcons; sourceTree = "<group>"; };
 		A30000010000000000000007 = {isa = PBXGroup; children = (A20000010000000000000010, B20000010000000000000002, ); name = Products; sourceTree = "<group>"; };
 		B30000010000000000000001 = {isa = PBXGroup; children = (B20000010000000000000001, B20000010000000000000003, B20000010000000000000004, B20000010000000000000005, B20000010000000000000006, B20000010000000000000007, B20000010000000000000009, ); name = TokenMeterTests; path = Tests; sourceTree = "<group>"; };
@@ -184,7 +184,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A60000010000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000015, A10000010000000000000016, A10000010000000000000017, A10000010000000000000018, A10000010000000000000019, A10000010000000000000052, A10000010000000000000057, A10000010000000000000062, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000010000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000015, A10000010000000000000016, A10000010000000000000017, A10000010000000000000018, A10000010000000000000019, A10000010000000000000052, A10000010000000000000057, A10000010000000000000062, A10000010000000000000076, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */

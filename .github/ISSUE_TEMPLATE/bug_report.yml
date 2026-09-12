@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible TokenMeter problem.
+title: "[Bug]: "
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitHub issues are public. Never attach or paste API keys, OAuth tokens, cookies, credential files, browser exports, or screenshots/logs containing them. Redact account identifiers and sensitive URLs.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the TokenMeter menu-bar panel
+        2. Select the affected configured subscription
+        3. Describe the non-sensitive action that produces the result
+        4. Describe the observed result
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: TokenMeter version or commit
+      placeholder: e.g. v0.1.0 or a commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: macOS and Xcode version
+      placeholder: e.g. macOS 26.0, Xcode 26.0
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider affected
+      options:
+        - DeepSeek
+        - Kimi
+        - Zhipu AI
+        - OpenCode Go
+        - MiniMax
+        - Claude
+        - OpenAI Codex
+        - CCBus
+        - APIKEY.FUN
+        - NowCoding
+        - Not provider-specific
+  - type: textarea
+    id: safe-details
+    attributes:
+      label: Safe diagnostics
+      description: Include only redacted error text and non-sensitive steps. Do not include credentials, cookies, full headers, or account exports.

@@ -1,0 +1,34 @@
+name: Provider request
+description: Request support for a provider or usage endpoint.
+title: "[Provider]: "
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitHub issues are public. Never attach API keys, OAuth tokens, cookies, credential files, browser exports, captured responses, or screenshots/logs containing them. Do not share private or undocumented API material you are not authorized to disclose.
+  - type: input
+    id: provider
+    attributes:
+      label: Provider name and public homepage
+    validations:
+      required: true
+  - type: textarea
+    id: capability
+    attributes:
+      label: Requested data
+      description: Specify balance, usage windows, or another user-visible metric.
+    validations:
+      required: true
+  - type: textarea
+    id: public-docs
+    attributes:
+      label: Public API or authentication documentation
+      description: Link only to public, official documentation. Explain whether the data endpoint is documented.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Describe expected account requirements without sharing account-specific data or credentials.
