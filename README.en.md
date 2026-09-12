@@ -15,7 +15,7 @@
 - Menu-bar overview of configured accounts' usage windows, usage, or balances; add, edit, delete, and reorder subscriptions.
 - Background refresh from 60 seconds to 30 minutes, with a two-minute default and an off switch.
 - System notifications only for low balances, failed authentication, and repeated service errors. It does **not** alert on quota exhaustion, plan expiry, or subscription renewal.
-- Settings for notification thresholds, launch at login, and system/light/dark appearance.
+- Settings for notification thresholds, launch at login, system/light/dark appearance, and an optional frosted-glass background in light mode.
 
 The app UI is currently Simplified Chinese only; these docs are available in Chinese and English. There is no per-account refresh toggle. TokenMeter does not manage plan purchases or billing.
 
@@ -33,6 +33,7 @@ The app UI is currently Simplified Chinese only; these docs are available in Chi
 | CCBus | Account balance | Web session |
 | APIKEY.FUN | Account balance | Web session |
 | NowCoding | Account balance and subscription quotas | Web session |
+| Siyu API | Account balance and daily, weekly, and monthly plan quota windows | Web session |
 
 Provider APIs and account permissions determine what can be displayed; TokenMeter does not guarantee that every account exposes every item. To add a provider, read the [provider development guide](docs/provider-development.md).
 

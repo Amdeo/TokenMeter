@@ -6,6 +6,8 @@ All notable changes are documented here.
 
 ### Changed
 
+- Showed Siyu API plans as daily, weekly, and monthly quota windows with reset hints instead of a single monthly row, and listed Siyu in the README provider tables.
+- Added an opt-in frosted-glass panel background for light appearance; the light panel is plain white by default.
 - Requested notification authorization once at launch instead of prompting in the overview panel, and only when alerts are enabled and the system has not decided yet; the settings panel still reports status and refusal reasons.
 - Clarified installation paths, including the published unsigned v0.1.0 archive and the distinction between that release and `main`.
 - Corrected the public clone URL and documented the Xcode 26+ source-build requirement.
