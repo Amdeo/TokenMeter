@@ -53,11 +53,17 @@ readonly VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionStrin
 readonly ARCHIVE_BASENAME="TokenMeter-${VERSION}-macos-universal"
 readonly ZIP_PATH="$OUTPUT_DIR/${ARCHIVE_BASENAME}.zip"
 
+# A released version must never be silently repackaged from a later revision:
+# bump CFBundleShortVersionString before packaging new content.
+if [[ -e "$ZIP_PATH" ]]; then
+    printf 'Refusing to overwrite existing archive: %s\n' "$ZIP_PATH" >&2
+    printf 'Bump CFBundleShortVersionString before packaging a new release.\n' >&2
+    exit 1
+fi
+
+printf 'Packaging version %s from %s\n' "$VERSION" "$(git -C "$ROOT_DIR" describe --tags --always --dirty 2>/dev/null || printf 'unknown revision')"
+
 if [[ -n "${DEVELOPER_ID_APPLICATION:-}" ]]; then
-    [[ -n "${NOTARYTOOL_PROFILE:-}" ]] || {
-        printf '%s\n' 'NOTARYTOOL_PROFILE is required when DEVELOPER_ID_APPLICATION is set.' >&2
-        exit 1
-    }
     readonly NOTARY_ZIP="$OUTPUT_DIR/${ARCHIVE_BASENAME}-notarization.zip"
     ditto -c -k --keepParent "$APP_PATH" "$NOTARY_ZIP"
     xcrun notarytool submit "$NOTARY_ZIP" --keychain-profile "$NOTARYTOOL_PROFILE" --wait

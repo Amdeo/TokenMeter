@@ -7,7 +7,7 @@
 
 | 位置 | 简化内容 | ceiling | upgrade 触发条件 |
 | --- | --- | --- | --- |
-| [`TokenMeter/Views/SubscriptionEditorSheet.swift:615`](TokenMeter/Views/SubscriptionEditorSheet.swift) | 浏览器授权 + 手动粘贴授权码，不监听本地回调端口 | 授权码必须手动复制一次，无法自动回填 | 粘贴体验被反馈麻烦时 → 加 `127.0.0.1:54545` 监听自动回填 |
+| [`TokenMeter/Views/SubscriptionEditorSheet.swift:652`](TokenMeter/Views/SubscriptionEditorSheet.swift) | 浏览器授权 + 手动粘贴授权码，不监听本地回调端口 | 授权码必须手动复制一次，无法自动回填 | 粘贴体验被反馈麻烦时 → 加 `127.0.0.1:54545` 监听自动回填 |
 | [`TokenMeter/Providers/BuiltIn/ClaudeProvider.swift:116`](TokenMeter/Providers/BuiltIn/ClaudeProvider.swift) | 429 直接报限流错误，不重试不刷新 | 偶发限流时本次刷新失败，需等下次刷新 | 真实账号频繁撞 429 时 → 加指数退避或降低刷新频率 |
 | [`TokenMeter/Providers/BuiltIn/ClaudeProvider.swift:164`](TokenMeter/Providers/BuiltIn/ClaudeProvider.swift) | `limits[]` 的 `weekly_scoped` 仅展示，不参与门控 | 模型级周额度耗尽不会阻止使用，只是显示 | 其他供应商引入阻塞语义时 → 同步 Claude |
 
@@ -19,7 +19,7 @@
 
 以下来自 `/ponytail-audit` 的全仓扫描。它们**不是代码里的 `ponytail:` 标记**，仅登记结论，避免以后重复评估。
 
-- **合并三个登录态错误枚举**（`KimiBrowserCredentialError` / `APIKeyFunBrowserCredentialError` / `CCBusBrowserCredentialError`，每个约 25 行、逐 case 重复）：合并需要给枚举加供应商维度，波及 34 个 throw 点、3 个 `isInvalid` 闭包和测试里的 `catch` 模式；且 `Views/SubscriptionEditorSheet.swift:315` 会把 `localizedDescription` 直接展示给用户，合并必然改动可见文案。收益约 -50 行。
+- **合并三个登录态错误枚举**（`KimiBrowserCredentialError` / `APIKeyFunBrowserCredentialError` / `CCBusBrowserCredentialError`，每个约 25 行、逐 case 重复）：合并需要给枚举加供应商维度，波及 34 个 throw 点、3 个 `isInvalid` 闭包和测试里的 `catch` 模式；且 `Views/SubscriptionEditorSheet.swift:350` 会把 `localizedDescription` 直接展示给用户，合并必然改动可见文案。收益约 -50 行。
   - 重新评估的触发条件：当出现第 4 个同构的浏览器会话供应商时（复制成本开始压过迁移成本）。
 - **合并 APIKeyFun / CCBus 两个提取器**（各 79 行、约 53 行同构）：共享核心只能抽出 `credential(from:)` 的约 25 行，且需要传入 error-factory 闭包；错误枚举本就该各自独立。收益约 -20 行。
   - 重新评估的触发条件：同上的第 4 个同构供应商，或 localStorage key 约定发生变化导致两份实现不同步时。
