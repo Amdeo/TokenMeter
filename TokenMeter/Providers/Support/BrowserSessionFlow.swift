@@ -16,31 +16,21 @@ enum BrowserSessionFlow {
         let providerID: ProviderID
         let subscriptionID: UUID
         let credentials: CredentialStore
+        /// 展示给用户的供应商名，用于「XX 网页登录态已过期」文案。
+        let providerName: String
         /// 现有凭证是否仍可直接使用（通常按 expiresAt 判断）。
         let isUsable: (KimiBrowserCredential) -> Bool
         /// 以 refresh_token 换新登录态。
         let refresh: (KimiBrowserCredential) async throws -> KimiBrowserCredential
-        /// 刷新错误中哪些表示凭证本身失效（而非网络/服务端问题）。
-        let isInvalid: (Error) -> Bool
-        /// 凭证失效时呈现的认证失效消息。
-        let invalidMessage: String
 
-        init(
-            providerID: ProviderID,
-            subscriptionID: UUID,
-            credentials: CredentialStore,
-            isUsable: @escaping (KimiBrowserCredential) -> Bool,
-            refresh: @escaping (KimiBrowserCredential) async throws -> KimiBrowserCredential,
-            isInvalid: @escaping (Error) -> Bool,
-            invalidMessage: String
-        ) {
-            self.providerID = providerID
-            self.subscriptionID = subscriptionID
-            self.credentials = credentials
-            self.isUsable = isUsable
-            self.refresh = refresh
-            self.isInvalid = isInvalid
-            self.invalidMessage = invalidMessage
+        /// 凭证失效时呈现的认证失效消息。
+        var invalidMessage: String {
+            "\(providerName) 网页登录态已过期，请在订阅设置中重新登录"
+        }
+
+        /// 只有登录态本身失效（而非网络/服务端问题）才判定为需要重新登录。
+        func isInvalid(_ error: Error) -> Bool {
+            (error as? BrowserLoginError)?.indicatesInvalidCredential ?? false
         }
     }
 

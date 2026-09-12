@@ -420,10 +420,9 @@ extension KimiUsageProvider {
             providerID: subscription.providerID,
             subscriptionID: subscription.id,
             credentials: credentials,
+            providerName: BrowserTokenSite.kimi.displayName,
             isUsable: { $0.expiresAt.timeIntervalSinceNow > 300 },
-            refresh: ChromeSessionImporter.refresh,
-            isInvalid: { ($0 as? KimiBrowserCredentialError)?.indicatesInvalidCredential ?? false },
-            invalidMessage: "Kimi 网页登录态已过期，请在订阅设置中重新登录"
+            refresh: ChromeSessionImporter.refresh
         )
         return try await BrowserSessionFlow.fetchWithRetry(
             configuration, stored: stored,

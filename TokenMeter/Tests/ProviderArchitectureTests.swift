@@ -317,11 +317,14 @@ struct CardRendererTests {
     }
 }
 
-// MARK: - CCBus 集成
+// MARK: - token 型网页登录态
 
-@MainActor
-struct CCBusTests {
-    private func makeJWT(exp: TimeInterval) -> String {
+/// Kimi / CCBus / APIKEY.FUN / Siyu 共用一套 localStorage 提取器与错误类型，
+/// 同一组用例覆盖四个站点的差异（token 键名、refresh token 约束）。
+struct BrowserTokenSiteTests {
+    private static let sites: [BrowserTokenSite] = [.kimi, .ccbus, .apiKeyFun, .siyu]
+
+    private static func makeJWT(exp: TimeInterval) -> String {
         let payload = Data("{\"exp\":\(Int(exp))}".utf8)
             .base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
@@ -330,6 +333,78 @@ struct CCBusTests {
         return "header.\(payload).signature"
     }
 
+    private static func payload(access: String, refresh: String) -> String {
+        "{\"accessToken\":\"\(access)\",\"refreshToken\":\"\(refresh)\"}"
+    }
+
+    @Test(arguments: sites)
+    func extractorBuildsCredentialFromLocalStoragePayload(_ site: BrowserTokenSite) throws {
+        let future = Date.now.addingTimeInterval(3_600).timeIntervalSince1970
+        let raw = Self.payload(
+            access: Self.makeJWT(exp: future), refresh: Self.makeJWT(exp: future + 86_400)
+        )
+
+        let credential = try site.credential(from: raw)
+
+        #expect(credential.tokenType == "Bearer")
+        #expect(credential.expiresAt.timeIntervalSince1970 == Double(Int(future)))
+    }
+
+    @Test(arguments: sites)
+    func extractorRejectsExpiredToken(_ site: BrowserTokenSite) {
+        let token = Self.makeJWT(exp: Date.now.addingTimeInterval(-60).timeIntervalSince1970)
+
+        #expect(throws: BrowserLoginError.expired(provider: site.displayName)) {
+            _ = try site.credential(from: Self.payload(access: token, refresh: token))
+        }
+    }
+
+    @Test(arguments: sites)
+    func extractorRejectsEmptyTokens(_ site: BrowserTokenSite) {
+        #expect(throws: BrowserLoginError.credentialsMissing(provider: site.displayName)) {
+            _ = try site.credential(from: Self.payload(access: "  ", refresh: ""))
+        }
+    }
+
+    @Test(arguments: sites)
+    func extractorRejectsMalformedPayload(_ site: BrowserTokenSite) {
+        #expect(throws: BrowserLoginError.invalidCredentials(provider: site.displayName)) {
+            _ = try site.credential(from: "not json")
+        }
+    }
+
+    /// refresh token 只有 Kimi 要求是带 exp 的 JWT；其余站点允许不透明字符串。
+    @Test
+    func refreshTokenJWTRequirementIsKimiOnly() throws {
+        let access = Self.makeJWT(exp: Date.now.addingTimeInterval(3_600).timeIntervalSince1970)
+        let raw = Self.payload(access: access, refresh: "opaque-refresh")
+
+        #expect(throws: BrowserLoginError.invalidCredentials(provider: BrowserTokenSite.kimi.displayName)) {
+            _ = try BrowserTokenSite.kimi.credential(from: raw)
+        }
+        #expect(throws: Never.self) {
+            _ = try BrowserTokenSite.ccbus.credential(from: raw)
+        }
+    }
+
+    @Test
+    func refreshResponseParsesTokensAndExpiry() throws {
+        // 模拟前端 POST /auth/refresh 的响应：code 0 + access_token/refresh_token/expires_in
+        let raw = """
+        {"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}
+        """
+        let response = try JSONDecoder().decode(BrowserSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
+        #expect(response.code == 0)
+        #expect(response.data?.accessToken == "new-access")
+        #expect(response.data?.refreshToken == "new-refresh")
+        #expect(response.data?.expiresIn == 7200)
+    }
+}
+
+// MARK: - CCBus 集成
+
+@MainActor
+struct CCBusTests {
     @Test
     func ccbusIsRegisteredWithBrowserSessionAuth() {
         let definition = ProviderRegistry.definition(for: .ccbus)
@@ -337,52 +412,6 @@ struct CCBusTests {
         #expect(definition?.metadata.displayName == "CCBus（AI 巴士）")
         #expect(definition?.authMethods.map(\.id.rawValue) == ["ccbus-browser-session"])
         #expect(definition?.authMethods.first?.flowID == .browserSession)
-    }
-
-    @Test
-    func ccbusExtractorBuildsCredentialFromLocalStoragePayload() throws {
-        let future = Date.now.addingTimeInterval(3_600).timeIntervalSince1970
-        let access = makeJWT(exp: future)
-        let refresh = makeJWT(exp: future + 86_400)
-        let raw = "{\"accessToken\":\"\(access)\",\"refreshToken\":\"\(refresh)\"}"
-
-        let credential = try CCBusBrowserCredentialExtractor.credential(from: raw)
-
-        #expect(credential.tokenType == "Bearer")
-        #expect(credential.expiresAt.timeIntervalSince1970 == Double(Int(future)))
-    }
-
-    @Test
-    func ccbusExtractorRejectsExpiredToken() {
-        let token = makeJWT(exp: Date.now.addingTimeInterval(-60).timeIntervalSince1970)
-        let raw = "{\"accessToken\":\"\(token)\",\"refreshToken\":\"\(token)\"}"
-
-        #expect(throws: CCBusBrowserCredentialError.expired) {
-            _ = try CCBusBrowserCredentialExtractor.credential(from: raw)
-        }
-    }
-
-    @Test
-    func ccbusExtractorRejectsEmptyTokens() {
-        #expect(throws: CCBusBrowserCredentialError.credentialsMissing) {
-            _ = try CCBusBrowserCredentialExtractor.credential(from: "{\"accessToken\":\"  \",\"refreshToken\":\"\"}")
-        }
-    }
-
-    @Test
-    func ccbusRefreshResponseParsesTokensAndExpiry() async throws {
-        let future = Date.now.addingTimeInterval(7_200).timeIntervalSince1970
-        // 模拟前端 POST /auth/refresh 的响应：code 0 + access_token/refresh_token/expires_in
-        let raw = """
-        {"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}
-        """
-        // 通过 URLProtocol stub 无法在此测试直接注入，因此验证响应模型可解码。
-        let response = try JSONDecoder().decode(BrowserSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
-        #expect(response.code == 0)
-        #expect(response.data?.accessToken == "new-access")
-        #expect(response.data?.refreshToken == "new-refresh")
-        #expect(response.data?.expiresIn == 7200)
-        _ = future
     }
 
     @Test
@@ -400,15 +429,6 @@ struct CCBusTests {
 
 @MainActor
 struct APIKeyFunTests {
-    private func makeJWT(exp: TimeInterval) -> String {
-        let payload = Data("{\"exp\":\(Int(exp))}".utf8)
-            .base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-        return "header.\(payload).signature"
-    }
-
     @Test
     func apikeyFunIsRegisteredWithBrowserSessionAuth() {
         let definition = ProviderRegistry.definition(for: .apikeyFun)
@@ -416,48 +436,6 @@ struct APIKeyFunTests {
         #expect(definition?.metadata.displayName == "APIKEY.FUN")
         #expect(definition?.authMethods.map(\.id.rawValue) == ["apikey-fun-browser-session"])
         #expect(definition?.authMethods.first?.flowID == .browserSession)
-    }
-
-    @Test
-    func apikeyFunExtractorBuildsCredentialFromLocalStoragePayload() throws {
-        let future = Date.now.addingTimeInterval(3_600).timeIntervalSince1970
-        let access = makeJWT(exp: future)
-        let refresh = makeJWT(exp: future + 86_400)
-        let raw = "{\"accessToken\":\"\(access)\",\"refreshToken\":\"\(refresh)\"}"
-
-        let credential = try APIKeyFunBrowserCredentialExtractor.credential(from: raw)
-
-        #expect(credential.tokenType == "Bearer")
-        #expect(credential.expiresAt.timeIntervalSince1970 == Double(Int(future)))
-    }
-
-    @Test
-    func apikeyFunExtractorRejectsExpiredToken() {
-        let token = makeJWT(exp: Date.now.addingTimeInterval(-60).timeIntervalSince1970)
-        let raw = "{\"accessToken\":\"\(token)\",\"refreshToken\":\"\(token)\"}"
-
-        #expect(throws: APIKeyFunBrowserCredentialError.expired) {
-            _ = try APIKeyFunBrowserCredentialExtractor.credential(from: raw)
-        }
-    }
-
-    @Test
-    func apikeyFunExtractorRejectsEmptyTokens() {
-        #expect(throws: APIKeyFunBrowserCredentialError.credentialsMissing) {
-            _ = try APIKeyFunBrowserCredentialExtractor.credential(from: "{\"accessToken\":\"  \",\"refreshToken\":\"\"}")
-        }
-    }
-
-    @Test
-    func apikeyFunRefreshResponseParsesTokensAndExpiry() throws {
-        let raw = """
-        {"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}
-        """
-        let response = try JSONDecoder().decode(BrowserSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
-        #expect(response.code == 0)
-        #expect(response.data?.accessToken == "new-access")
-        #expect(response.data?.refreshToken == "new-refresh")
-        #expect(response.data?.expiresIn == 7200)
     }
 
     @Test
@@ -557,15 +535,6 @@ struct NowCodingTests {
 
 @MainActor
 struct SiyuTests {
-    private func makeJWT(exp: TimeInterval) -> String {
-        let payload = Data("{\"exp\":\(Int(exp))}".utf8)
-            .base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-        return "header.\(payload).signature"
-    }
-
     @Test
     func siyuIsRegisteredWithBrowserSessionAuth() {
         let definition = ProviderRegistry.definition(for: .siyu)
@@ -573,48 +542,6 @@ struct SiyuTests {
         #expect(definition?.metadata.displayName == "Siyu API")
         #expect(definition?.authMethods.map(\.id.rawValue) == ["siyu-browser-session"])
         #expect(definition?.authMethods.first?.flowID == .browserSession)
-    }
-
-    @Test
-    func siyuExtractorBuildsCredentialFromLocalStoragePayload() throws {
-        let future = Date.now.addingTimeInterval(3_600).timeIntervalSince1970
-        let access = makeJWT(exp: future)
-        let refresh = makeJWT(exp: future + 86_400)
-        let raw = "{\"accessToken\":\"\(access)\",\"refreshToken\":\"\(refresh)\"}"
-
-        let credential = try SiyuBrowserCredentialExtractor.credential(from: raw)
-
-        #expect(credential.tokenType == "Bearer")
-        #expect(credential.expiresAt.timeIntervalSince1970 == Double(Int(future)))
-    }
-
-    @Test
-    func siyuExtractorRejectsExpiredToken() {
-        let token = makeJWT(exp: Date.now.addingTimeInterval(-60).timeIntervalSince1970)
-        let raw = "{\"accessToken\":\"\(token)\",\"refreshToken\":\"\(token)\"}"
-
-        #expect(throws: SiyuBrowserCredentialError.expired) {
-            _ = try SiyuBrowserCredentialExtractor.credential(from: raw)
-        }
-    }
-
-    @Test
-    func siyuExtractorRejectsEmptyTokens() {
-        #expect(throws: SiyuBrowserCredentialError.credentialsMissing) {
-            _ = try SiyuBrowserCredentialExtractor.credential(from: "{\"accessToken\":\"  \",\"refreshToken\":\"\"}")
-        }
-    }
-
-    @Test
-    func siyuRefreshResponseParsesTokensAndExpiry() throws {
-        let raw = """
-        {"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}
-        """
-        let response = try JSONDecoder().decode(BrowserSessionRefresher.RefreshResponse.self, from: Data(raw.utf8))
-        #expect(response.code == 0)
-        #expect(response.data?.accessToken == "new-access")
-        #expect(response.data?.refreshToken == "new-refresh")
-        #expect(response.data?.expiresIn == 7200)
     }
 
     @Test
@@ -691,7 +618,31 @@ struct SiyuTests {
     func siyuParsesDailyWeeklyMonthlyWindowsAndResetTimes() throws {
         // 对齐线上 /subscriptions/active 响应：三个窗口各自带用量、限额与窗口起点。
         let json = """
-        {"code":0,"message":"success","data":[{"id":1470,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","daily_usage_usd":383,"weekly_usage_usd":2565,"monthly_usage_usd":2565,"daily_window_start":"2026-09-12T00:00:00+08:00","weekly_window_start":"2026-09-07T16:39:08.699592+08:00","monthly_window_start":"2026-09-07T16:39:08.699592+08:00","group":{"id":17,"name":"DeepSeek大月卡","status":"active","daily_limit_usd":2000,"weekly_limit_usd":10000,"monthly_limit_usd":35000}}]}
+        {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "id": 1470,
+              "status": "active",
+              "expires_at": "2099-01-01T00:00:00.000000+08:00",
+              "daily_usage_usd": 383,
+              "weekly_usage_usd": 2565,
+              "monthly_usage_usd": 2565,
+              "daily_window_start": "2026-09-12T00:00:00+08:00",
+              "weekly_window_start": "2026-09-07T16:39:08.699592+08:00",
+              "monthly_window_start": "2026-09-07T16:39:08.699592+08:00",
+              "group": {
+                "id": 17,
+                "name": "DeepSeek大月卡",
+                "status": "active",
+                "daily_limit_usd": 2000,
+                "weekly_limit_usd": 10000,
+                "monthly_limit_usd": 35000
+              }
+            }
+          ]
+        }
         """
         let response = try JSONDecoder().decode(SubscriptionsResponse.self, from: Data(json.utf8))
         let active = try #require(SiyuUsageProvider.activeSubscriptions(response.data ?? [], now: .now).first)
@@ -752,7 +703,26 @@ struct SiyuTests {
     @Test
     func siyuOmitsWindowsWithoutLimits() throws {
         let json = """
-        {"code":0,"message":"success","data":[{"id":1470,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","daily_usage_usd":383,"weekly_usage_usd":2565,"monthly_usage_usd":2565,"group":{"id":17,"name":"DeepSeek大月卡","status":"active","monthly_limit_usd":35000}}]}
+        {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "id": 1470,
+              "status": "active",
+              "expires_at": "2099-01-01T00:00:00.000000+08:00",
+              "daily_usage_usd": 383,
+              "weekly_usage_usd": 2565,
+              "monthly_usage_usd": 2565,
+              "group": {
+                "id": 17,
+                "name": "DeepSeek大月卡",
+                "status": "active",
+                "monthly_limit_usd": 35000
+              }
+            }
+          ]
+        }
         """
         let response = try JSONDecoder().decode(SubscriptionsResponse.self, from: Data(json.utf8))
         let active = try #require(SiyuUsageProvider.activeSubscriptions(response.data ?? [], now: .now).first)
@@ -765,7 +735,23 @@ struct SiyuTests {
     @Test
     func siyuDropsPlansWithoutAnyLimit() throws {
         let json = """
-        {"code":0,"message":"success","data":[{"id":1470,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","daily_usage_usd":383,"group":{"id":17,"name":"DeepSeek大月卡","status":"active"}}]}
+        {
+          "code": 0,
+          "message": "success",
+          "data": [
+            {
+              "id": 1470,
+              "status": "active",
+              "expires_at": "2099-01-01T00:00:00.000000+08:00",
+              "daily_usage_usd": 383,
+              "group": {
+                "id": 17,
+                "name": "DeepSeek大月卡",
+                "status": "active"
+              }
+            }
+          ]
+        }
         """
         let response = try JSONDecoder().decode(SubscriptionsResponse.self, from: Data(json.utf8))
 
@@ -806,10 +792,9 @@ struct BrowserSessionFlowTests {
             providerID: .ccbus,
             subscriptionID: id,
             credentials: store,
+            providerName: BrowserTokenSite.ccbus.displayName,
             isUsable: { $0.expiresAt > .now },
-            refresh: refresh,
-            isInvalid: { ($0 as? CCBusBrowserCredentialError)?.indicatesInvalidCredential ?? false },
-            invalidMessage: "CCBus 网页登录态已过期，请在订阅设置中重新登录"
+            refresh: refresh
         )
     }
 
@@ -903,7 +888,7 @@ struct BrowserSessionFlowTests {
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let id = UUID()
         let configuration = makeConfiguration(store: store, id: id) { _ in
-            throw CCBusBrowserCredentialError.expired
+            throw BrowserLoginError.expired(provider: "CCBus")
         }
         do {
             _ = try await BrowserSessionFlow.fetchWithRetry(
@@ -923,7 +908,7 @@ struct BrowserSessionFlowTests {
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let id = UUID()
         let configuration = makeConfiguration(store: store, id: id) { _ in
-            throw CCBusBrowserCredentialError.refreshFailed("HTTP 502")
+            throw BrowserLoginError.refreshFailed(provider: "CCBus", message: "HTTP 502")
         }
         do {
             _ = try await BrowserSessionFlow.fetchWithRetry(
@@ -947,7 +932,7 @@ struct BrowserSessionFlowTests {
         var refreshCount = 0
         let configuration = makeConfiguration(store: store, id: id) { _ in
             refreshCount += 1
-            throw CCBusBrowserCredentialError.refreshFailed("HTTP 503")
+            throw BrowserLoginError.refreshFailed(provider: "CCBus", message: "HTTP 503")
         }
         do {
             _ = try await BrowserSessionFlow.fetchWithRetry(

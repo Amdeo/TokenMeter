@@ -159,106 +159,101 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 
 ## 3. 生成模块
 
-基于 CCBus 参照，复制并替换以下站点特定参数（下文用占位符 `<NAME>` `<id>` `<域名>` `<API前缀>` `<登录页>` `<余额路径>` `<余额字段>` `<币种>` `<scale>`）：
+站点差异全部落成常量，不再每个中转站复制一套实现（提取器/续期器/登录窗口都是共享的）。
+占位符：`<id>` `<域名>` `<API前缀>` `<登录页>` `<余额路径>` `<余额字段>` `<币种>` `<scale>` `<显示名>`。
 
-### 3.1 `TokenMeter/Providers/BuiltIn/<Name>Provider.swift`
+### 3.1 站点常量 `TokenMeter/Services/BrowserTokenLogin.swift`
+
+`BrowserTokenSite` extension 追加一条（错误文案、登录窗口标题、localStorage 键名）：
 
 ```swift
-import Foundation
+    static let <name> = BrowserTokenSite(
+        displayName: "<显示名>",                 // 错误文案里的短名，如 "CCBus"
+        loginWindowTitle: "登录 <显示名> 账号",
+        accessTokenKey: "<第 7 项确认的键>",       // 常见 auth_token / access_token
+        sessionDomains: ["<域名，去 https>"],
+        loginPageURL: URL(string: "<登录页>")!
+    )
+```
 
-// MARK: - 定义
+- 仅当 refresh token 本身也必须是带 exp 的 JWT 时才加 `validatesRefreshTokenExpiry: true`（目前只有 Kimi）。
+- token 存在 `localStorage["user"]` JSON 里（new-api 系）就到 3.4，不走本条。
 
-@MainActor
-struct <Name>ProviderDefinition: ProviderDefinition {
-    let id = ProviderID(rawValue: "<id>")
+`{API前缀}/auth/refresh` 与已有站点同构时，`BrowserRelayRefresher` extension 再加一条：
 
-    var metadata: ProviderMetadata {
-        ProviderMetadata(
-            displayName: "<显示名>",
-            iconResourceName: nil,          // 有 PNG 时填 "icon-<id>"
-            fallbackSystemImage: "<SF Symbol>",
-            tintRGB: <0xRRGGBB>,
-            capabilityDescription: "支持账户余额，可通过网页登录态获取。",
-            authPageURL: URL(string: "<登录页>"),
-            homepageURL: URL(string: "<域名根>，如 https://ccbus.top"),
-            authenticationSummary: "网页登录态 · 支持账户余额"
-        )
-    }
+```swift
+    static let <name> = BrowserRelayRefresher(
+        site: .<name>,
+        apiBase: URL(string: "<API前缀，如 https://ccbus.top/api/v1>")!
+    )
+```
 
-    var authMethods: [AuthMethodDefinition] {
-        [AuthMethodDefinition(
+### 3.2 余额同构的中转站：`TokenMeter/Providers/BuiltIn/RelayBalanceProvider.swift`
+
+余额走 `/auth/me`、续期走 `/auth/refresh` 的站点无需新文件，
+在 `RelayBalanceProviderDefinition` extension 追加一条实例即可：
+
+```swift
+    static let <name> = RelayBalanceProviderDefinition(
+        site: .<name>,
+        id: .<id>,
+        displayName: "<显示名>",
+        iconResourceName: nil,          // 有 PNG 时填 "icon-<id>"
+        fallbackSystemImage: "<SF Symbol>",
+        tintRGB: <0xRRGGBB>,
+        homepageURL: URL(string: "<域名根，如 https://ccbus.top>")!,
+        authMethod: AuthMethodDefinition(
             id: .<id>BrowserSession,
             flowID: .browserSession,
             title: "网页登录态",
             systemImage: "globe",
             tintRGB: <0xRRGGBB>,
             detail: "登录 <显示名> 账号（内置）"
-        )]
-    }
+        ),
+        demoBalance: 10.00
+    )
+```
 
-    let cardRenderer: any ProviderCardRenderer = BalanceCardRenderer()   // 按 0.5 卡片样式确认结果选择：
-    // 余额卡 → BalanceCardRenderer；额度列表卡 → QuotaListCardRenderer(anchorHint: 可选)；
-    // 混合卡（余额+订阅）→ 自定义 <Name>CardRenderer（见 TokenMeter/Views/ProviderCards/NowCodingCardRenderer.swift）
+### 3.3 余额异构的中转站：新建 `TokenMeter/Providers/BuiltIn/<Name>Provider.swift`
 
-    func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
-        <Name>UsageProvider(subscription: subscription)
-    }
+字段名/路径/卡片与 CCBus 不同（如余额+订阅混合）时才新建，参照
+`TokenMeter/Providers/BuiltIn/SiyuProvider.swift`：
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(name: "可用余额", used: 0, limit: 10.00, resetAt: nil, unit: .currency(code: "<币种>", scale: 1), kind: .balance)
-        ])
-    }
-}
+- 定义 `@MainActor struct <Name>ProviderDefinition: ProviderDefinition`：`id`/`metadata`/`authMethods`；
+  `cardRenderer` 按 0.5 的确认结果选：余额卡 → `BalanceCardRenderer()`；
+  额度列表卡 → `QuotaListCardRenderer(anchorHint: 可选)`；
+  混合卡 → 自定义 renderer（见 `Views/ProviderCards/NowCodingCardRenderer.swift`）。
+- `makeDemoSnapshot` 照抄现有实现，金额用演示值。
 
-// MARK: - 用量提供者
-
+```swift
 struct <Name>UsageProvider: UsageProvider {
     let subscription: Subscription
     private let credentials = CredentialStore()
 
     func fetchUsage() async throws -> UsageSnapshot {
-        var credential: KimiBrowserCredential
-        var didRefresh = false
-        if let stored = credentials.browserCredential(for: subscription.id),
-           stored.expiresAt.timeIntervalSinceNow > 300 {
-            credential = stored
-        } else {
-            guard let stored = credentials.browserCredential(for: subscription.id) else {
-                throw UsageProviderError.notConfigured(subscription.providerID)
-            }
-            do {
-                credential = try await <Name>SessionRefresher.refresh(stored)
-                try credentials.save(browserCredential: credential, for: subscription.id)
-                didRefresh = true
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "<显示名> 网页登录态已过期，请在订阅设置中重新登录")
-            }
+        guard let stored = credentials.browserCredential(for: subscription.id) else {
+            throw UsageProviderError.notConfigured(subscription.providerID)
         }
-        do {
-            return try await fetchBalance(credential: credential)
-        } catch UsageProviderError.httpStatus(let status) where [401, 403].contains(status) {
-            guard !didRefresh else {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "<显示名> 网页登录态已过期，请在订阅设置中重新登录")
-            }
-            do {
-                let refreshed = try await <Name>SessionRefresher.refresh(credential)
-                try credentials.save(browserCredential: refreshed, for: subscription.id)
-                return try await fetchBalance(credential: refreshed)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw UsageProviderError.authenticationRequired(subscription.providerID, "<显示名> 网页登录态已过期，请在订阅设置中重新登录")
-            }
-        }
+        // 刷新、401/403 兑底重试、错误分类都由 BrowserSessionFlow 统一处理，
+        // provider 只提供站点常量与业务请求。
+        let configuration = BrowserSessionFlow.Configuration(
+            providerID: subscription.providerID,
+            subscriptionID: subscription.id,
+            credentials: credentials,
+            providerName: BrowserTokenSite.<name>.displayName,
+            isUsable: { $0.expiresAt.timeIntervalSinceNow > 300 },
+            refresh: { try await BrowserRelayRefresher.<name>.refresh($0) }
+        )
+        return try await BrowserSessionFlow.fetchWithRetry(
+            configuration, stored: stored,
+            fetch: { try await fetchBalance(credential: $0) }
+        )
     }
 
     private func fetchBalance(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
         // new-api 系余额接口可能需要不同 method（POST）或请求体；按探测结果调整。
         let response: MeResponse = try await APIClient.get(
-            <Name>SessionRefresher.apiBase.appendingPathComponent("<余额路径>"),
+            BrowserRelayRefresher.<name>.apiBase.appendingPathComponent("<余额路径>"),
             providerID: subscription.providerID,
             authorization: "\(credential.tokenType) \(credential.accessToken)"
         )
@@ -284,36 +279,20 @@ private struct MeResponse: Decodable {
 }
 ```
 
-### 3.2 `TokenMeter/Services/<Name>BrowserCredentialExtractor.swift`
+### 3.4 登录窗口
 
-复制 `CCBusBrowserCredentialExtractor.swift`，替换：
+无需新文件：`TokenMeter/Services/EmbeddedWebLoginController.swift` 的 Configuration extension 加一行
 
-- 错误信息中的站点名。
-- `extractionJavaScript` 的 localStorage 键名（第 7 项确认的键）。
+```swift
+    static var <name>: Self { tokenLogin(.<name>) }
+```
 
-new-api 系注意：若 token 存 `localStorage["user"]`（JSON 内 `token` 字段），JS 改为
-`JSON.stringify({accessToken: JSON.parse(localStorage.getItem("user")).token, refreshToken: null})`，
-且刷新逻辑不可用（见 3.4）。
+轮询、超时、切换账号清站点数据都由 `EmbeddedWebLoginController` 统一承担。
 
-### 3.3 `TokenMeter/Services/<Name>SessionRefresher.swift`
-
-复制 `CCBusSessionRefresher.swift`，替换：
-
-- `apiBase`（第 6 项）、`loginPageURL`（第 4 项）。
-- `refreshEndpoint`：`{api}/auth/refresh`（第 10 项）。
-- `RefreshResponse` 字段（access_token/refresh_token/expires_in；按实际响应调整）。
-
-### 3.4 `TokenMeter/Services/Embedded<Name>LoginController.swift`
-
-复制 `EmbeddedCCBusLoginController.swift`，替换：
-
-- 类名、`loginPageURL`、域名校验（`host == "<域名去https>"` 或 `hasSuffix`）、
-  提取器类型、面板标题。
-- 声明 `BrowserSessionLogining` 协议一致性（与 EmbeddedKimiLoginController 相同）。
-
-**无 refresh 的中转站**（new-api 系）：`<Name>UsageProvider.fetchUsage` 中
-跳过刷新分支——token 过期时直接抛 `.authenticationRequired` 提示重新登录；
-`<Name>SessionRefresher` 可省略（不生成该文件，provider 中不调用）。
+**无 refresh 的中转站**（new-api 系，token 存 `localStorage["user"]`）：
+`<Name>UsageProvider.fetchUsage` 不接 `BrowserSessionFlow`——token 过期直接抛
+`.authenticationRequired` 提示重新登录；`BrowserRelayRefresher` 那条常量不生成，
+但 3.1 的 `BrowserTokenSite` 仍要加（`accessTokenKey` 指向对应键），登录窗口照 3.4 接。
 
 ### 3.5 图标接入（用户提供官方图标时）
 
@@ -342,12 +321,11 @@ new-api 系注意：若 token 存 `localStorage["user"]`（JSON 内 `token` 字�
 1. `TokenMeter/Models/ProviderID.swift`：
    - `ProviderID` extension 加 `static let <id> = ProviderID(rawValue: "<id>")`。
    - `AuthMethodID` extension 加 `static let <id>BrowserSession = AuthMethodID(rawValue: "<id>-browser-session")`。
-2. `TokenMeter/Providers/ProviderRegistry.swift`：`all` 数组追加 `<Name>ProviderDefinition()`。
-3. `TokenMeter/Views/SubscriptionEditorSheet.swift`：
-   - `startEmbeddedLogin` 的 guard 条件加 `|| draft.authMethodID == .<id>BrowserSession`。
-   - `makeBrowserLoginController` 的 switch 加 `case .<id>: Embedded<Name>LoginController()`。
-   - `.onChange(of: draft.authMethodID)` 的 leaveBrowserAuthentication 条件加
-     `method != .<id>BrowserSession`。
+2. `TokenMeter/Providers/ProviderRegistry.swift`：`all` 数组追加
+   `RelayBalanceProviderDefinition.<name>`（3.2）或 `<Name>ProviderDefinition()`（3.3）。
+3. `TokenMeter/Views/SubscriptionEditorSheet.swift`：`makeBrowserLoginController` 的 switch 加
+   `case .<id>: EmbeddedWebLoginController(configuration: .<name>)`
+   （不加会落到 `default` 的 Kimi 配置）。
 4. `TokenMeter.xcodeproj/project.pbxproj`：新文件加入
    PBXFileReference / PBXBuildFile / 对应 PBXGroup children / PBXSourcesBuildPhase
    （沿用未占用的 A2…/A1… 序列），完成后 `plutil -lint` 必须 OK。

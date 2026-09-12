@@ -148,65 +148,32 @@ final class EmbeddedWebLoginController: NSObject, NSWindowDelegate, BrowserSessi
 /// 各供应商的登录窗口配置。差异只在标题、域名、登录页地址与提取方式；
 /// 窗口行为由 `EmbeddedWebLoginController` 统一承担。
 extension EmbeddedWebLoginController.Configuration {
-    /// Kimi：登录页即用量页，登录态在 localStorage 的 access_token/refresh_token。
-    static var kimi: Self {
+    /// token 型供应商（Kimi / CCBus / APIKEY.FUN / Siyu）：差异全在 `BrowserTokenSite`。
+    static func tokenLogin(_ site: BrowserTokenSite) -> Self {
         .init(
-            title: "登录 Kimi 账号",
-            sessionDomains: ["kimi.com"],
-            loginPageURL: URL(string: ChromeSessionImporter.quotaURL)!,
+            title: site.loginWindowTitle,
+            sessionDomains: site.sessionDomains,
+            loginPageURL: site.loginPageURL,
             extract: { webView in
                 guard let raw = try? await webView.evaluateJavaScript(
-                    KimiBrowserCredentialExtractor.extractionJavaScript
+                    site.extractionJavaScript
                 ) as? String, !raw.isEmpty else { return nil }
-                return (try? KimiBrowserCredentialExtractor.credential(from: raw)).map(BrowserLoginResult.token)
+                return (try? site.credential(from: raw)).map(BrowserLoginResult.token)
             }
         )
     }
 
-    /// CCBus（AI 巴士）：登录态在 localStorage 的 auth_token/refresh_token。
-    static var ccbus: Self {
-        .init(
-            title: "登录 CCBus（AI 巴士）账号",
-            sessionDomains: ["ccbus.top"],
-            loginPageURL: CCBusSessionRefresher.loginPageURL,
-            extract: { webView in
-                guard let raw = try? await webView.evaluateJavaScript(
-                    CCBusBrowserCredentialExtractor.extractionJavaScript
-                ) as? String, !raw.isEmpty else { return nil }
-                return (try? CCBusBrowserCredentialExtractor.credential(from: raw)).map(BrowserLoginResult.token)
-            }
-        )
-    }
+    /// Kimi：登录页即用量页。
+    static var kimi: Self { tokenLogin(.kimi) }
 
-    /// Siyu API：登录态在 localStorage 的 auth_token/refresh_token（与 CCBus 同构）。
-    static var siyu: Self {
-        .init(
-            title: "登录 Siyu API 账号",
-            sessionDomains: ["siyu.site"],
-            loginPageURL: SiyuSessionRefresher.loginPageURL,
-            extract: { webView in
-                guard let raw = try? await webView.evaluateJavaScript(
-                    SiyuBrowserCredentialExtractor.extractionJavaScript
-                ) as? String, !raw.isEmpty else { return nil }
-                return (try? SiyuBrowserCredentialExtractor.credential(from: raw)).map(BrowserLoginResult.token)
-            }
-        )
-    }
+    /// CCBus（AI 巴士）。
+    static var ccbus: Self { tokenLogin(.ccbus) }
 
-    /// APIKEY.FUN：登录态在 localStorage 的 auth_token/refresh_token。
-    static var apiKeyFun: Self {
-        .init(
-            title: "登录 APIKEY.FUN 账号",
-            sessionDomains: ["apikey.fun"],
-            loginPageURL: APIKeyFunSessionRefresher.loginPageURL,
-            extract: { webView in
-                guard let raw = try? await webView.evaluateJavaScript(
-                    APIKeyFunBrowserCredentialExtractor.extractionJavaScript
-                ) as? String, !raw.isEmpty else { return nil }
-                return (try? APIKeyFunBrowserCredentialExtractor.credential(from: raw)).map(BrowserLoginResult.token)
-            }
-        )
-    }
+    /// Siyu API。
+    static var siyu: Self { tokenLogin(.siyu) }
+
+    /// APIKEY.FUN。
+    static var apiKeyFun: Self { tokenLogin(.apiKeyFun) }
 
     /// NowCoding：new-api 新版认证，localStorage 无 token，
     /// 登录态是 WKWebsiteDataStore 里的 HttpOnly session cookie + localStorage 用户 ID。

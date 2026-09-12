@@ -13,7 +13,7 @@ struct SiyuProviderDefinition: ProviderDefinition {
             fallbackSystemImage: "bolt.fill",
             tintRGB: 0x6366F1,
             capabilityDescription: "支持账户余额与订阅额度，可通过网页登录态获取。",
-            authPageURL: URL(string: "https://siyu.site/login"),
+            authPageURL: BrowserRelayRefresher.siyu.site.loginPageURL,
             homepageURL: URL(string: "https://siyu.site"),
             authenticationSummary: "网页登录态 · 余额 + 订阅"
         )
@@ -77,11 +77,9 @@ struct SiyuProviderDefinition: ProviderDefinition {
 
 // MARK: - 站点常量
 
-/// Siyu API 站点常量：API 前缀与登录页。
+/// Siyu API 站点常量：余额/订阅额度的单位。
+/// API 前缀、登录页与续期入口见 `BrowserRelayRefresher.siyu`。
 enum SiyuSite: Sendable {
-    static let apiBase = URL(string: "https://siyu.site/api/v1")!
-    static let loginPageURL = URL(string: "https://siyu.site/login")!
-    static let homePageURL = URL(string: "https://siyu.site")!
     /// 余额/订阅额度单位：接口返回值即美元金额，scale 为 1。
     static let currencyCode = "USD"
 }
@@ -100,10 +98,9 @@ struct SiyuUsageProvider: UsageProvider {
             providerID: subscription.providerID,
             subscriptionID: subscription.id,
             credentials: credentials,
+            providerName: BrowserTokenSite.siyu.displayName,
             isUsable: { $0.expiresAt.timeIntervalSinceNow > 300 },
-            refresh: SiyuSessionRefresher.refresh,
-            isInvalid: { ($0 as? SiyuBrowserCredentialError)?.indicatesInvalidCredential ?? false },
-            invalidMessage: "Siyu API 网页登录态已过期，请在订阅设置中重新登录"
+            refresh: { try await BrowserRelayRefresher.siyu.refresh($0) }
         )
         return try await BrowserSessionFlow.fetchWithRetry(
             configuration, stored: stored,
@@ -116,12 +113,12 @@ struct SiyuUsageProvider: UsageProvider {
     /// 每个订阅展开为 每日/每周/每月 三个额度窗口，重置时间取窗口起点 + 1d/7d/30d。
     private func fetchAll(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
         let me: MeResponse = try await APIClient.get(
-            SiyuSite.apiBase.appendingPathComponent("/auth/me"),
+            BrowserRelayRefresher.siyu.apiBase.appendingPathComponent("/auth/me"),
             providerID: subscription.providerID,
             authorization: "\(credential.tokenType) \(credential.accessToken)"
         )
         let subscriptions: SubscriptionsResponse = try await APIClient.get(
-            SiyuSite.apiBase.appendingPathComponent("/subscriptions/active"),
+            BrowserRelayRefresher.siyu.apiBase.appendingPathComponent("/subscriptions/active"),
             providerID: subscription.providerID,
             authorization: "\(credential.tokenType) \(credential.accessToken)"
         )

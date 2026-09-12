@@ -4,7 +4,7 @@ import Testing
 
 // MARK: - JWT 载荷解码
 
-/// `JWT` 是 5 个登录态提取器/续期器与 Codex 账户 ID 提取共用的唯一解码路径，
+/// `JWT` 是登录态提取器/续期器与 Codex 账户 ID 提取共用的唯一解码路径，
 /// 这些用例锁定它从各处重复实现收敛后保持的边界行为。
 struct JWTTests {
     private func makeToken(payload: String) -> String {
@@ -210,16 +210,17 @@ struct BrowserSessionRefresherTests {
 
     @Test
     func providerRefreshersMapSemanticFailuresToTheirOwnErrors() async {
-        // 映射不能搞错：401 必须变成 expired（isInvalid 依赖它判定需要重登）。
+        // 映射不能搞错：401 必须变成 expired（isInvalid 依赖它判定需要重登），
+        // 且错误要带上本供应商的名字，否则用户会看到别家的提示。
         let unauthorized = HTTPStub { _, _ in (401, Data()) }
         let unauthorizedTransport = await unauthorized.transport
         do {
-            _ = try await APIKeyFunSessionRefresher.refresh(
+            _ = try await BrowserRelayRefresher.apiKeyFun.refresh(
                 Self.credential(), transport: unauthorizedTransport
             )
             Issue.record("应以 APIKEY.FUN 登录态失效结束")
-        } catch APIKeyFunBrowserCredentialError.expired {
-            #expect(Bool(true))
+        } catch BrowserLoginError.expired(let provider) {
+            #expect(provider == "APIKEY.FUN")
         } catch {
             Issue.record("错误的分类：\(error)")
         }
@@ -227,9 +228,10 @@ struct BrowserSessionRefresherTests {
         let outage = HTTPStub { _, _ in (500, Data()) }
         let outageTransport = await outage.transport
         do {
-            _ = try await CCBusSessionRefresher.refresh(Self.credential(), transport: outageTransport)
+            _ = try await BrowserRelayRefresher.ccbus.refresh(Self.credential(), transport: outageTransport)
             Issue.record("应以 CCBus 续期失败结束")
-        } catch CCBusBrowserCredentialError.refreshFailed(let message) {
+        } catch BrowserLoginError.refreshFailed(let provider, let message) {
+            #expect(provider == "CCBus")
             #expect(message == "HTTP 500")
         } catch {
             Issue.record("错误的分类：\(error)")
