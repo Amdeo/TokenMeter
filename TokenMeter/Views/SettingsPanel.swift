@@ -59,6 +59,7 @@ struct SettingsPanel: View {
                         settingsToggle("打开时刷新", isOn: $settings.refreshOnOpen)
                         settingsToggle("后台自动刷新", isOn: $settings.autoRefreshEnabled)
                         appearanceRow()
+                        settingsToggle("浅色玻璃特效", isOn: $settings.glassEffectEnabled)
                         refreshIntervalRow()
                     }
 
