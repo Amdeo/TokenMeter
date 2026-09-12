@@ -9,8 +9,12 @@ struct SettingsPanel: View {
     let onBack: () -> Void
     let onMigration: () -> Void
     let migrationRecoveryError: String?
+    let persistenceError: String?
     let onPreview: () -> Void
 
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HeaderIconButton(systemName: "chevron.left", label: "返回概览", action: onBack)
@@ -98,6 +102,12 @@ struct SettingsPanel: View {
                         thresholdRow("USD", value: $settings.usdBalanceThreshold, isLast: true)
                     }
 
+                    if let persistenceError {
+                        Label(persistenceError, systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(TM.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     settingsSection("数据迁移", footer: {
                         if let migrationRecoveryError {
                             Label(migrationRecoveryError, systemImage: "exclamationmark.triangle.fill")
@@ -149,10 +159,13 @@ struct SettingsPanel: View {
                     }
                     #endif
 
-                    HStack {
-                        Label("TokenMeter 私有本地凭证文件 · 受文件权限保护", systemImage: "lock.fill")
-                        Spacer()
-                        Text("TokenMeter")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("凭据以本地明文文件保存，受文件权限保护", systemImage: "lock.fill")
+                        HStack {
+                            Text("TokenMeter \(version)")
+                            Spacer()
+                            Link("反馈问题", destination: URL(string: "https://github.com/Amdeo/TokenMeter/issues/new/choose")!)
+                        }
                     }
                     .font(.system(size: 10))
                     .foregroundStyle(TM.textTertiary)
@@ -175,7 +188,7 @@ struct SettingsPanel: View {
                     .font(.system(size: 12))
                     .foregroundStyle(TM.textPrimary)
                 Spacer()
-                Toggle(isOn: isOn) { EmptyView() }
+                Toggle(title, isOn: isOn)
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.small)

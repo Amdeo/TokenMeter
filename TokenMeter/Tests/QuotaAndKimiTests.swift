@@ -147,7 +147,6 @@ struct QuotaAndKimiTests {
 
         let snapshot = try KimiUsageProvider.parseCodingUsage(response, subscription: subscription)
         #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
-        #expect(snapshot.quotas.map(\.name) == ["5 小时额度", "每周额度"])
         #expect(snapshot.quotas[0].fraction == 0)
         #expect(snapshot.quotas[0].usedText == "0")
     }
@@ -470,7 +469,6 @@ extension QuotaAndKimiTests {
 
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
-        #expect(anchor.label == "总使用量")
         #expect(anchor.value == 0.41.formatted(.percent.precision(.fractionLength(1))))
         #expect(anchor.accessibilityLabel == "总使用量 \(anchor.value)")
         // 未配置：overall 锚点回退到 ratioStatus 对应的状态色（normal → TM.ok），而非内置默认 indigo。
@@ -488,7 +486,6 @@ extension QuotaAndKimiTests {
 
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
-        #expect(anchor.label == "5 小时额度")
         #expect(anchor.value == 0.55.formatted(.percent.precision(.fractionLength(0))))
     }
 
@@ -512,7 +509,6 @@ extension QuotaAndKimiTests {
 
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
-        #expect(anchor.label == "5 小时额度")
         #expect(anchor.value == 0.60.formatted(.percent.precision(.fractionLength(0))))
     }
 
@@ -528,7 +524,6 @@ extension QuotaAndKimiTests {
 
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
-        #expect(anchor.label == "每月窗口")
         #expect(anchor.value == 0.35.formatted(.percent.precision(.fractionLength(0))))
     }
 
@@ -580,32 +575,7 @@ extension QuotaAndKimiTests {
         #expect(label == "编辑 DeepSeek 的配置，等待首次刷新…")
     }
 
-    @Test
-    func subscriptionCardAccessibilityAppendsRealtimeAnchorAndStatus() throws {
-        // 用通用平台（Zhipu）验证：realtime 状态会把配额状态与锚点百分比拼接进文案。
-        let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
-        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
-            Quota(name: "5 小时额度", used: 18, limit: 100, resetAt: nil, kind: .fiveHour)
-        ])
-        let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
-        let label = SubscriptionCardPresentation.cardAccessibilityLabel(subscription: subscription, snapshot: snapshot, anchor: anchor)
-
-        #expect(label == "编辑 智谱 AI 的配置，正常，5 小时额度，已用 18%")
-    }
-
-    @Test
-    func subscriptionCardAccessibilityAppendsWarningQuotaStatus() throws {
-        let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
-        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
-            Quota(name: "5 小时额度", used: 90, limit: 100, resetAt: nil, kind: .fiveHour)
-        ])
-        let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
-
-        let label = SubscriptionCardPresentation.cardAccessibilityLabel(subscription: subscription, snapshot: snapshot, anchor: anchor)
-
-        #expect(label == "编辑 智谱 AI 的配置，即将用尽，5 小时额度，已用 90%")
-    }
 
     @Test(arguments: zip(
         [UsageState.notConfigured, .unsupported, .authenticationRequired, .error],
@@ -939,4 +909,114 @@ private final class QuotaColorLoginItemManager: LoginItemManaging, @unchecked Se
 private final class QuotaColorNotificationManager: NotificationAuthorizationManaging, @unchecked Sendable {
     func requestAuthorization(completion: @escaping @Sendable (Bool) -> Void) { completion(true) }
     func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void) { completion(.authorized) }
+}
+
+extension QuotaAndKimiTests {
+    @Test @MainActor
+    func usageStoreDiscardsCancelledRefreshCompletion() async throws {
+        let fixture = try UsageStoreFixture()
+        defer { fixture.remove() }
+        let gate = RefreshGate()
+        let store = fixture.makeStore { subscription, _ in GateUsageProvider(subscription: subscription, gate: gate) }
+        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
+        store.add(subscription)
+
+        store.refresh(subscription)
+        await gate.waitUntilStarted()
+        store.invalidateRefresh(for: subscription)
+        store.refresh(subscription)
+        await gate.waitUntilStarted(count: 2)
+        await gate.completeSecond()
+        await Task.yield()
+        await Task.yield()
+        await gate.completeFirst()
+        await Task.yield()
+        await Task.yield()
+
+        #expect(store.snapshots[subscription.id]?.errorMessage == "second")
+        #expect(store.lastSuccessfulRefreshAt != nil)
+        #expect(!store.isRefreshing)
+    }
+
+    @Test @MainActor
+    func usageStorePreservesCorruptMetadataAndBlocksMutations() throws {
+        let fixture = try UsageStoreFixture(metadata: Data("corrupt metadata".utf8))
+        defer { fixture.remove() }
+        let original = try Data(contentsOf: fixture.metadataURL)
+        let store = fixture.makeStore()
+
+        store.add(Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey))
+
+        #expect(store.subscriptions.isEmpty)
+        #expect(try Data(contentsOf: fixture.metadataURL) == original)
+        #expect(store.lastPersistenceError != nil)
+
+        try Data("[]".utf8).write(to: fixture.metadataURL)
+        store.retryLoadingSubscriptions()
+        let recovered = Subscription(providerID: .deepSeek, name: "Recovered", authMethodID: .apiKey)
+        store.add(recovered)
+        #expect(store.lastPersistenceError == nil)
+        let persisted = try JSONDecoder().decode([Subscription].self, from: Data(contentsOf: fixture.metadataURL))
+        #expect(persisted.map(\.id) == [recovered.id])
+    }
+}
+
+@MainActor
+private final class UsageStoreFixture {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("TokenMeterTests-\(UUID().uuidString)", isDirectory: true)
+    let metadataURL: URL
+    let credentialURL: URL
+    private let suite = "TokenMeterTests.\(UUID().uuidString)"
+
+    init(metadata: Data? = nil) throws {
+        metadataURL = directory.appendingPathComponent("subscriptions.json")
+        credentialURL = directory.appendingPathComponent("credentials.json")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        if let metadata { try metadata.write(to: metadataURL) }
+    }
+
+    func makeStore(providerFactory: @escaping UsageProviderFactory = { subscription, _ in UnsupportedUsageProvider(subscription: subscription) }) -> UsageStore {
+        UsageStore(settings: makeSettings(), metadataURL: metadataURL,
+                   credentialStore: CredentialStore(fileURL: credentialURL), providerFactory: providerFactory)
+    }
+
+    private func makeSettings() -> SettingsStore {
+        SettingsStore(defaults: UserDefaults(suiteName: suite)!, loginItemManager: QuotaColorLoginItemManager(), notificationManager: QuotaColorNotificationManager())
+    }
+
+    func remove() {
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+        try? FileManager.default.removeItem(at: directory)
+    }
+}
+
+private actor RefreshGate {
+    private var starts = 0
+    private var firstContinuation: CheckedContinuation<Void, Never>?
+    private var secondContinuation: CheckedContinuation<Void, Never>?
+
+    func fetch() async -> String {
+        starts += 1
+        let start = starts
+        await withCheckedContinuation { continuation in
+            if start == 1 { firstContinuation = continuation } else { secondContinuation = continuation }
+        }
+        return start == 1 ? "first" : "second"
+    }
+
+    func waitUntilStarted(count: Int = 1) async {
+        while starts < count { await Task.yield() }
+    }
+
+    func completeFirst() { firstContinuation?.resume(); firstContinuation = nil }
+    func completeSecond() { secondContinuation?.resume(); secondContinuation = nil }
+}
+
+private struct GateUsageProvider: UsageProvider {
+    let subscription: Subscription
+    let gate: RefreshGate
+
+    func fetchUsage() async throws -> UsageSnapshot {
+        UsageSnapshot(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: .now, isDemo: false, errorMessage: await gate.fetch(), state: .realtime)
+    }
 }

@@ -106,6 +106,46 @@ struct SettingsAndNotificationTests {
     }
 
     @Test
+    func OAuthCodeStateRequiresCredentialForCompletionAndResetsOnMethodChange() {
+        let draft = SubscriptionEditorDraft(providerID: .claude)
+        #expect(draft.oauthCodeAuthorizationState == .idle)
+
+        draft.oauthCodeVerifier = "verifier"
+        draft.oauthCodeState = "state"
+        draft.oauthCodeAuthorizeURL = URL(string: "https://claude.ai/oauth/authorize")!
+        draft.oauthStatus = "授权页面已打开"
+        #expect(draft.oauthCodeAuthorizationState == .awaitingCallback)
+        #expect(!SubscriptionCredentialRequirement.canSave(
+            original: nil,
+            selected: .claudeOAuth,
+            flowID: .oauthCode,
+            draft: draft
+        ))
+
+        draft.clearAuthenticationState()
+        #expect(draft.oauthCodeAuthorizationState == .idle)
+        #expect(draft.oauthCodeVerifier == nil)
+        #expect(draft.oauthCodeState == nil)
+        #expect(draft.oauthCodeAuthorizeURL == nil)
+        #expect(draft.oauthStatus == nil)
+    }
+
+    @Test
+    func OAuthCodeStatePreventsDuplicateExchangeAndReturnsToAwaitingOnFailure() {
+        let draft = SubscriptionEditorDraft(providerID: .claude)
+        draft.oauthCodeAuthorizeURL = URL(string: "https://claude.ai/oauth/authorize")!
+        #expect(draft.oauthCodeAuthorizationState == .awaitingCallback)
+
+        draft.oauthTask = Task {}
+        #expect(draft.oauthCodeAuthorizationState == .exchanging)
+        draft.oauthTask?.cancel()
+        draft.oauthTask = nil
+        draft.oauthStatus = "授权码无效"
+        #expect(draft.oauthCodeAuthorizationState == .awaitingCallback)
+        #expect(draft.oauthCredential == nil)
+    }
+
+    @Test
     func lowBalanceUsesDisplayedCurrencyScale() {
         let suite = "TokenMeterTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

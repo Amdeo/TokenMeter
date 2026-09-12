@@ -196,6 +196,7 @@ struct MenuBarView: View {
                     onBack: navigateBack,
                     onMigration: { navigateForward { navigation.route = .migration } },
                     migrationRecoveryError: store.lastMigrationRecoveryError,
+                    persistenceError: store.lastPersistenceError,
                     onPreview: previewEntryAction
                 )
                 .transition(pushTransition)
@@ -296,6 +297,29 @@ struct MenuBarView: View {
                 onToggleReorder: store.subscriptions.count > 1 ? { toggleReordering() } : nil
             )
             .padding(.bottom, 10)
+
+            if let error = store.lastPersistenceError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(TM.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 8)
+                Button("重新读取配置") { store.retryLoadingSubscriptions() }
+                    .font(.system(size: 11))
+                    .padding(.bottom, 8)
+            }
+            if !store.subscriptions.isEmpty,
+               store.settings.notificationStatus == .notDetermined,
+               store.settings.lowBalanceAlerts || store.settings.authenticationAlerts || store.settings.serviceErrorAlerts {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("提醒尚未获得系统授权。允许后才能接收余额与认证提醒。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textSecondary)
+                    Button("允许本地通知") { store.settings.requestNotificationsIfNeeded() }
+                        .font(.system(size: 11))
+                }
+                .padding(.bottom, 8)
+            }
 
             if store.subscriptions.isEmpty {
                 MenuBarEmptyState { openAddSubscription() }
@@ -481,6 +505,24 @@ struct MenuBarView: View {
         "\(store.subscriptions.count) 个服务"
     }
 
+    private func synchronizationStatus(now: Date) -> (text: String, color: Color) {
+        if store.isRefreshing { return ("同步中…", TM.accent) }
+        let enabled = store.subscriptions.filter(\.isEnabled)
+        guard !enabled.isEmpty else { return ("暂无启用服务", TM.textTertiary) }
+        let snapshots = enabled.compactMap { store.snapshots[$0.id] }
+        let failed = snapshots.filter { $0.state != .realtime }.count
+        if failed == enabled.count { return ("全部获取失败", TM.danger) }
+        if failed > 0 { return ("\(failed) 个服务获取失败", TM.warn) }
+        guard snapshots.count == enabled.count,
+              let oldest = snapshots.map(\.updatedAt).min() else {
+            return ("等待同步", TM.textTertiary)
+        }
+        if now.timeIntervalSince(oldest) > max(120, store.settings.refreshInterval * 2) {
+            return ("数据已过期", TM.warn)
+        }
+        return ("已同步 · \(oldest.formatted(date: .omitted, time: .shortened))", TM.ok)
+    }
+
     private var footer: some View {
         HStack(spacing: 10) {
                 Button { openAddSubscription() } label: {
@@ -495,21 +537,16 @@ struct MenuBarView: View {
 
                 Spacer(minLength: 8)
 
-                HStack(spacing: 5) {
-                    Circle().fill(store.isRefreshing ? TM.accent : TM.ok).frame(width: 6, height: 6)
-                    if store.isRefreshing {
-                        Text("同步中…")
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    let status = synchronizationStatus(now: context.date)
+                    HStack(spacing: 5) {
+                        Circle().fill(status.color).frame(width: 6, height: 6)
+                        Text(status.text)
                             .font(.system(size: 10))
                             .foregroundStyle(TM.textTertiary)
-                    } else if let updatedAt = store.lastRefreshAt {
-                        Text("已同步 · \(updatedAt.formatted(date: .omitted, time: .shortened))")
-                            .font(.system(size: 10))
-                            .foregroundStyle(TM.textTertiary)
-                    } else {
-                        Text("等待同步")
-                            .font(.system(size: 10))
-                            .foregroundStyle(TM.textTertiary)
+                            .lineLimit(1)
                     }
+                    .accessibilityElement(children: .combine)
                 }
 
                 Button(role: .destructive) {

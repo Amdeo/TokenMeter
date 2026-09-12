@@ -65,7 +65,7 @@ struct QuotaProgressRow: View {
                     .layoutPriority(1)
                 Spacer(minLength: 6)
                 if let quota {
-                    Text(valueOverride ?? quota.fraction.formatted(.percent.precision(.fractionLength(1))))
+                    Text(valueOverride ?? "已用 \(quota.fraction.formatted(.percent.precision(.fractionLength(1))))")
                         .font(.system(size: 11, weight: .bold).monospacedDigit())
                         .foregroundStyle(tint)
                         .layoutPriority(1)
@@ -180,7 +180,7 @@ struct QuotaListCardRenderer: ProviderCardRenderer {
             ? SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
             : quota.status.tint
         return CardSummary(
-            label: quota.name,
+            label: "\(quota.name) · 已用",
             value: percent,
             accessibilityLabel: "\(quota.name)，已用 \(percent)",
             colorRGB: color.tokenMeterRGB

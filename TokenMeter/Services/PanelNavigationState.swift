@@ -151,6 +151,13 @@ final class PanelNavigationState {
     }
 }
 
+
+enum OAuthAuthorizationState: Equatable {
+    case idle
+    case awaitingCallback
+    case exchanging
+    case completed
+}
 @MainActor
 @Observable
 final class SubscriptionEditorDraft {
@@ -210,6 +217,13 @@ final class SubscriptionEditorDraft {
     var isEditing: Bool { original != nil }
     var isImportingBrowser: Bool { browserImportTask != nil }
     var isAuthenticating: Bool { oauthTask != nil || browserImportTask != nil }
+
+    var oauthCodeAuthorizationState: OAuthAuthorizationState {
+        if oauthCredential != nil { return .completed }
+        if oauthTask != nil { return .exchanging }
+        if oauthCodeAuthorizeURL != nil { return .awaitingCallback }
+        return .idle
+    }
     var isDirty: Bool {
         if isAuthenticating || oauthCredential != nil || browserCredential != nil || cookieCredential != nil { return true }
         if original == nil {
@@ -226,13 +240,27 @@ final class SubscriptionEditorDraft {
     }
 
     func cancelTasks() {
+        clearOAuthAuthentication()
+        leaveBrowserAuthentication()
+    }
+
+    /// Cancels and clears all state owned by device and authorization-code OAuth.
+    /// Authentication-method changes must not reuse a credential, PKCE verifier,
+    /// or presentation text from a different flow.
+    func clearOAuthAuthentication() {
         oauthSessionID = UUID()
-        browserImportSessionID = UUID()
         oauthTask?.cancel()
-        browserImportTask?.cancel()
         oauthTask = nil
-        browserImportTask = nil
+        oauthCredential = nil
+        oauthDevice = nil
+        oauthStatus = nil
         leaveCodeOAuth()
+    }
+
+    /// Clears all transient authentication state before changing methods.
+    func clearAuthenticationState() {
+        clearOAuthAuthentication()
+        leaveBrowserAuthentication()
     }
 
     /// 清空待兑换的授权码流程参数（切换认证方式或放弃编辑时调用）。

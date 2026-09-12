@@ -133,6 +133,8 @@ final class SettingsStore {
         }
     }
 
+    var needsNotificationPermission: Bool { notificationStatus == .notDetermined }
+
     init(
         defaults: UserDefaults = .standard,
         loginItemManager: LoginItemManaging? = nil,

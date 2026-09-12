@@ -77,6 +77,8 @@ struct SubscriptionEditorSheet: View {
                             apiKey: $draft.apiKey,
                             oauthDevice: draft.oauthDevice,
                             oauthStatus: draft.oauthStatus,
+                            oauthCodeState: draft.oauthCodeAuthorizationState,
+                            oauthCredential: draft.oauthCredential,
                             isAuthorizing: draft.oauthTask != nil,
                             onStartOAuth: startOAuth,
                             onCancelOAuth: cancelOAuth,
@@ -122,8 +124,7 @@ struct SubscriptionEditorSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: draft.authMethodID) { _, _ in
-            if authFlowID != .deviceOAuth, authFlowID != .oauthCode { resetOAuthState() }
-            if authFlowID != .browserSession { draft.leaveBrowserAuthentication() }
+            draft.clearAuthenticationState()
         }
         .overlay {
             if showDiscardConfirmation {
@@ -181,26 +182,64 @@ struct SubscriptionEditorSheet: View {
         do {
             try saveCredential(for: subscription.id)
             store.add(subscription)
-            onClose()
-            store.refresh(subscription)
+            guard let persistenceError = store.lastPersistenceError else {
+                onClose()
+                store.refresh(subscription)
+                return
+            }
+            draft.message = persistenceError
         } catch { draft.message = error.localizedDescription }
     }
 
     private func saveEditing(_ subscription: Subscription) {
         guard canSave else { draft.message = "切换认证方式后，请先提供对应的新凭证。"; return }
         do {
+            store.invalidateRefresh(for: subscription)
             try saveCredential(for: subscription.id)
             var updated = subscription
-            if subscription.authMethodID != draft.authMethodID { store.updateAuthMethod(subscription, to: draft.authMethodID); updated.authMethodID = draft.authMethodID }
-            let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !name.isEmpty, name != subscription.name { store.rename(subscription, to: name); updated.name = name }
-            if draft.quotaColors != subscription.quotaColors {
-                store.updateQuotaColors(draft.quotaColors, for: subscription)
-                updated.quotaColors = draft.quotaColors
+            if subscription.authMethodID != draft.authMethodID {
+                store.updateAuthMethod(subscription, to: draft.authMethodID)
+                guard let persistenceError = store.lastPersistenceError else {
+                    updated.authMethodID = draft.authMethodID
+                    return saveEditingDetails(updated, original: subscription)
+                }
+                draft.message = persistenceError
+                return
             }
-            onClose()
-            store.refresh(updated)
+            saveEditingDetails(updated, original: subscription)
         } catch { draft.message = error.localizedDescription }
+    }
+
+    private func saveEditingDetails(_ subscription: Subscription, original: Subscription) {
+        var updated = subscription
+        let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty, name != original.name {
+            store.rename(original, to: name)
+            guard let persistenceError = store.lastPersistenceError else {
+                updated.name = name
+                return saveEditingQuotaColors(updated, original: original)
+            }
+            draft.message = persistenceError
+            return
+        }
+        saveEditingQuotaColors(updated, original: original)
+    }
+
+    private func saveEditingQuotaColors(_ subscription: Subscription, original: Subscription) {
+        var updated = subscription
+        if draft.quotaColors != original.quotaColors {
+            store.updateQuotaColors(draft.quotaColors, for: original)
+            guard let persistenceError = store.lastPersistenceError else {
+                updated.quotaColors = draft.quotaColors
+                onClose()
+                store.refresh(updated)
+                return
+            }
+            draft.message = persistenceError
+            return
+        }
+        onClose()
+        store.refresh(updated)
     }
 
     private func saveCredential(for id: UUID) throws {
@@ -208,15 +247,7 @@ struct SubscriptionEditorSheet: View {
     }
 
     private func deleteSubscription() { guard let subscription else { return }; store.remove(subscription); onClose() }
-    private func resetOAuthState() {
-        draft.oauthSessionID = UUID()
-        draft.oauthTask?.cancel()
-        draft.oauthTask = nil
-        draft.oauthCredential = nil
-        draft.oauthDevice = nil
-        draft.oauthStatus = nil
-        draft.leaveCodeOAuth()
-    }
+    private func resetOAuthState() { draft.clearOAuthAuthentication() }
     private func cancelOAuth() { resetOAuthState() }
 
     private func startOAuth() {
@@ -244,8 +275,8 @@ struct SubscriptionEditorSheet: View {
     /// 授权码流程：复用尚未兑换的 PKCE（重复点击不会作废已完成的授权），否则新建。
     private func startCodeOAuth() {
         draft.message = nil
+        guard draft.oauthCodeAuthorizationState != .exchanging else { return }
         if let url = draft.oauthCodeAuthorizeURL {
-            draft.oauthStatus = Self.codeOAuthPendingStatus
             openURL(url)
             return
         }
@@ -261,11 +292,15 @@ struct SubscriptionEditorSheet: View {
 
     /// 把用户粘贴的授权码/回调地址兑换成令牌。
     private func completeOAuthCode() {
-        guard let verifier = draft.oauthCodeVerifier, let state = draft.oauthCodeState else {
+        guard draft.oauthCodeAuthorizationState == .awaitingCallback,
+              let verifier = draft.oauthCodeVerifier,
+              let state = draft.oauthCodeState
+        else {
             draft.message = "请先点「打开授权页面」开始授权。"
             return
         }
-        let input = draft.oauthCodeInput
+        let input = draft.oauthCodeInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return }
         let sessionID = draft.oauthSessionID
         draft.message = nil
         draft.oauthStatus = "正在用授权码换取令牌…"
@@ -294,7 +329,7 @@ struct SubscriptionEditorSheet: View {
     private static let codeOAuthPendingStatus = "已在浏览器打开授权页面；完成后把地址栏整段地址粘贴到下方。"
 
     private func startEmbeddedLogin(switchingAccount: Bool = false) {
-        resetOAuthState(); draft.leaveBrowserAuthentication(); let sessionID = draft.browserImportSessionID; draft.message = nil
+        draft.clearOAuthAuthentication(); draft.leaveBrowserAuthentication(); let sessionID = draft.browserImportSessionID; draft.message = nil
         draft.browserImportTask = Task { @MainActor in
             do {
                 let controller = Self.makeBrowserLoginController(for: draft.providerID)
@@ -493,6 +528,8 @@ private struct AuthMethodSelection: View {
     @Binding var apiKey: String
     let oauthDevice: DeviceOAuthAuthorization?
     let oauthStatus: String?
+    let oauthCodeState: OAuthAuthorizationState
+    let oauthCredential: OAuthCredential?
     let isAuthorizing: Bool
     let onStartOAuth: () -> Void
     let onCancelOAuth: () -> Void
@@ -618,10 +655,11 @@ private struct AuthMethodSelection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 EditorSoftButton(
-                    title: oauthCodeAuthorizeURL == nil ? "打开授权页面" : "重新打开授权页面",
+                    title: oauthCodeState == .idle ? "打开授权页面" : "重新打开授权页面",
                     systemImage: "safari",
                     prominent: true
                 ) { onStartOAuth() }
+                .disabled(oauthCodeState == .exchanging)
                 if let url = oauthCodeAuthorizeURL {
                     EditorSoftButton(title: "复制链接", systemImage: "doc.on.doc") {
                         onCopy(url.absoluteString)
@@ -630,9 +668,9 @@ private struct AuthMethodSelection: View {
             }
             if let oauthStatus {
                 HStack(spacing: 8) {
-                    if isAuthorizing {
+                    if oauthCodeState == .exchanging {
                         ProgressView().controlSize(.small)
-                    } else if oauthCredentialDone {
+                    } else if oauthCodeState == .completed {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(TM.ok)
                             .font(.system(size: 11))
@@ -643,13 +681,14 @@ private struct AuthMethodSelection: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if !oauthCredentialDone {
+            if oauthCodeState == .awaitingCallback || oauthCodeState == .exchanging {
                 VStack(alignment: .leading, spacing: 7) {
                     FormField("粘贴授权码或回调地址", text: $oauthCodeInput)
+                        .disabled(oauthCodeState == .exchanging)
                     EditorSoftButton(title: "使用授权码完成", systemImage: "checkmark", prominent: true) {
                         onCompleteOAuthCode()
                     }
-                    .disabled(oauthCodeInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(oauthCodeState != .awaitingCallback || oauthCodeInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             Text("授权页会跳转到本机回调地址而无法打开，这是预期行为：请把浏览器地址栏里的整段地址复制回来。令牌只写入 TokenMeter 本地私有文件。")
@@ -701,7 +740,7 @@ private struct AuthMethodSelection: View {
     }
 
     private var oauthCredentialDone: Bool {
-        oauthStatus?.contains("完成") == true || oauthStatus?.contains("导入") == true
+        oauthCredential != nil
     }
 }
 
