@@ -92,6 +92,8 @@ final class SettingsStore {
 
     private(set) var launchAtLogin: Bool
     var appearanceMode: AppearanceMode { didSet { defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode) } }
+    /// 浅色外观下是否使用磨砂玻璃背景；关闭时面板显示纯白背景。深色外观始终用深色渐变。
+    var glassEffectEnabled: Bool { didSet { defaults.set(glassEffectEnabled, forKey: Keys.glassEffectEnabled) } }
     var refreshOnOpen: Bool { didSet { defaults.set(refreshOnOpen, forKey: Keys.refreshOnOpen) } }
     var autoRefreshEnabled: Bool { didSet { defaults.set(autoRefreshEnabled, forKey: Keys.autoRefreshEnabled) } }
     var refreshInterval: TimeInterval { didSet { defaults.set(refreshInterval, forKey: Keys.refreshInterval) } }
@@ -155,6 +157,7 @@ final class SettingsStore {
         self.notificationManager = notificationManager ?? SystemNotificationAuthorizationManager()
         launchAtLogin = false
         appearanceMode = AppearanceMode(rawValue: defaults.string(forKey: Keys.appearanceMode) ?? "") ?? .system
+        glassEffectEnabled = defaults.object(forKey: Keys.glassEffectEnabled) as? Bool ?? false
         refreshOnOpen = defaults.object(forKey: Keys.refreshOnOpen) as? Bool ?? true
         autoRefreshEnabled = defaults.object(forKey: Keys.autoRefreshEnabled) as? Bool ?? true
         refreshInterval = Self.clampedRefreshInterval(defaults.object(forKey: Keys.refreshInterval) as? TimeInterval ?? 120)
@@ -241,6 +244,7 @@ final class SettingsStore {
     private enum Keys {
         static let launchAtLogin = "settings.launchAtLogin"
         static let appearanceMode = "settings.appearanceMode"
+        static let glassEffectEnabled = "settings.glassEffectEnabled"
         static let refreshOnOpen = "settings.refreshOnOpen"
         static let autoRefreshEnabled = "settings.autoRefreshEnabled"
         static let refreshInterval = "settings.refreshInterval"

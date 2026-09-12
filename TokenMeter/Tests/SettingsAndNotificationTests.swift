@@ -254,15 +254,18 @@ struct SettingsAndNotificationTests {
         #expect(first.autoRefreshEnabled)
         #expect(first.lowBalanceAlerts)
         #expect(first.appearanceMode == .system)
+        #expect(!first.glassEffectEnabled)
         #expect(first.cnyBalanceThreshold == 5)
         #expect(first.usdBalanceThreshold == 1)
 
         first.refreshOnOpen = false
         first.autoRefreshEnabled = false
+        first.glassEffectEnabled = true
         first.cnyBalanceThreshold = 8.5
         let second = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: FakeNotificationAuthorizationManager())
         #expect(!second.refreshOnOpen)
         #expect(!second.autoRefreshEnabled)
+        #expect(second.glassEffectEnabled)
         #expect(second.cnyBalanceThreshold == 8.5)
     }
 

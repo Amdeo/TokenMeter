@@ -74,21 +74,24 @@ private extension NSColor {
     }
 }
 
-/// 面板背景：深色用深色渐变，浅色用系统原生玻璃。
-/// macOS 26+ 使用 SwiftUI Liquid Glass（glassEffect）作为整个面板唯一的外层玻璃表面；
-/// macOS 14–25 回退到经典 AppKit 菜单磨砂（NSVisualEffectView(.menu)）。
+/// 面板背景：深色用深色渐变；浅色默认纯白背景，
+/// 开启玻璃特效后使用系统原生玻璃（macOS 26+ Liquid Glass，
+/// macOS 14–25 经典 AppKit 菜单磨砂）。
 struct TMPanelBackground: View {
     @Environment(\.colorScheme) private var colorScheme
+    let glassEnabled: Bool
 
     var body: some View {
         if colorScheme == .dark {
             TM.panelBackground
-        } else {
+        } else if glassEnabled {
             if #available(macOS 26.0, *) {
                 LiquidGlassBackground()
             } else {
                 NativeGlassBackground()
             }
+        } else {
+            Color.white
         }
     }
 }
@@ -227,7 +230,7 @@ struct MenuBarView: View {
             guard let measurement else { return }
             navigation.reportMeasuredHeight(measurement.height, for: measurement.route)
         }
-        .background(TMPanelBackground())
+        .background(TMPanelBackground(glassEnabled: store.settings.glassEffectEnabled))
         .foregroundStyle(TM.textPrimary)
         .modifier(TMColorSchemeModifier(mode: store.settings.appearanceMode))
         .overlay(alignment: .bottom) {
