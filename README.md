@@ -53,7 +53,15 @@
 
 ### 从源码构建
 
-需要 macOS 14 或更高版本，以及 Xcode 26 或更高版本（项目使用 macOS 26 SDK 符号）。
+需要 macOS 14 或更高版本，以及 Xcode 26 或更高版本。本仓库当前在以下环境开发与构建：
+
+| 项目 | 版本 |
+| --- | --- |
+| 开发系统 | macOS 26.5.2（25F84） |
+| 最低系统 | macOS 14.0 |
+| macOS SDK（API） | 26.5 |
+| Xcode | 26.6（17F113） |
+| Swift | 工程 6.0，编译器 6.3.3 |
 
 ```bash
 git clone https://github.com/Amdeo/TokenMeter.git

@@ -53,7 +53,15 @@ Download builds only from this repository's GitHub Release. Signing and notariza
 
 ### Build from source
 
-Use macOS 14 or later and Xcode 26 or later; the project uses macOS 26 SDK symbols.
+Use macOS 14 or later and Xcode 26 or later. The current development environment is:
+
+| Item | Version |
+| --- | --- |
+| Development OS | macOS 26.5.2 (25F84) |
+| Minimum OS | macOS 14.0 |
+| macOS SDK (API) | 26.5 |
+| Xcode | 26.6 (17F113) |
+| Swift | Project 6.0, compiler 6.3.3 |
 
 ```bash
 git clone https://github.com/Amdeo/TokenMeter.git
