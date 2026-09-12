@@ -322,7 +322,11 @@ struct MenuBarView: View {
     private var subscriptionList: some View {
         let move: ((IndexSet, Int) -> Void)? = isReordering
             ? { source, destination in
-                store.moveSubscriptions(fromOffsets: source, toOffset: destination)
+                // 落位默认是硬切：List 的 onMove 只在外面套一层动画时才会让
+                // 卡片滑到新位置；沿用面板既有的 easeOut 0.2s 语言。
+                withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) {
+                    store.moveSubscriptions(fromOffsets: source, toOffset: destination)
+                }
             }
             : nil
 
