@@ -19,6 +19,8 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         guard !Self.isRunningTests else { return }
 
         let settings = SettingsStore()
+        // 概览面板不再显示通知授权入口，启动时主动请求一次。
+        settings.requestNotificationsIfNeeded()
         let store = UsageStore(settings: settings)
         let navigation = PanelNavigationState()
         if settings.autoRefreshEnabled { store.start() }

@@ -296,6 +296,7 @@ struct SettingsAndNotificationTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let notifications = FakeNotificationAuthorizationManager()
+        notifications.status = .notDetermined
         let settings = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: notifications)
         settings.lowBalanceAlerts = false
         settings.lowBalanceAlerts = true
@@ -311,6 +312,8 @@ struct SettingsAndNotificationTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let notifications = FakeNotificationAuthorizationManager()
         notifications.requestError = NSError(domain: UNErrorDomain, code: 1)
+        // 未签名构建被系统拒绝注册后，授权状态一直停留在「未决定」。
+        notifications.status = .notDetermined
         let settings = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: notifications)
 
         settings.requestNotificationsIfNeeded()
@@ -321,6 +324,37 @@ struct SettingsAndNotificationTests {
         settings.requestNotificationsIfNeeded()
         await settle { settings.notificationRequestError == nil }
         #expect(settings.notificationRequestError == nil)
+    }
+
+    /// 已开启提醒但系统已经表态（已授权/已拒绝）时不再请求，启动时才不会反复打扰。
+    @Test
+    func notificationRequestSkippedWhenSystemAlreadyDecided() async {
+        let suite = "TokenMeterTests.NotificationDecided.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let notifications = FakeNotificationAuthorizationManager()
+        notifications.status = .denied
+        let settings = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: notifications)
+        await settle { settings.notificationStatus == .denied }
+
+        settings.requestNotificationsIfNeeded()
+        #expect(notifications.requestCount == 0)
+    }
+
+    /// 所有提醒都关闭时，启动不应弹出通知授权请求。
+    @Test
+    func notificationRequestSkippedWhenAllAlertsDisabled() {
+        let suite = "TokenMeterTests.NotificationDisabled.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let notifications = FakeNotificationAuthorizationManager()
+        let settings = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: notifications)
+        settings.lowBalanceAlerts = false
+        settings.authenticationAlerts = false
+        settings.serviceErrorAlerts = false
+
+        settings.requestNotificationsIfNeeded()
+        #expect(notifications.requestCount == 0)
     }
 
     /// 让 `requestNotificationsIfNeeded` 内的 MainActor 任务执行完（最多让出 50 次）。
@@ -554,6 +588,8 @@ private final class FakeNotificationAuthorizationManager: NotificationAuthorizat
     var requestCount = 0
     /// 非 nil 时模拟系统拒绝注册（如未签名构建返回 UNErrorDomain code 1）。
     var requestError: Error?
+    /// `getStatus` 回报的系统授权状态；未签名构建被拒后一直停留在 `.notDetermined`。
+    var status: UNAuthorizationStatus = .authorized
     func requestAuthorization(completion: @escaping @Sendable (Result<Bool, Error>) -> Void) {
         requestCount += 1
         if let requestError {
@@ -562,7 +598,7 @@ private final class FakeNotificationAuthorizationManager: NotificationAuthorizat
             completion(.success(true))
         }
     }
-    func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void) { completion(.authorized) }
+    func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void) { completion(status) }
 }
 
 @MainActor

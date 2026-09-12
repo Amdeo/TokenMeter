@@ -308,25 +308,6 @@ struct MenuBarView: View {
                     .font(.system(size: 11))
                     .padding(.bottom, 8)
             }
-            if !store.subscriptions.isEmpty,
-               store.settings.notificationStatus == .notDetermined,
-               store.settings.lowBalanceAlerts || store.settings.authenticationAlerts || store.settings.serviceErrorAlerts {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("提醒尚未获得系统授权。允许后才能接收余额与认证提醒。")
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.textSecondary)
-                    if let error = store.settings.notificationRequestError {
-                        Text(error)
-                            .font(.system(size: 11))
-                            .foregroundStyle(TM.danger)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Button("允许本地通知") { store.settings.requestNotificationsIfNeeded() }
-                        .font(.system(size: 11))
-                }
-                .padding(.bottom, 8)
-            }
-
             if store.subscriptions.isEmpty {
                 MenuBarEmptyState { openAddSubscription() }
                     .frame(

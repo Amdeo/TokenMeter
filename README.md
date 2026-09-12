@@ -67,7 +67,7 @@ xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
   -configuration Debug build CODE_SIGNING_ALLOWED=NO
 ```
 
-未签名源码构建的运行或分发可能需要你在 Xcode 中配置自己的 Team 和签名。系统通知还要求构建带有 Apple 开发者签名：macOS 拒绝为未签名（仅 linker/ad-hoc 签名）的应用注册通知，此时概览与通知设置会显示系统给出的拒绝原因。
+未签名源码构建的运行或分发可能需要你在 Xcode 中配置自己的 Team 和签名。系统通知还要求构建带有 Apple 开发者签名：macOS 拒绝为未签名（仅 linker/ad-hoc 签名）的应用注册通知。应用启动时会主动请求一次通知授权（仅在开启提醒且系统尚未决定时），被拒原因显示在设置面板中。
 
 ## 快速上手
 

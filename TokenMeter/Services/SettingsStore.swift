@@ -186,7 +186,11 @@ final class SettingsStore {
         }
         refreshLoginItemStatus()
     }
+    /// 概览面板不再提供授权入口，改由启动（`TokenMeterAppDelegate`）与打开提醒开关时调用。
+    /// 仅在系统尚未决定且至少开启一种提醒时请求，已授权、已拒绝或不需要提醒的用户不会被反复调用。
     func requestNotificationsIfNeeded() {
+        guard needsNotificationPermission,
+              lowBalanceAlerts || authenticationAlerts || serviceErrorAlerts else { return }
         notificationManager.requestAuthorization { [weak self] result in
             Task { @MainActor in
                 guard let self else { return }

@@ -6,6 +6,7 @@ All notable changes are documented here.
 
 ### Changed
 
+- Requested notification authorization once at launch instead of prompting in the overview panel, and only when alerts are enabled and the system has not decided yet; the settings panel still reports status and refusal reasons.
 - Clarified installation paths, including the published unsigned v0.1.0 archive and the distinction between that release and `main`.
 - Corrected the public clone URL and documented the Xcode 26+ source-build requirement.
 - Documented the current notification scope, Chinese-only UI, local persistence, plaintext credential storage, persistent WebKit site data, and public issue workflow.
