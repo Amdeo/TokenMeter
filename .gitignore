@@ -19,6 +19,9 @@ xcuserdata/
 .pi/skills/*
 !.pi/skills/add-relay-provider/
 !.pi/skills/add-relay-provider/SKILL.md
+.omp/skills/*
+!.omp/skills/add-relay-provider
+.pi-lens.json
 .codebase-memory/
 .context7/
 .zcode/
@@ -29,3 +32,6 @@ xcuserdata/
 # 调试会话导出（可能包含敏感信息，勿提交）
 kimi-export-session*.md
 .local/agent-work/
+
+# xcode-build-server（SourceKit 编译数据库，含本机绝对路径，每台机器自行生成）
+buildServer.json
