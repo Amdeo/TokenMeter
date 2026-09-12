@@ -42,6 +42,14 @@
 
 [v0.1.0](https://github.com/Amdeo/TokenMeter/releases/tag/v0.1.0) 提供 `TokenMeter-0.1.0-macOS.zip`。该发布包是未签名构建；请从 GitHub Release 下载、解压后按 macOS 的安全提示操作。发布版本与 `main` 分支不同：`main` 包含发布后的开发改动，适合需要从源码构建的用户。
 
+未签名构建没有 Developer ID 签名和 Apple 公证，首次打开时 macOS 会拦截：
+
+1. 解压后把 `TokenMeter.app` 拖入 `/Applications`。
+2. 在 Finder 中按住 Control 点击该应用，选择「打开」，再在弹窗中选择「打开」；或前往「系统设置 → 隐私与安全性」，在安全提示处选择「仍要打开」。
+3. 如果系统提示应用「已损坏」，先与 Release 同时发布的校验值文件比对 `shasum -a 256`；校验一致时执行 `xattr -dr com.apple.quarantine /Applications/TokenMeter.app`，然后重新打开。
+
+只从本仓库的 GitHub Release 下载构建产物。签名与公证流程见[贡献指南](CONTRIBUTING.md)。
+
 ### 从源码构建
 
 需要 macOS 14 或更高版本，以及 Xcode 26 或更高版本（项目使用 macOS 26 SDK 符号）。

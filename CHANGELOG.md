@@ -21,6 +21,7 @@ All notable changes are documented here.
 - Preserved corrupt subscription metadata, blocked configuration mutations until recovery, and exposed persistence errors with a reload action.
 - Refused to repackage an existing release version and printed the source revision at package time, so unreleased `main` content cannot be shipped under a released version number.
 - Corrected stale `PONYTAIL-DEBT.md` line references after the editor and store refactors.
+- Documented the concrete first-launch steps for the unsigned build, including quarantine removal after checksum verification.
 
 ## [v0.1.0](https://github.com/Amdeo/TokenMeter/releases/tag/v0.1.0) — 2026-09-08
 
