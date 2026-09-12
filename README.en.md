@@ -12,7 +12,7 @@
 
 ## Current capabilities
 
-- Menu-bar overview of configured accounts' usage windows, usage, or balances; add, edit, delete, and reorder subscriptions.
+- Menu-bar overview of configured accounts' usage windows, usage, or balances; add, edit, delete, and reorder subscriptions. Right-click the menu-bar icon for the add-subscription, settings, and quit menu.
 - Background refresh from 60 seconds to 30 minutes, with a two-minute default and an off switch.
 - System notifications only for low balances, failed authentication, and repeated service errors. It does **not** alert on quota exhaustion, plan expiry, or subscription renewal.
 - Settings for notification thresholds, launch at login, system/light/dark appearance, and an optional frosted-glass background in light mode.
@@ -80,8 +80,8 @@ Running or distributing an unsigned source build may require your own Xcode Team
 
 ## Get started
 
-1. Click the TokenMeter menu-bar icon to open the overview.
-2. Choose **Add subscription**, then choose a provider.
+1. Click the TokenMeter menu-bar icon to open the overview; right-click it for the menu (add subscription, settings, quit).
+2. Choose **Add subscription** from that menu, then choose a provider; the empty overview also has its own **Add subscription** button.
 3. Complete that provider's API-key, OAuth, or web-login flow.
 4. Return to the overview to see available data; adjust refresh and notification settings as needed.
 

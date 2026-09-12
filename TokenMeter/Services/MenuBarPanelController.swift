@@ -191,6 +191,7 @@ final class MenuBarPanelController: NSObject {
     private var globalMouseMonitor: Any?
     private var screenObserver: NSObjectProtocol?
     private var applicationResignObserver: NSObjectProtocol?
+    private var secondaryClickMonitor: Any?
     private var panelSize: PanelSize
     private var visibilityGate = PanelVisibilityGate()
     private var isStarted = false
@@ -221,8 +222,8 @@ final class MenuBarPanelController: NSObject {
             )
             button.imagePosition = .imageOnly
             button.target = self
-            button.action = #selector(togglePanel)
-            button.sendAction(on: [.leftMouseDown])
+            button.action = #selector(handleStatusItemClick)
+            button.sendAction(on: [.leftMouseDown, .rightMouseDown])
             button.toolTip = "TokenMeter"
             button.setAccessibilityLabel("TokenMeter")
         }
@@ -275,6 +276,8 @@ final class MenuBarPanelController: NSObject {
         localMouseMonitor = nil
         globalMouseMonitor = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        if let secondaryClickMonitor { NSEvent.removeMonitor(secondaryClickMonitor) }
+        secondaryClickMonitor = nil
         if let applicationResignObserver { NotificationCenter.default.removeObserver(applicationResignObserver) }
         screenObserver = nil
         applicationResignObserver = nil
@@ -305,6 +308,14 @@ final class MenuBarPanelController: NSObject {
 
     private func installEventHandling() {
         let mouseDownEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        // 状态栏按钮上的右击直接弹菜单：不依赖按钮 action 里对事件类型的判断，
+        // 因为不同输入设备（真右键 / control-左击 / 鼠标工具）送到的事件形态不同。
+        // 命中按钮时吞掉事件，避免按钮再走一次左键逻辑。
+        secondaryClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) { [weak self] event in
+            guard let self, self.statusButtonFrame?.contains(NSEvent.mouseLocation) == true else { return event }
+            self.presentContextMenu()
+            return nil
+        }
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseDownEvents) { [weak self] event in
             self?.hideIfClickedOutside()
             return event
@@ -330,12 +341,72 @@ final class MenuBarPanelController: NSObject {
 
     private func updatePanelSize(_ size: PanelSize) {
         panelSize = size
-        guard isStarted, panel.isVisible else { return }
+        // 不按可见性跳过：从右击菜单触发的导航发生在菜单跟踪循环里，
+        // orderFrontRegardless 会被推迟到菜单关闭后才生效，此时内容已经
+        // 报出新高度。若此时丢弃，窗口就会停在旧高度，内容上下被裁。
         applyCurrentFrame()
     }
 
     @objc private func togglePanel() {
         panel.isVisible ? hidePanel() : showPanel()
+    }
+
+    /// 左击开关面板；右击只弹菜单（先把面板收起）。
+    /// 二次点击有多种来源：真右键（rightMouseDown）、control-左击，以及
+    /// 第三方鼠标工具合成的事件；只要不是普通左击都按二次点击处理。
+    @objc private func handleStatusItemClick() {
+        let event = NSApp.currentEvent
+        let isSecondary = event?.type == .rightMouseDown
+            || event?.modifierFlags.contains(.control) == true
+        guard isSecondary else {
+            togglePanel()
+            return
+        }
+        presentContextMenu()
+    }
+
+    /// 弹出右击菜单。statusItem.menu 非空说明正处在菜单弹出期间，忽略重入。
+    private func presentContextMenu() {
+        guard let statusItem else { return }
+        guard statusItem.menu == nil else { return }
+        hidePanel()
+        statusItem.menu = contextMenu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    /// 面板不再保留底部操作行：添加订阅、设置、退出都走右击菜单。
+    private lazy var contextMenu: NSMenu = {
+        let menu = NSMenu()
+        // 图标用面板里「添加订阅」同一个 plus 符号；设置项的齿轮由系统自动加。
+        let addItem = menuItem(title: "添加订阅", action: #selector(addSubscription))
+        addItem.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
+        menu.addItem(addItem)
+        menu.addItem(menuItem(title: "设置…", action: #selector(openSettings)))
+        menu.addItem(.separator())
+        menu.addItem(menuItem(title: "退出 TokenMeter", action: #selector(quit)))
+        return menu
+    }()
+
+    private func menuItem(title: String, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    @objc private func addSubscription() {
+        navigation.beginAdding()
+        showPanel()
+    }
+
+    @objc private func openSettings() {
+        navigation.route = .settings
+        showPanel()
+    }
+
+    @objc private func quit() {
+        store.stop()
+        NSApplication.shared.terminate(nil)
     }
 
     private func showPanel() {
@@ -408,7 +479,7 @@ final class MenuBarPanelController: NSObject {
     }
 
     private func applyCurrentFrame() {
-        guard panel.isVisible, let frame = frame(for: panelSize) else { return }
+        guard let frame = frame(for: panelSize) else { return }
         guard abs(panel.frame.minX - frame.minX) > 0.5
             || abs(panel.frame.minY - frame.minY) > 0.5
             || abs(panel.frame.width - frame.width) > 0.5

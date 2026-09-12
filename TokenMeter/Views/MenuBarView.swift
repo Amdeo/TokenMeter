@@ -138,7 +138,6 @@ struct MenuBarView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onPanelSizeChange: (PanelSize) -> Void
     let onReorderModeChange: (Bool) -> Void
-    @State private var confirmQuit = false
     @State private var isReordering = false
     @State private var subscriptionRowHeights: [UUID: CGFloat] = [:]
     #if DEBUG
@@ -238,26 +237,6 @@ struct MenuBarView: View {
         }
         #endif
         .overlay {
-            if confirmQuit {
-                ConfirmDialog(
-                    title: "退出 TokenMeter？",
-                    message: "退出后将停止后台刷新。",
-                    confirmTitle: "退出 TokenMeter",
-                    onConfirm: {
-                        confirmQuit = false
-                        store.stop()
-                        DispatchQueue.main.async {
-                            NSApplication.shared.terminate(nil)
-                        }
-                    },
-                    onCancel: {
-                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { confirmQuit = false }
-                    }
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            }
-        }
-        .overlay {
             PanelWindowAppearanceBridge(appearanceMode: store.settings.appearanceMode)
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
@@ -272,12 +251,9 @@ struct MenuBarView: View {
     private var dashboardContent: some View {
         return VStack(alignment: .leading, spacing: 0) {
             DashboardHeader(
-                meta: dashboardMeta,
+                status: synchronizationStatus,
                 isRefreshing: store.isRefreshing,
                 onRefresh: { store.refreshAll(source: .manual) },
-                onSettings: {
-                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.16)) { openSettings() }
-                },
                 isReordering: isReordering,
                 onToggleReorder: store.subscriptions.count > 1 ? { toggleReordering() } : nil
             )
@@ -306,8 +282,6 @@ struct MenuBarView: View {
                 }
                 subscriptionList
             }
-
-            footer
         }
         .onChange(of: store.subscriptions.map(\.id)) { _, ids in
             let currentIDs = Set(ids)
@@ -370,8 +344,7 @@ struct MenuBarView: View {
         .padding(.vertical, 2)
     }
 
-    private func recordRowHeights(_ measured: [UUID: CGFloat]) {
-        for (id, height) in measured {
+    private func recordRowHeights(_ measured: [UUID: CGFloat]) {        for (id, height) in measured {
             guard height > 0, height.isFinite,
                   subscriptionRowHeights[id] != height,
                   store.subscriptions.contains(where: { $0.id == id }) else { continue }
@@ -410,10 +383,6 @@ struct MenuBarView: View {
         withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) { isReordering.toggle() }
     }
 
-    private var dashboardMeta: String {
-        "\(store.subscriptions.count) 个服务"
-    }
-
     private func synchronizationStatus(now: Date) -> (text: String, color: Color) {
         if store.isRefreshing { return ("同步中…", TM.accent) }
         let enabled = store.subscriptions.filter(\.isEnabled)
@@ -432,48 +401,6 @@ struct MenuBarView: View {
         return ("已同步 · \(oldest.formatted(date: .omitted, time: .shortened))", TM.ok)
     }
 
-    private var footer: some View {
-        HStack(spacing: 10) {
-                Button { openAddSubscription() } label: {
-                    Label("添加订阅", systemImage: "plus")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(TM.textPrimary)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("添加订阅")
-                .accessibilityLabel("添加订阅")
-
-                Spacer(minLength: 8)
-
-                TimelineView(.periodic(from: .now, by: 30)) { context in
-                    let status = synchronizationStatus(now: context.date)
-                    HStack(spacing: 5) {
-                        Circle().fill(status.color).frame(width: 6, height: 6)
-                        Text(status.text)
-                            .font(.system(size: 10))
-                            .foregroundStyle(TM.textTertiary)
-                            .lineLimit(1)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-
-                Button(role: .destructive) {
-                    confirmQuit = true
-                } label: {
-                    Image(systemName: "power")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(TM.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help("退出 TokenMeter")
-                .accessibilityLabel("退出 TokenMeter")
-            }
-            .padding(.top, 6)
-    }
-
     private var previewEntryAction: () -> Void {
         #if DEBUG
         return {
@@ -486,10 +413,6 @@ struct MenuBarView: View {
 }
 
 private extension MenuBarView {
-    func openSettings() {
-        navigateForward { navigation.route = .settings }
-    }
-
     func openAddSubscription() {
         navigateForward { navigation.beginAdding() }
     }
@@ -577,10 +500,10 @@ private struct ProviderSelectionCard: View {
 }
 
 private struct DashboardHeader: View {
-    let meta: String
+    /// 同步状态由时间驱动，单独用 TimelineView 包裹，避免整块面板随计时器重建。
+    let status: (Date) -> (text: String, color: Color)
     let isRefreshing: Bool
     let onRefresh: () -> Void
-    let onSettings: () -> Void
     var isReordering: Bool = false
     var onToggleReorder: (() -> Void)? = nil
 
@@ -589,12 +512,21 @@ private struct DashboardHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(meta)
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                let sync = status(context.date)
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(sync.color)
+                        .frame(width: 6, height: 6)
+                    Text(sync.text)
+                        .foregroundStyle(TM.textTertiary)
+                }
                 .font(.system(size: 11))
-                .foregroundStyle(TM.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .layoutPriority(1)
+                .accessibilityElement(children: .combine)
+            }
+            .layoutPriority(1)
 
             Spacer()
 
@@ -618,8 +550,6 @@ private struct DashboardHeader: View {
                     withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { spinning = false }
                 }
             }
-
-            HeaderIconButton(systemName: "slider.horizontal.3", label: "设置", action: onSettings)
         }
     }
 }

@@ -6,6 +6,7 @@ All notable changes are documented here.
 
 ### Changed
 
+- Moved add-subscription, settings, and quit into a right-click menu on the menu-bar icon; the overview's bottom action row is gone and the synchronization status now sits next to the service count in the header.
 - Showed Siyu API plans as daily, weekly, and monthly quota windows with reset hints instead of a single monthly row, and listed Siyu in the README provider tables.
 - Added an opt-in frosted-glass panel background for light appearance; the light panel is plain white by default.
 - Requested notification authorization once at launch instead of prompting in the overview panel, and only when alerts are enabled and the system has not decided yet; the settings panel still reports status and refusal reasons.
