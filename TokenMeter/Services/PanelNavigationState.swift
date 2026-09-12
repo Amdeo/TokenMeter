@@ -24,12 +24,11 @@ struct PanelHeightPreferenceKey: PreferenceKey {
     }
 }
 
-/// 订阅卡片行高度之和：每行背景 GeometryReader 上报本行高度，reduce 累加，
-/// 驱动列表显式高度，使面板高度仍随内容自适应，超过上限后列表内部滚动。
-struct SubscriptionListContentHeightPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value += nextValue()
+/// 订阅卡片行高度缓存，按稳定的订阅 ID 合并各个 List 行的测量结果。
+struct SubscriptionRowHeightsPreferenceKey: PreferenceKey {
+    static let defaultValue: [UUID: CGFloat] = [:]
+    static func reduce(value: inout [UUID: CGFloat], nextValue: () -> [UUID: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 

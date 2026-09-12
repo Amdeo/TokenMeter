@@ -1,19 +1,177 @@
 import AppKit
 import SwiftUI
 
+/// 排序拖拽边缘提示。完全由 AppKit 绘制：拖动期间若改 SwiftUI 状态，
+/// 会触发 List 重建并杀死正在进行的原生拖放会话。
+@MainActor
+private final class SubscriptionEdgeHintView: NSView {
+    private let iconView = NSImageView()
+    private let textLabel = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        let accent = NSColor(TM.accent)
+        layer?.cornerRadius = 10
+        layer?.cornerCurve = .continuous
+        layer?.backgroundColor = accent.withAlphaComponent(0.16).cgColor
+        layer?.borderColor = accent.withAlphaComponent(0.45).cgColor
+        layer?.borderWidth = 1
+
+        textLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        textLabel.textColor = .labelColor
+        iconView.contentTintColor = .labelColor
+
+        let stack = NSStackView(views: [iconView, textLabel])
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        isHidden = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func configure(text: String, symbol: String) {
+        textLabel.stringValue = text
+        iconView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: text)
+    }
+}
+
 @MainActor
 final class MenuBarPanel: NSPanel {
     var onCancel: (() -> Void)?
+    /// 由 MenuBarView 在切换排序模式时同步，拖动期间不回调 SwiftUI。
+    var isReordering = false
+
+    private let hintView = SubscriptionEdgeHintView()
+    private weak var dragTable: NSTableView?
+    private var dragTimer: Timer?
+    private var placedHideTimer: Timer?
+    private var pasteboardChangeCount = 0
+    private var isDraggingSubscription = false
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, event.keyCode == 53 {
+            cancelDragFeedback()
+            super.sendEvent(event)
             onCancel?()
             return
         }
+        if event.type == .leftMouseDown {
+            cancelDragFeedback()
+            if isReordering, let table = tableRow(at: event.locationInWindow) {
+                dragTable = table
+                pasteboardChangeCount = NSPasteboard(name: .drag).changeCount
+                // 原生 List 拖放跑嵌套事件循环并吞掉鼠标事件；定时器挂在
+                // eventTracking 模式，让它在拖动期间持续更新提示。
+                let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.updateDragFeedback() }
+                }
+                dragTimer = timer
+                RunLoop.main.add(timer, forMode: .common)
+                RunLoop.main.add(timer, forMode: .eventTracking)
+            }
+        }
+        if event.type == .leftMouseDragged, dragTimer != nil {
+            contentView?.autoscroll(with: event)
+        }
         super.sendEvent(event)
+        if event.type == .leftMouseUp { updateDragFeedback() }
+    }
+
+    override func orderOut(_ sender: Any?) {
+        cancelDragFeedback()
+        super.orderOut(sender)
+    }
+
+    private func updateDragFeedback() {
+        guard dragTimer != nil else { return }
+        guard isVisible, isReordering, let table = dragTable, table.window === self else {
+            cancelDragFeedback()
+            return
+        }
+        if !isDraggingSubscription,
+           NSPasteboard(name: .drag).changeCount != pasteboardChangeCount {
+            isDraggingSubscription = true
+        }
+
+        // 屏幕坐标自下而上，与 NSHostingView.isFlipped 无关。
+        let isTopHalf = NSEvent.mouseLocation.y >= frame.midY
+        if NSEvent.pressedMouseButtons & 1 == 0 {
+            let screenPoint = NSEvent.mouseLocation
+            let point = table.convert(convertPoint(fromScreen: screenPoint), from: nil)
+            let inTable = table.visibleRect.contains(point)
+            let didPlace = isDraggingSubscription && inTable
+            cancelDragFeedback()
+            guard didPlace else { return }
+            showHint(text: "已放置", symbol: "checkmark.circle.fill", atTopEdge: isTopHalf, for: table)
+            let hideTimer = Timer(timeInterval: 0.8, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated { self?.hintView.isHidden = true }
+            }
+            placedHideTimer = hideTimer
+            RunLoop.main.add(hideTimer, forMode: .common)
+            return
+        }
+
+        guard isDraggingSubscription else { return }
+        let atTop = table.visibleRect.minY <= 0.5
+        let atBottom = table.visibleRect.maxY >= table.frame.height - 0.5
+        if isTopHalf, !atTop {
+            showHint(text: "继续向上滚动", symbol: "arrow.up", atTopEdge: true, for: table)
+        } else if !isTopHalf, !atBottom {
+            showHint(text: "继续向下滚动", symbol: "arrow.down", atTopEdge: false, for: table)
+        } else {
+            hintView.isHidden = true
+        }
+    }
+
+    private func showHint(text: String, symbol: String, atTopEdge: Bool, for table: NSTableView) {
+        guard let contentView, let scrollView = table.enclosingScrollView else { return }
+        contentView.addSubview(hintView, positioned: .above, relativeTo: nil)
+        hintView.configure(text: text, symbol: symbol)
+
+        let scrollFrame = scrollView.convert(scrollView.bounds, to: nil)
+        let windowRect = CGRect(
+            x: scrollFrame.minX + 4,
+            y: atTopEdge ? scrollFrame.maxY - 38 : scrollFrame.minY + 4,
+            width: scrollFrame.width - 8,
+            height: 34
+        )
+        hintView.frame = contentView.convert(windowRect, from: nil)
+        hintView.isHidden = false
+    }
+
+    private func cancelDragFeedback() {
+        dragTimer?.invalidate()
+        dragTimer = nil
+        placedHideTimer?.invalidate()
+        placedHideTimer = nil
+        dragTable = nil
+        isDraggingSubscription = false
+        hintView.isHidden = true
+    }
+
+    private func tableRow(at windowPoint: NSPoint) -> NSTableView? {
+        guard let contentView else { return nil }
+        var view = contentView.hitTest(windowPoint)
+        while let current = view {
+            if let table = current as? NSTableView {
+                let point = table.convert(windowPoint, from: nil)
+                return table.visibleRect.contains(point) && table.row(at: point) >= 0 ? table : nil
+            }
+            view = current.superview
+        }
+        return nil
     }
 }
 
@@ -74,23 +232,33 @@ final class MenuBarPanelController: NSObject {
         }
 
         let rootView = AnyView(
-            MenuBarView(onPanelSizeChange: { [weak self] size in
-                self?.updatePanelSize(size)
-            })
+            MenuBarView(
+                onPanelSizeChange: { [weak self] size in
+                    self?.updatePanelSize(size)
+                },
+                onReorderModeChange: { [weak self] reordering in
+                    self?.panel.isReordering = reordering
+                }
+            )
             .environment(store)
             .environment(navigation)
         )
+        let container = NSView(frame: NSRect(origin: .zero, size: panel.frame.size))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.clear.cgColor
+        container.layer?.cornerRadius = 14
+        container.layer?.cornerCurve = .continuous
+        container.layer?.masksToBounds = true
+        container.autoresizingMask = [.width, .height]
+
         let hostingView = MenuBarHostingView(rootView: rootView)
         hostingView.translatesAutoresizingMaskIntoConstraints = true
         hostingView.autoresizingMask = [.width, .height]
-        hostingView.frame = NSRect(origin: .zero, size: panel.frame.size)
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-        hostingView.layer?.cornerRadius = 14
-        hostingView.layer?.cornerCurve = .continuous
-        hostingView.layer?.masksToBounds = true
-        panel.contentView = hostingView
-        hostingView.frame = panel.contentView?.bounds ?? hostingView.frame
+        panel.contentView = container
+        hostingView.frame = container.bounds
+        container.addSubview(hostingView)
         self.hostingView = hostingView
 
         installEventHandling()

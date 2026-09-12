@@ -128,47 +128,27 @@ extension View {
     }
 }
 
-/// 订阅卡片行在排序列表坐标系中的布局 frame（[id: CGRect]），
-/// 供 DragGesture 实时换位比较相邻行中线。
-private struct SubscriptionRowFramePreferenceKey: PreferenceKey {
-    static let defaultValue: [UUID: CGRect] = [:]
-    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
 
-private struct ReorderContentFramePreferenceKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
-    }
-}
-
-private struct SubscriptionListViewportHeightPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
 
 struct MenuBarView: View {
     @Environment(UsageStore.self) private var store
     @Environment(PanelNavigationState.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onPanelSizeChange: (PanelSize) -> Void
+    let onReorderModeChange: (Bool) -> Void
     @State private var confirmQuit = false
     @State private var isReordering = false
-    @State private var subscriptionListContentHeight: CGFloat = PanelLayoutMetrics.subscriptionListMaxHeight
-    @State private var subscriptionListViewportHeight: CGFloat = PanelLayoutMetrics.subscriptionListMaxHeight
-    /// 排序模式（DragGesture）状态机：拖动期间不改动 store 数组，全部视觉换位由行 offset 承担，
-    /// 消除「系统重排动画 + 手动 offset」双通道造成的抖动；松手才一次性写回 store。
-    @State private var reorder = SubscriptionReorderController()
+    @State private var subscriptionRowHeights: [UUID: CGFloat] = [:]
     #if DEBUG
     @State private var previewMode: StatusPreviewMode?
     #endif
 
-    init(onPanelSizeChange: @escaping (PanelSize) -> Void = { _ in }) {
+    init(
+        onPanelSizeChange: @escaping (PanelSize) -> Void = { _ in },
+        onReorderModeChange: @escaping (Bool) -> Void = { _ in }
+    ) {
         self.onPanelSizeChange = onPanelSizeChange
+        self.onReorderModeChange = onReorderModeChange
     }
 
     private func navigateForward(_ action: () -> Void) {
@@ -327,36 +307,15 @@ struct MenuBarView: View {
 
             footer
         }
-        .onPreferenceChange(SubscriptionListContentHeightPreferenceKey.self) { measured in
-            // 保存完整内容高度；自动模式使用固定上限，手动高度模式由父容器决定 viewport。
-            guard measured > 0 else { return }
-            let spacing = CGFloat(max(store.subscriptions.count - 1, 0)) * 8
-            subscriptionListContentHeight = measured + spacing
+        .onChange(of: store.subscriptions.map(\.id)) { _, ids in
+            let currentIDs = Set(ids)
+            guard subscriptionRowHeights.keys.contains(where: { !currentIDs.contains($0) }) else { return }
+            subscriptionRowHeights = subscriptionRowHeights.filter { currentIDs.contains($0.key) }
         }
-        .onPreferenceChange(SubscriptionListViewportHeightPreferenceKey.self) { measured in
-            guard measured > 0 else { return }
-            subscriptionListViewportHeight = measured
-        }
-        .onPreferenceChange(SubscriptionRowFramePreferenceKey.self) { frames in
-            // 让位 offset 会改变渲染 frame；拖动期间固定基准，避免几何测量和
-            // offset 互相反馈导致换位抖动。
-            if reorder.draggingID == nil {
-                reorder.frames = frames
-            } else if reorder.baseFrames.isEmpty, frames.count == store.subscriptions.count {
-                reorder.baseFrames = frames
-            }
-        }
-        .onPreferenceChange(ReorderContentFramePreferenceKey.self) { frame in
-            reorder.contentFrame = frame
-            guard reorder.draggingID != nil else { return }
-            reorder.adjustSequence(centerY: reorder.pointerY - frame.minY)
-        }
+        .onChange(of: isReordering) { _, value in onReorderModeChange(value) }
         .animation(reduceMotion ? .none : .easeOut(duration: 0.15), value: isReordering)
         .reportsIntrinsicPanelHeight(route: .overview, chrome: PanelLayoutMetrics.rootVerticalChrome)
-        .onDisappear {
-            isReordering = false
-            reorder.reset()
-        }
+        .onDisappear { isReordering = false }
     }
 
     private var reorderHint: some View {
@@ -372,100 +331,67 @@ struct MenuBarView: View {
     }
 
     private var subscriptionListIdealHeight: CGFloat {
-        min(subscriptionListContentHeight, PanelLayoutMetrics.subscriptionListMaxHeight)
+        guard !store.subscriptions.isEmpty else { return 0 }
+        var contentHeight: CGFloat = 0
+        for subscription in store.subscriptions {
+            guard let height = subscriptionRowHeights[subscription.id], height > 0, height.isFinite else {
+                return PanelLayoutMetrics.subscriptionListMaxHeight
+            }
+            contentHeight += height
+        }
+        contentHeight += CGFloat(store.subscriptions.count - 1) * 8
+        return min(contentHeight, PanelLayoutMetrics.subscriptionListMaxHeight)
     }
 
-    /// 订阅卡片列表。列表行高度由卡片内容测量驱动，超限时内部滚动；
-    /// 排序模式改用纯 DragGesture 实时换位，避免系统拖放链在瞬态面板中
-    /// 与滚动手势和布局更新互相竞争。
     private var subscriptionList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: SubscriptionReorderController.spacing) {
-                    ForEach(store.subscriptions) { subscription in
-                        subscriptionRow(for: subscription)
-                            .id(subscription.id)
-                    }
-                }
-                .coordinateSpace(name: SubscriptionReorderController.contentCoordinateSpace)
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear.preference(
-                            key: ReorderContentFramePreferenceKey.self,
-                            value: geometry.frame(in: .named(SubscriptionReorderController.viewportCoordinateSpace))
-                        )
-                    }
-                }
+        let move: ((IndexSet, Int) -> Void)? = isReordering
+            ? { source, destination in
+                store.moveSubscriptions(fromOffsets: source, toOffset: destination)
             }
-            .coordinateSpace(name: SubscriptionReorderController.viewportCoordinateSpace)
-            .scrollIndicators(.hidden)
-            .frame(
-                idealHeight: subscriptionListIdealHeight,
-                maxHeight: navigation.hasManualOverviewHeight ? .infinity : subscriptionListIdealHeight
-            )
+            : nil
+
+        return List {
+            ForEach(store.subscriptions) { subscription in
+                subscriptionRow(for: subscription)
+            }
+            .onMove(perform: move)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
+        .contentMargins(.all, 0, for: .scrollContent)
+        .frame(
+            idealHeight: subscriptionListIdealHeight,
+            maxHeight: navigation.hasManualOverviewHeight ? .infinity : subscriptionListIdealHeight
+        )
+        .padding(.vertical, 2)
+    }
+
+    private func recordRowHeights(_ measured: [UUID: CGFloat]) {
+        for (id, height) in measured {
+            guard height > 0, height.isFinite,
+                  subscriptionRowHeights[id] != height,
+                  store.subscriptions.contains(where: { $0.id == id }) else { continue }
+            subscriptionRowHeights[id] = height
+        }
+    }
+
+    private func subscriptionRow(for subscription: Subscription) -> some View {
+        subscriptionCard(for: subscription)
+            .fixedSize(horizontal: false, vertical: true)
             .background {
                 GeometryReader { geometry in
                     Color.clear.preference(
-                        key: SubscriptionListViewportHeightPreferenceKey.self,
-                        value: geometry.size.height
+                        key: SubscriptionRowHeightsPreferenceKey.self,
+                        value: [subscription.id: geometry.size.height]
                     )
                 }
             }
-            .padding(.vertical, 2)
-            .task(id: reorder.autoScrollDirection) {
-                guard reorder.autoScrollDirection != .none else { return }
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: SubscriptionReorderController.autoScrollInterval)
-                    guard !Task.isCancelled else { return }
-                    reorder.autoScrollTick &+= 1
-                }
-            }
-            .onChange(of: reorder.autoScrollTick) { _, _ in
-                reorder.advanceAutoScroll(using: proxy, viewportHeight: subscriptionListViewportHeight, reduceMotion: reduceMotion)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func subscriptionRow(for subscription: Subscription) -> some View {
-        let isDragging = reorder.draggingID == subscription.id
-        let row = subscriptionCard(for: subscription)
-            .background(GeometryReader { proxy in
-                Color.clear
-                    .preference(key: SubscriptionListContentHeightPreferenceKey.self, value: proxy.size.height)
-                    .preference(
-                        key: SubscriptionRowFramePreferenceKey.self,
-                        value: [subscription.id: proxy.frame(in: .named(SubscriptionReorderController.contentCoordinateSpace))]
-                    )
-            })
-            .zIndex(isDragging ? 1 : 0)
-
-        if isReordering {
-            let offsetRow = row
-                .offset(y: reorder.offsetY(for: subscription.id))
-                .contentShape(Rectangle())
-                // ScrollView 在 macOS 上仍可能参与纵向手势，排序手势必须优先。
-                .highPriorityGesture(reorder.dragGesture(
-                    for: subscription.id,
-                    subscriptions: store.subscriptions,
-                    viewportHeight: subscriptionListViewportHeight,
-                    onCommit: { _, sourceIndex, targetIndex in
-                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.18)) {
-                            // Array.move 的 destination 是插入点；向下移动时需跳过被移除的原槽位。
-                            let destination = targetIndex > sourceIndex ? targetIndex + 1 : targetIndex
-                            store.moveSubscriptions(fromOffsets: IndexSet(integer: sourceIndex), toOffset: destination)
-                        }
-                    }
-                ))
-                // 拖行跟手更新不动画，让位行只在序列改变时短暂缓动。
-                .animation(
-                    isDragging || reduceMotion ? nil : .easeOut(duration: 0.15),
-                    value: reorder.sequence
-                )
-            offsetRow
-        } else {
-            row
-        }
+            .padding(.bottom, subscription.id == store.subscriptions.last?.id ? 0 : 8)
+            .onPreferenceChange(SubscriptionRowHeightsPreferenceKey.self) { recordRowHeights($0) }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets())
     }
 
     private func subscriptionCard(for subscription: Subscription) -> some View {
@@ -477,18 +403,8 @@ struct MenuBarView: View {
         )
     }
 
-
     private func toggleReordering() {
-        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) {
-            if isReordering {
-                // 退出排序：store 已是最新顺序，仅复位视觉状态。
-                reorder.reset()
-            } else {
-                reorder.sequence = store.subscriptions.map(\.id)
-                reorder.baseFrames = [:]
-            }
-            isReordering.toggle()
-        }
+        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) { isReordering.toggle() }
     }
 
     private var dashboardMeta: String {

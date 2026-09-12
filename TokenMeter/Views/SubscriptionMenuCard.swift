@@ -82,9 +82,7 @@ struct SubscriptionMenuCard: View {
     }
 
     var body: some View {
-        // 排序模式下卡片不能是 Button：Button 会消费鼠标按下，行级手势
-        // （排序 DragGesture）收不到事件。此时改用非交互容器渲染卡片外观，
-        // 拖拽手势由外层行视图捕获。
+        // 排序模式使用非 Button 容器，让原生 List 接管拖放；普通模式仍点击编辑。
         Group {
             if isReordering {
                 cardContent
