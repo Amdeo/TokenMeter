@@ -25,6 +25,8 @@ enum TM {
     static let panelHorizontal: CGFloat = 18
     /// 卡片/设置行/表单行内部的统一水平内边距（对齐主页订阅卡片的 11pt）。
     static let cardContentHorizontal: CGFloat = 11
+    /// macOS `List` 会在每行两侧内建 8pt 内缩；概览页反向抵消后才能与其他页面同宽同位。
+    static let listRowHorizontalInset: CGFloat = 8
 
     static let textPrimary = adaptive(light: NSColor.tokenHex(0x1A1B1C), dark: NSColor.tokenHex(0xF4F4F1))
     static let textSecondary = adaptive(light: NSColor.tokenHex(0x5E6461), dark: NSColor.tokenHex(0x8F9391))
@@ -360,6 +362,7 @@ struct MenuBarView: View {
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
         .contentMargins(.all, 0, for: .scrollContent)
+        .padding(.horizontal, -TM.listRowHorizontalInset)
         .frame(
             idealHeight: subscriptionListIdealHeight,
             maxHeight: navigation.hasManualOverviewHeight ? .infinity : subscriptionListIdealHeight
