@@ -15,6 +15,7 @@ All notable changes are documented here.
 
 ### Fixed
 
+- Surfaced the system's reason when notification authorization is refused (unsigned builds), instead of leaving the allow-notifications button apparently inert.
 - Prevented the test host from initializing production stores, windows, or background refreshes.
 - Derived OAuth form state from authorization data rather than status-message wording and cleared stale state when switching methods.
 - Prevented cancelled refresh completions from overwriting newer state or clearing a newer refresh task.

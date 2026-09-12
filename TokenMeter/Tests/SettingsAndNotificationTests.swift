@@ -303,6 +303,34 @@ struct SettingsAndNotificationTests {
         #expect(notifications.requestCount == 1)
     }
 
+    /// 系统拒绝注册通知时必须给出原因，而不是让按钮看起来毫无反应。
+    @Test
+    func notificationRefusalSurfacesReasonAndClearsAfterSuccess() async {
+        let suite = "TokenMeterTests.NotificationRefusal.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let notifications = FakeNotificationAuthorizationManager()
+        notifications.requestError = NSError(domain: UNErrorDomain, code: 1)
+        let settings = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: notifications)
+
+        settings.requestNotificationsIfNeeded()
+        await settle { settings.notificationRequestError != nil }
+        #expect(settings.notificationRequestError?.isEmpty == false)
+
+        notifications.requestError = nil
+        settings.requestNotificationsIfNeeded()
+        await settle { settings.notificationRequestError == nil }
+        #expect(settings.notificationRequestError == nil)
+    }
+
+    /// 让 `requestNotificationsIfNeeded` 内的 MainActor 任务执行完（最多让出 50 次）。
+    private func settle(until condition: () -> Bool) async {
+        for _ in 0..<50 {
+            if condition() { return }
+            await Task.yield()
+        }
+    }
+
     @Test
     func settingsLoginItemSuccessAndFailureRollBack() {
         let suite = "TokenMeterTests.\(UUID().uuidString)"
@@ -524,7 +552,16 @@ private final class FakeLoginItemManager: LoginItemManaging, @unchecked Sendable
 
 private final class FakeNotificationAuthorizationManager: NotificationAuthorizationManaging, @unchecked Sendable {
     var requestCount = 0
-    func requestAuthorization(completion: @escaping @Sendable (Bool) -> Void) { requestCount += 1; completion(true) }
+    /// 非 nil 时模拟系统拒绝注册（如未签名构建返回 UNErrorDomain code 1）。
+    var requestError: Error?
+    func requestAuthorization(completion: @escaping @Sendable (Result<Bool, Error>) -> Void) {
+        requestCount += 1
+        if let requestError {
+            completion(.failure(requestError))
+        } else {
+            completion(.success(true))
+        }
+    }
     func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void) { completion(.authorized) }
 }
 

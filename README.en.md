@@ -67,7 +67,7 @@ xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
   -configuration Debug build CODE_SIGNING_ALLOWED=NO
 ```
 
-Running or distributing an unsigned source build may require your own Xcode Team and signing configuration.
+Running or distributing an unsigned source build may require your own Xcode Team and signing configuration. System notifications additionally require a build signed with an Apple developer certificate: macOS refuses to register an unsigned (linker/ad-hoc signed only) app for notifications, and the overview and notification settings then show the system's rejection reason.
 
 ## Get started
 

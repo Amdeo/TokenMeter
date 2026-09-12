@@ -90,6 +90,12 @@ struct SettingsPanel: View {
                                     .font(.system(size: 10))
                                     .foregroundStyle(TM.textTertiary)
                             }
+                            if let error = settings.notificationRequestError {
+                                Text(error)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(TM.danger)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }) {
                         settingsToggle("余额偏低提醒", isOn: $settings.lowBalanceAlerts)

@@ -57,13 +57,19 @@ struct SystemLoginItemManager: LoginItemManaging {
 }
 
 protocol NotificationAuthorizationManaging {
-    func requestAuthorization(completion: @escaping @Sendable (Bool) -> Void)
+    func requestAuthorization(completion: @escaping @Sendable (Result<Bool, Error>) -> Void)
     func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void)
 }
 
 struct SystemNotificationAuthorizationManager: NotificationAuthorizationManaging {
-    func requestAuthorization(completion: @escaping @Sendable (Bool) -> Void) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in completion(granted) }
+    func requestAuthorization(completion: @escaping @Sendable (Result<Bool, Error>) -> Void) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error {
+                completion(.failure(error))
+            } else {
+                completion(.success(granted))
+            }
+        }
     }
     func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void) {
         UNUserNotificationCenter.current().getNotificationSettings { settings in completion(settings.authorizationStatus) }
@@ -79,6 +85,10 @@ final class SettingsStore {
     private(set) var loginItemError: String?
     private(set) var loginItemStatus: LoginItemStatus = .notRegistered
     private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
+    /// 最近一次通知授权请求的失败原因；nil 表示没有已知失败。
+    /// 系统拒绝注册（未签名构建）时状态会一直停留在 `.notDetermined`，
+    /// 必须把原因显式暴露出来，否则界面表现为「点按钮没有任何反应」。
+    private(set) var notificationRequestError: String?
 
     private(set) var launchAtLogin: Bool
     var appearanceMode: AppearanceMode { didSet { defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode) } }
@@ -177,9 +187,28 @@ final class SettingsStore {
         refreshLoginItemStatus()
     }
     func requestNotificationsIfNeeded() {
-        notificationManager.requestAuthorization { [weak self] _ in
-            Task { @MainActor in self?.updateNotificationStatus() }
+        notificationManager.requestAuthorization { [weak self] result in
+            Task { @MainActor in
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.notificationRequestError = nil
+                case .failure(let error):
+                    self.notificationRequestError = Self.notificationRequestErrorMessage(error)
+                }
+                self.updateNotificationStatus()
+            }
         }
+    }
+
+    /// 把系统拒绝翻译成可操作的中文说明。
+    /// `UNErrorDomain` code 1 表示系统不允许该进程注册通知（未签名或缺少通知签名 entitlement）。
+    private static func notificationRequestErrorMessage(_ error: Error) -> String {
+        let error = error as NSError
+        if error.domain == UNErrorDomain, error.code == 1 {
+            return "系统拒绝注册通知：当前构建没有 Apple 开发者签名，macOS 不允许它发送通知。"
+        }
+        return "请求通知权限失败：\(error.localizedDescription)"
     }
 
     func updateNotificationStatus() {

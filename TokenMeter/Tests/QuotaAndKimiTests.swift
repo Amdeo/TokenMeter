@@ -907,7 +907,7 @@ private final class QuotaColorLoginItemManager: LoginItemManaging, @unchecked Se
 }
 
 private final class QuotaColorNotificationManager: NotificationAuthorizationManaging, @unchecked Sendable {
-    func requestAuthorization(completion: @escaping @Sendable (Bool) -> Void) { completion(true) }
+    func requestAuthorization(completion: @escaping @Sendable (Result<Bool, Error>) -> Void) { completion(.success(true)) }
     func getStatus(completion: @escaping @Sendable (UNAuthorizationStatus) -> Void) { completion(.authorized) }
 }
 

@@ -315,6 +315,12 @@ struct MenuBarView: View {
                     Text("提醒尚未获得系统授权。允许后才能接收余额与认证提醒。")
                         .font(.system(size: 11))
                         .foregroundStyle(TM.textSecondary)
+                    if let error = store.settings.notificationRequestError {
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Button("允许本地通知") { store.settings.requestNotificationsIfNeeded() }
                         .font(.system(size: 11))
                 }
