@@ -618,25 +618,51 @@ struct SiyuTests {
     }
 
     @Test
-    func siyuDemoSnapshotShowsBalanceAndPlans() {
+    func siyuDemoSnapshotShowsBalanceAndWindows() {
         let definition = ProviderRegistry.definition(for: .siyu)!
         let subscription = Subscription(providerID: .siyu, name: "Siyu API")
         let snapshot = definition.makeDemoSnapshot(for: subscription, now: .now)
         #expect(snapshot.state == .realtime)
         #expect(snapshot.quotas.contains { $0.kind == .balance })
-        #expect(snapshot.quotas.filter { $0.kind == .generic }.count == 2)
+        // 两个订阅 × 每日/每周/每月 三个窗口 = 6 个通用额度行。
+        #expect(snapshot.quotas.filter { $0.kind == .generic }.count == 6)
+        let groups = SiyuCardRenderer.planGroups(snapshot.quotas.filter { $0.kind == .generic })
+        #expect(groups.map(\.name) == ["DeepSeek大月卡", "DeepSeek月卡"])
+        #expect(groups.allSatisfy { $0.windows.count == 3 })
+        #expect(groups.first?.windows.map { SiyuCardRenderer.windowTitle(from: $0.name) } == ["每日", "每周", "每月"])
     }
 
     // MARK: - 过期订阅排除
 
-    private func makeItem(status: String, expiresAt: String?, monthUsage: Double = 2472, limit: Double = 35000) -> SubscriptionsResponse.Item {
-        let json = SubscriptionsResponse.Item(
+    private func makeItem(
+        status: String,
+        expiresAt: String?,
+        dailyUsage: Double = 0,
+        weeklyUsage: Double = 0,
+        monthlyUsage: Double = 2472,
+        dailyLimit: Double = 0,
+        weeklyLimit: Double = 0,
+        monthlyLimit: Double = 35000,
+        dailyWindowStart: String? = nil,
+        weeklyWindowStart: String? = nil,
+        monthlyWindowStart: String? = nil
+    ) -> SubscriptionsResponse.Item {
+        SubscriptionsResponse.Item(
             status: status,
-            monthlyUsageUSD: monthUsage,
+            dailyUsageUSD: dailyUsage,
+            weeklyUsageUSD: weeklyUsage,
+            monthlyUsageUSD: monthlyUsage,
+            dailyWindowStart: dailyWindowStart,
+            weeklyWindowStart: weeklyWindowStart,
+            monthlyWindowStart: monthlyWindowStart,
             expiresAt: expiresAt,
-            group: SubscriptionsResponse.Item.Group(name: "DeepSeek大月卡", monthlyLimitUSD: limit)
+            group: SubscriptionsResponse.Item.Group(
+                name: "DeepSeek大月卡",
+                dailyLimitUSD: dailyLimit,
+                weeklyLimitUSD: weeklyLimit,
+                monthlyLimitUSD: monthlyLimit
+            )
         )
-        return json
     }
 
     @Test
@@ -658,6 +684,51 @@ struct SiyuTests {
         #expect(active.first?.expiresAt == future)
         #expect(active.first?.name == "DeepSeek大月卡")
         _ = past
+    }
+
+    @Test
+    func siyuParsesDailyWeeklyMonthlyWindowsAndResetTimes() throws {
+        // 对齐线上 /subscriptions/active 响应：三个窗口各自带用量、限额与窗口起点。
+        let json = """
+        {"code":0,"message":"success","data":[{"id":1470,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","daily_usage_usd":383,"weekly_usage_usd":2565,"monthly_usage_usd":2565,"daily_window_start":"2026-09-12T00:00:00+08:00","weekly_window_start":"2026-09-07T16:39:08.699592+08:00","monthly_window_start":"2026-09-07T16:39:08.699592+08:00","group":{"id":17,"name":"DeepSeek大月卡","status":"active","daily_limit_usd":2000,"weekly_limit_usd":10000,"monthly_limit_usd":35000}}]}
+        """
+        let response = try JSONDecoder().decode(SubscriptionsResponse.self, from: Data(json.utf8))
+        let active = try #require(SiyuUsageProvider.activeSubscriptions(response.data ?? [], now: .now).first)
+
+        #expect(active.name == "DeepSeek大月卡")
+        #expect(active.windows.map(\.title) == ["每日", "每周", "每月"])
+        #expect(active.windows.map(\.used) == [383, 2565, 2565])
+        #expect(active.windows.map(\.limit) == [2000, 10000, 35000])
+
+        // 重置时刻 = 窗口起点 + 1d/7d/30d。
+        let dailyStart = try #require(SiyuDate.parse("2026-09-12T00:00:00+08:00"))
+        let weeklyStart = try #require(SiyuDate.parse("2026-09-07T16:39:08.699592+08:00"))
+        #expect(active.windows[0].resetAt == dailyStart.addingTimeInterval(86_400))
+        #expect(active.windows[1].resetAt == weeklyStart.addingTimeInterval(7 * 86_400))
+        #expect(active.windows[2].resetAt == weeklyStart.addingTimeInterval(30 * 86_400))
+    }
+
+    @Test
+    func siyuWindowQuotaNamesGroupByPlanInRenderer() {
+        let subscription = Subscription(providerID: .siyu, name: "Siyu API")
+        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            SiyuUsageProvider.windowQuotas(name: "DeepSeek大月卡", windows: [
+                .daily(used: 370, limit: 2000, windowStart: nil),
+                .weekly(used: 2552, limit: 10000, windowStart: nil),
+                .monthly(used: 2552, limit: 35000, windowStart: nil),
+            ], expiresAt: .now),
+            SiyuUsageProvider.windowQuotas(name: "DeepSeek月卡", windows: [
+                .daily(used: 0, limit: 1000, windowStart: nil),
+                .weekly(used: 691, limit: 5000, windowStart: nil),
+                .monthly(used: 12055, limit: 17500, windowStart: nil),
+            ], expiresAt: .now),
+        ].flatMap { $0 })
+
+        let groups = SiyuCardRenderer.planGroups(snapshot.quotas)
+        #expect(groups.map(\.name) == ["DeepSeek大月卡", "DeepSeek月卡"])
+        #expect(groups.allSatisfy { $0.windows.count == 3 })
+        #expect(SiyuCardRenderer.windowTitle(from: "DeepSeek大月卡 · 每周") == "每周")
+        #expect(SiyuCardRenderer.planName(from: "DeepSeek大月卡 · 每周") == "DeepSeek大月卡")
     }
 
     @Test
