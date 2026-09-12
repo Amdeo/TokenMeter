@@ -42,16 +42,49 @@ struct ProviderRegistryTests {
     }
 
     @Test
-    func unknownProviderResolvesToNilAndUnsupportedDefinitionRenders() {
+    func unknownProviderResolvesToNilAndUnsupportedDefinitionRenders() async {
         let unknown = ProviderID(rawValue: "nonexistent")
         #expect(ProviderRegistry.definition(for: unknown) == nil)
         let definition = UnsupportedProviderDefinition(providerID: unknown)
         #expect(definition.metadata.displayName == "nonexistent")
-        let snapshot = definition.makeDemoSnapshot(
-            for: Subscription(providerID: unknown, name: "x"),
-            now: .now
-        )
-        #expect(snapshot.state == .unsupported)
+        // 未知供应商刷新时抛 unsupported，不崩溃也不误报网络错误。
+        let provider = definition.makeUsageProvider(for: Subscription(providerID: unknown, name: "x"))
+        do {
+            _ = try await provider.fetchUsage()
+            Issue.record("未知供应商应抛 unsupported")
+        } catch UsageProviderError.unsupported(let providerID) {
+            #expect(providerID == unknown)
+        } catch {
+            Issue.record("错误的分类：\(error)")
+        }
+    }
+
+    /// 卡片分组只看额度行自带的 group 元数据（显示名可能重复，不能当身份）。
+    @Test
+    func siyuCardGroupsWindowsByPlanGroup() {
+        func window(_ key: String, _ title: String, _ name: String) -> Quota {
+            Quota(
+                name: "\(title) · \(name)",
+                used: 10, limit: 100, resetAt: nil,
+                kind: .generic,
+                group: .init(key: key, title: title)
+            )
+        }
+        let quotas = [
+            window("plan.1", "DeepSeek大月卡", "每日"),
+            window("plan.1", "DeepSeek大月卡", "每周"),
+            window("plan.1", "DeepSeek大月卡", "每月"),
+            window("plan.2", "DeepSeek月卡", "每日"),
+            window("plan.2", "DeepSeek月卡", "每周"),
+            window("plan.2", "DeepSeek月卡", "每月"),
+        ]
+
+        let groups = SiyuCardRenderer.planGroups(quotas)
+
+        #expect(groups.compactMap(\.title) == ["DeepSeek大月卡", "DeepSeek月卡"])
+        #expect(groups.map(\.key) == ["plan.1", "plan.2"])
+        #expect(groups.allSatisfy { $0.windows.count == 3 })
+        #expect(groups.first?.windows.map(SiyuCardRenderer.rowTitle) == ["每日", "每周", "每月"])
     }
 
     @Test
@@ -63,15 +96,6 @@ struct ProviderRegistryTests {
         }
     }
 
-    @Test
-    func demoSnapshotsAreRealtimeAndCarryProviderID() {
-        for definition in ProviderRegistry.all {
-            let subscription = Subscription(providerID: definition.id, name: "demo")
-            let snapshot = definition.makeDemoSnapshot(for: subscription, now: .now)
-            #expect(snapshot.state == .realtime)
-            #expect(snapshot.providerID == definition.id)
-        }
-    }
 }
 
 // MARK: - 旧数据迁移
@@ -414,15 +438,6 @@ struct CCBusTests {
         #expect(definition?.authMethods.first?.flowID == .browserSession)
     }
 
-    @Test
-    func ccbusDemoSnapshotIsBalanceQuota() {
-        let definition = ProviderRegistry.definition(for: .ccbus)!
-        let subscription = Subscription(providerID: .ccbus, name: "CCBus")
-        let snapshot = definition.makeDemoSnapshot(for: subscription, now: .now)
-        #expect(snapshot.state == .realtime)
-        #expect(snapshot.quotas.first?.kind == .balance)
-        #expect(snapshot.quotas.first?.unit.isCurrency == true)
-    }
 }
 
 // MARK: - APIKEY.FUN 集成
@@ -438,15 +453,6 @@ struct APIKeyFunTests {
         #expect(definition?.authMethods.first?.flowID == .browserSession)
     }
 
-    @Test
-    func apikeyFunDemoSnapshotIsBalanceQuota() {
-        let definition = ProviderRegistry.definition(for: .apikeyFun)!
-        let subscription = Subscription(providerID: .apikeyFun, name: "APIKEY.FUN")
-        let snapshot = definition.makeDemoSnapshot(for: subscription, now: .now)
-        #expect(snapshot.state == .realtime)
-        #expect(snapshot.quotas.first?.kind == .balance)
-        #expect(snapshot.quotas.first?.unit.isCurrency == true)
-    }
 }
 
 // MARK: - NowCoding 集成
@@ -519,16 +525,6 @@ struct NowCodingTests {
         #expect(store.browserCredential(for: id)?.accessToken == "a")
     }
 
-    @Test
-    func nowcodingDemoSnapshotShowsBalanceAndPlans() {
-        let definition = ProviderRegistry.definition(for: .nowCoding)!
-        let subscription = Subscription(providerID: .nowCoding, name: "NowCoding")
-        let snapshot = definition.makeDemoSnapshot(for: subscription, now: .now)
-        #expect(snapshot.state == .realtime)
-        #expect(snapshot.quotas.contains { $0.kind == .balance })
-        #expect(snapshot.quotas.filter { $0.kind == .generic }.count == 2)
-    }
-
 }
 
 // MARK: - Siyu API 集成
@@ -542,22 +538,6 @@ struct SiyuTests {
         #expect(definition?.metadata.displayName == "Siyu API")
         #expect(definition?.authMethods.map(\.id.rawValue) == ["siyu-browser-session"])
         #expect(definition?.authMethods.first?.flowID == .browserSession)
-    }
-
-    @Test
-    func siyuDemoSnapshotShowsBalanceAndWindows() {
-        let definition = ProviderRegistry.definition(for: .siyu)!
-        let subscription = Subscription(providerID: .siyu, name: "Siyu API")
-        let snapshot = definition.makeDemoSnapshot(for: subscription, now: .now)
-        #expect(snapshot.state == .realtime)
-        #expect(snapshot.quotas.contains { $0.kind == .balance })
-        // 两个订阅 × 每日/每周/每月 三个窗口 = 6 个通用额度行。
-        #expect(snapshot.quotas.filter { $0.kind == .generic }.count == 6)
-        let groups = SiyuCardRenderer.planGroups(snapshot.quotas.filter { $0.kind == .generic })
-        #expect(groups.compactMap(\.title) == ["DeepSeek大月卡", "DeepSeek月卡"])
-        #expect(groups.map(\.key) == ["demo.1", "demo.2"])
-        #expect(groups.allSatisfy { $0.windows.count == 3 })
-        #expect(groups.first?.windows.map(SiyuCardRenderer.rowTitle) == ["每日", "每周", "每月"])
     }
 
     // MARK: - 过期订阅排除

@@ -29,12 +29,6 @@ struct ZhipuProviderDefinition: ProviderDefinition {
         ZhipuUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(name: "GLM-4 Token", used: 7_800_000, limit: 10_000_000, resetAt: now.addingTimeInterval(5 * 86_400)),
-            Quota(name: "今日调用次数", used: 42, limit: 100, resetAt: now.addingTimeInterval(12 * 3_600))
-        ])
-    }
 }
 
 // MARK: - 用量提供者

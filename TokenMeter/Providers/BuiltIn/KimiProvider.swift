@@ -34,16 +34,6 @@ struct KimiProviderDefinition: ProviderDefinition {
         KimiUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(
-            subscription: subscription,
-            quotas: [
-                Quota(name: "5 小时额度", used: 320_000, limit: 1_000_000, resetAt: now.addingTimeInterval(2 * 3_600), kind: .fiveHour),
-                Quota(name: "每周额度", used: 1_200_000, limit: 2_000_000, resetAt: now.addingTimeInterval(5 * 86_400), kind: .weekly)
-            ],
-            overallUsageRatio: 0.41
-        )
-    }
 }
 
 // MARK: - 用量提供者

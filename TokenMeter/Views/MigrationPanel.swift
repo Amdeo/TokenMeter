@@ -234,7 +234,7 @@ struct MigrationPanel: View {
         Task { @MainActor in
             defer { isWorking = false }
             do {
-                let data = try await store.exportMigrationPackageAsync(password: password)
+                let data = try await store.exportMigrationPackage(password: password)
                 try data.write(to: url, options: .atomic)
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
                 let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
@@ -257,7 +257,7 @@ struct MigrationPanel: View {
         Task { @MainActor in
             defer { isWorking = false }
             do {
-                plan = try await store.prepareMigrationImportAsync(data: packageData, password: password)
+                plan = try await store.prepareMigrationImport(data: packageData, password: password)
                 mode = .review
             } catch is CancellationError {
                 return

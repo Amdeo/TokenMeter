@@ -116,3 +116,39 @@ extension QuotaStatus {
         }
     }
 }
+
+// MARK: - 卡片顶部摘要
+
+extension CardSummary {
+    /// 用量百分比摘要（顶部锚点）：颜色沿配置解析链回退到状态色。
+    @MainActor
+    static func usage(_ quota: Quota, subscription: Subscription) -> CardSummary {
+        let percent = quota.fraction.formatted(.percent.precision(.fractionLength(0)))
+        return CardSummary(
+            label: "\(quota.name) · 已用",
+            value: percent,
+            accessibilityLabel: "\(quota.name)，已用 \(percent)",
+            colorRGB: anchorColor(for: quota, subscription: subscription)
+        )
+    }
+
+    /// 余额摘要：数值用剩余金额，颜色解析规则与用量摘要一致。
+    @MainActor
+    static func balance(_ quota: Quota, subscription: Subscription) -> CardSummary {
+        CardSummary(
+            label: "余额",
+            value: quota.remainingText,
+            accessibilityLabel: "可用余额 \(quota.remainingText)",
+            colorRGB: anchorColor(for: quota, subscription: subscription)
+        )
+    }
+
+    /// 有用户配置时用配置色，否则回退额度状态色。
+    @MainActor
+    private static func anchorColor(for quota: Quota, subscription: Subscription) -> UInt32 {
+        let color = SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: quota.name, kind: quota.kind)
+            ? SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
+            : quota.status.tint
+        return color.tokenMeterRGB
+    }
+}

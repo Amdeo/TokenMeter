@@ -35,44 +35,6 @@ struct SiyuProviderDefinition: ProviderDefinition {
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         SiyuUsageProvider(subscription: subscription)
     }
-
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        let balance = Quota(
-            name: "可用余额",
-            used: 0,
-            limit: 19.39,
-            resetAt: nil,
-            unit: .currency(code: SiyuSite.currencyCode, scale: 1),
-            kind: .balance
-        )
-        // 每个订阅展示 每日/每周/每月 三个窗口；重置时间按窗口起点 + 1d/7d/30d 演示。
-        let sub1 = SiyuUsageProvider.windowQuotas(
-            key: "demo.1",
-            title: "DeepSeek大月卡",
-            windows: [
-                .daily(used: 370, limit: 2000, windowStart: Self.iso(now.addingTimeInterval(-20 * 3600))),
-                .weekly(used: 2552, limit: 10000, windowStart: Self.iso(now.addingTimeInterval(-5 * 86400 - 4 * 3600))),
-                .monthly(used: 2552, limit: 35000, windowStart: Self.iso(now.addingTimeInterval(-5 * 86400 - 4 * 3600))),
-            ].compactMap { $0 },
-            expiresAt: now.addingTimeInterval(25 * 86400)
-        )
-        let sub2 = SiyuUsageProvider.windowQuotas(
-            key: "demo.2",
-            title: "DeepSeek月卡",
-            windows: [
-                .daily(used: 0, limit: 1000, windowStart: nil),
-                .weekly(used: 691, limit: 5000, windowStart: Self.iso(now.addingTimeInterval(-4 * 86400 - 2 * 3600))),
-                .monthly(used: 12055, limit: 17500, windowStart: Self.iso(now.addingTimeInterval(-5 * 3600))),
-            ].compactMap { $0 },
-            expiresAt: now.addingTimeInterval(3 * 86400)
-        )
-        return .realtime(subscription: subscription, quotas: [balance] + sub1 + sub2)
-    }
-
-    /// 演示用 ISO8601 时间字符串（窗口起点）。
-    private static func iso(_ date: Date) -> String {
-        ISO8601DateFormatter().string(from: date)
-    }
 }
 
 // MARK: - 站点常量

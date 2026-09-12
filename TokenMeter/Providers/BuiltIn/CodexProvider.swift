@@ -27,12 +27,6 @@ struct CodexProviderDefinition: ProviderDefinition {
         CodexUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(name: "5 小时额度", used: 35, limit: 100, resetAt: now.addingTimeInterval(3_600), kind: .fiveHour),
-            Quota(name: "7 天额度", used: 62, limit: 100, resetAt: now.addingTimeInterval(3 * 86_400), kind: .weekly)
-        ])
-    }
 }
 
 struct CodexUsageProvider: UsageProvider {

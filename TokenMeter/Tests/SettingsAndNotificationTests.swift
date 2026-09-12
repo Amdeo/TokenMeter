@@ -10,8 +10,9 @@ private func freshPanelNavigationState() -> PanelNavigationState {
     return PanelNavigationState(defaults: defaults)
 }
 
+/// 面板与站点的小工具策略：显示去重、站点数据域匹配。
 @MainActor
-struct SettingsAndNotificationTests {
+struct PanelAndSitePolicyTests {
     @Test
     func browserSessionSiteDataMatchesExactDomainAndSubdomainsOnly() {
         #expect(BrowserSessionSiteData.matches(domain: "kimi.com", recordDisplayName: "kimi.com"))
@@ -34,7 +35,10 @@ struct SettingsAndNotificationTests {
         #expect(!duplicateDisplay)
         #expect(secondDisplay)
     }
+}
 
+@MainActor
+struct SettingsAndNotificationTests {
     @Test
     func reportedAdaptiveHeightClampsToPanelBounds() {
         let navigation = freshPanelNavigationState()
@@ -48,15 +52,15 @@ struct SettingsAndNotificationTests {
     @Test
     func newManualCredentialRequiresAPIKey() {
         let draft = SubscriptionEditorDraft(providerID: .deepSeek)
-        #expect(!SubscriptionCredentialRequirement.canSave(
-            original: nil,
+        #expect(!AuthFlowRegistry.canSave(
+            originalAuthMethodID: nil,
             selected: .apiKey,
             flowID: .apiKey,
             draft: draft
         ))
         draft.apiKey = "replacement-key"
-        #expect(SubscriptionCredentialRequirement.canSave(
-            original: nil,
+        #expect(AuthFlowRegistry.canSave(
+            originalAuthMethodID: nil,
             selected: .apiKey,
             flowID: .apiKey,
             draft: draft
@@ -66,22 +70,22 @@ struct SettingsAndNotificationTests {
     @Test
     func editingAuthenticationMethodRequiresNewMatchingCredential() {
         let draft = SubscriptionEditorDraft(providerID: .deepSeek)
-        #expect(SubscriptionCredentialRequirement.canSave(
-            original: .apiKey,
+        #expect(AuthFlowRegistry.canSave(
+            originalAuthMethodID: .apiKey,
             selected: .apiKey,
             flowID: .apiKey,
             draft: draft
         ))
         draft.authMethodID = .kimiDeviceOAuth
-        #expect(!SubscriptionCredentialRequirement.canSave(
-            original: .apiKey,
+        #expect(!AuthFlowRegistry.canSave(
+            originalAuthMethodID: .apiKey,
             selected: .kimiDeviceOAuth,
             flowID: .deviceOAuth,
             draft: draft
         ))
         draft.oauthCredential = OAuthCredential(accessToken: "oauth", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
-        #expect(SubscriptionCredentialRequirement.canSave(
-            original: .apiKey,
+        #expect(AuthFlowRegistry.canSave(
+            originalAuthMethodID: .apiKey,
             selected: .kimiDeviceOAuth,
             flowID: .deviceOAuth,
             draft: draft
@@ -89,16 +93,16 @@ struct SettingsAndNotificationTests {
         draft.authMethodID = .kimiBrowserSession
         draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
         draft.browserImportTask = Task {}
-        #expect(!SubscriptionCredentialRequirement.canSave(
-            original: .apiKey,
+        #expect(!AuthFlowRegistry.canSave(
+            originalAuthMethodID: .apiKey,
             selected: .kimiBrowserSession,
             flowID: .browserSession,
             draft: draft
         ))
         draft.cancelTasks()
         draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
-        #expect(SubscriptionCredentialRequirement.canSave(
-            original: .apiKey,
+        #expect(AuthFlowRegistry.canSave(
+            originalAuthMethodID: .apiKey,
             selected: .kimiBrowserSession,
             flowID: .browserSession,
             draft: draft
@@ -115,8 +119,8 @@ struct SettingsAndNotificationTests {
         draft.oauthCodeAuthorizeURL = URL(string: "https://claude.ai/oauth/authorize")!
         draft.oauthStatus = "授权页面已打开"
         #expect(draft.oauthCodeAuthorizationState == .awaitingCallback)
-        #expect(!SubscriptionCredentialRequirement.canSave(
-            original: nil,
+        #expect(!AuthFlowRegistry.canSave(
+            originalAuthMethodID: nil,
             selected: .claudeOAuth,
             flowID: .oauthCode,
             draft: draft
@@ -402,7 +406,7 @@ struct SettingsAndNotificationTests {
     @Test
     func authenticationRequiredIsCodableAndDistinctFromNotConfigured() throws {
         let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
-        let snapshot = UsageSnapshot(subscriptionID: subscription.id, providerID: .kimi, quotas: [], updatedAt: .now, isDemo: false, errorMessage: "expired", state: .authenticationRequired)
+        let snapshot = UsageSnapshot(subscriptionID: subscription.id, providerID: .kimi, quotas: [], updatedAt: .now, errorMessage: "expired", state: .authenticationRequired)
         let decoded = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
         #expect(decoded.state == .authenticationRequired)
         #expect(decoded.state != .notConfigured)
@@ -462,7 +466,7 @@ struct AlertEvaluationTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let evaluator = AlertEvaluator(defaults: defaults)
         let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiDeviceOAuth)
-        let expired = UsageSnapshot(subscriptionID: subscription.id, providerID: .kimi, quotas: [], updatedAt: .now, isDemo: false, errorMessage: "expired", state: .authenticationRequired)
+        let expired = UsageSnapshot(subscriptionID: subscription.id, providerID: .kimi, quotas: [], updatedAt: .now, errorMessage: "expired", state: .authenticationRequired)
         let realtime = UsageSnapshot.realtime(subscription: subscription, quotas: [])
         #expect(evaluator.evaluate(previous: nil, current: expired, subscription: subscription, source: .background, settings: AlertSettings()).count == 1)
         #expect(evaluator.evaluate(previous: expired, current: expired, subscription: subscription, source: .background, settings: AlertSettings()).isEmpty)

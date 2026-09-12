@@ -491,7 +491,6 @@ extension QuotaAndKimiTests {
             providerID: .kimi,
             quotas: [],
             updatedAt: .now,
-            isDemo: false,
             errorMessage: nil,
             state: state
         )
@@ -523,7 +522,6 @@ extension QuotaAndKimiTests {
             providerID: .kimi,
             quotas: [],
             updatedAt: .now,
-            isDemo: false,
             errorMessage: nil,
             state: state
         )
@@ -549,7 +547,6 @@ extension QuotaAndKimiTests {
             providerID: .zhipu,
             quotas: [Quota(name: "5 小时额度", used: 90, limit: 100, resetAt: nil, kind: .fiveHour)],
             updatedAt: .now,
-            isDemo: false,
             errorMessage: "上游附带错误",
             state: .realtime
         )
@@ -952,6 +949,6 @@ private struct GateUsageProvider: UsageProvider {
     let gate: RefreshGate
 
     func fetchUsage() async throws -> UsageSnapshot {
-        UsageSnapshot(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: .now, isDemo: false, errorMessage: await gate.fetch(), state: .realtime)
+        UsageSnapshot(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: .now, errorMessage: await gate.fetch(), state: .realtime)
     }
 }

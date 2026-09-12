@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - 供应商定义
 
-/// 单个供应商的完整定义：元数据、认证方式、用量提供者工厂、Demo 快照与卡片渲染器。
+/// 单个供应商的完整定义：元数据、认证方式、用量提供者工厂与卡片渲染器。
 /// 新增供应商时实现本协议并注册到 `ProviderRegistry.all`。
 @MainActor
 protocol ProviderDefinition: Identifiable {
@@ -11,7 +11,6 @@ protocol ProviderDefinition: Identifiable {
     var authMethods: [AuthMethodDefinition] { get }
     var cardRenderer: any ProviderCardRenderer { get }
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot
 }
 
 // MARK: - 卡片摘要

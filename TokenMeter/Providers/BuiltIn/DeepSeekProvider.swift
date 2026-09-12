@@ -30,11 +30,6 @@ struct DeepSeekProviderDefinition: ProviderDefinition {
         DeepSeekUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(name: "可用余额", used: 0, limit: 28.40, resetAt: nil, unit: .currency(code: "USD", scale: 1), kind: .balance)
-        ])
-    }
 }
 
 // MARK: - 用量提供者

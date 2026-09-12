@@ -16,8 +16,6 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
     let tintRGB: UInt32
     let homepageURL: URL
     let authMethod: AuthMethodDefinition
-    /// Demo 快照展示的余额。
-    let demoBalance: Double
 
     var metadata: ProviderMetadata {
         ProviderMetadata(
@@ -40,18 +38,6 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
         RelayBalanceUsageProvider(subscription: subscription, site: site)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(
-                name: "可用余额",
-                used: 0,
-                limit: demoBalance,
-                resetAt: nil,
-                unit: .currency(code: "USD", scale: 1),
-                kind: .balance
-            )
-        ])
-    }
 }
 
 extension RelayBalanceProviderDefinition {
@@ -70,8 +56,7 @@ extension RelayBalanceProviderDefinition {
             systemImage: "globe",
             tintRGB: 0x2DD4BF,
             detail: "登录 CCBus 账号（内置）"
-        ),
-        demoBalance: 23.22
+        )
     )
 
     static let apiKeyFun = RelayBalanceProviderDefinition(
@@ -89,8 +74,7 @@ extension RelayBalanceProviderDefinition {
             systemImage: "globe",
             tintRGB: 0x6E6CF0,
             detail: "登录 APIKEY.FUN 账号（内置）"
-        ),
-        demoBalance: 18.14
+        )
     )
 }
 

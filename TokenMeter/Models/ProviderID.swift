@@ -85,6 +85,13 @@ enum AuthFlowID: String, Codable, Sendable {
     case oauthCode
 }
 
+/// 设备授权（RFC 8628）：用户在浏览器里输入 userCode 完成确认。
+struct DeviceOAuthAuthorization: Sendable {
+    let userCode: String
+    let verificationURL: URL
+    let expiresAt: Date
+}
+
 /// 供应商支持的认证方式定义（编辑页选项 + 表单驱动）。
 struct AuthMethodDefinition: Identifiable, Sendable {
     let id: AuthMethodID

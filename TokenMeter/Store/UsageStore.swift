@@ -98,11 +98,8 @@ final class UsageStore {
         CredentialMigrationService(metadataURL: metadataURL, credentialStore: credentials)
     }
 
-    func exportMigrationPackage(password: String) throws -> Data {
-        try migrationService.exportPackage(subscriptions: subscriptions, password: password)
-    }
-
-    func exportMigrationPackageAsync(password: String) async throws -> Data {
+    /// 导出迁移包。加解密在后台执行：PBKDF2 迭代开销不能让主线程卡住。
+    func exportMigrationPackage(password: String) async throws -> Data {
         let service = migrationService
         let subscriptions = subscriptions
         return try await Task.detached(priority: .userInitiated) {
@@ -110,16 +107,8 @@ final class UsageStore {
         }.value
     }
 
-    func prepareMigrationImport(data: Data, password: String) throws -> MigrationImportPlan {
-        let payload = try migrationService.decryptPackage(data, password: password)
-        return migrationService.makeImportPlan(
-            payload: payload,
-            localSubscriptions: subscriptions,
-            localCredentials: try credentials.snapshot()
-        )
-    }
-
-    func prepareMigrationImportAsync(data: Data, password: String) async throws -> MigrationImportPlan {
+    /// 解密并生成导入方案（同样在后台执行）。
+    func prepareMigrationImport(data: Data, password: String) async throws -> MigrationImportPlan {
         let service = migrationService
         let subscriptions = subscriptions
         let localCredentials = try credentials.snapshot()
@@ -260,6 +249,61 @@ final class UsageStore {
         cancelActiveRefresh()
     }
 
+    private var canMutateSubscriptions: Bool {
+        guard !migrationInProgress else { return false }
+        guard !subscriptionsLoadFailed else {
+            lastPersistenceError = "订阅配置文件无法读取，已阻止修改以保留原文件。"
+            return false
+        }
+        return true
+    }
+
+    /// Explicitly retry after repairing or replacing the metadata file.
+    func retryLoadingSubscriptions() {
+        guard !migrationInProgress else { return }
+        loadSubscriptions()
+    }
+
+    private func loadSubscriptions() {
+        guard FileManager.default.fileExists(atPath: metadataURL.path) else {
+            subscriptionsLoadFailed = false
+            lastPersistenceError = nil
+            return
+        }
+        do {
+            let data = try Data(contentsOf: metadataURL)
+            subscriptions = try decoder.decode([Subscription].self, from: data)
+            subscriptionsLoadFailed = false
+            lastPersistenceError = nil
+        } catch {
+            subscriptionsLoadFailed = true
+            lastPersistenceError = "订阅配置文件无法读取，原文件已保留。"
+            UsageStoreLogger.logger.error("subscriptions metadata load failed error=\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func saveSubscriptions() {
+        guard !subscriptionsLoadFailed else {
+            lastPersistenceError = "订阅配置文件无法读取，已阻止覆盖原文件。"
+            return
+        }
+        do {
+            let directory = metadataURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try encoder.encode(subscriptions).write(to: metadataURL, options: .atomic)
+            lastPersistenceError = nil
+        } catch {
+            lastPersistenceError = error.localizedDescription
+            UsageStoreLogger.logger.error("subscriptions metadata write failed error=\(error.localizedDescription, privacy: .public)")
+        }
+    }
+}
+
+// MARK: - 刷新执行
+
+/// 刷新任务的启动/取消、单订阅执行与错误折叠单独放扩展里，避免主类型体过长
+/// （`private` 在文件内可见，行为不变）。
+extension UsageStore {
     /// 以 store 自持任务的方式启动一段刷新：任务句柄被保存，
     /// 删除订阅或切换认证方式时可通过 `cancelActiveRefresh` 取消，
     /// 阻止网络返回后把快照或凭证写回已失效的订阅。
@@ -341,7 +385,7 @@ final class UsageStore {
                 UsageSnapshot(
                     subscriptionID: subscription.id,
                     providerID: subscription.providerID,
-                    quotas: [], updatedAt: .now, isDemo: false,
+                    quotas: [], updatedAt: .now,
                     errorMessage: error.localizedDescription,
                     state: .notConfigured
                 ),
@@ -353,7 +397,7 @@ final class UsageStore {
                 UsageSnapshot(
                     subscriptionID: subscription.id,
                     providerID: subscription.providerID,
-                    quotas: [], updatedAt: .now, isDemo: false,
+                    quotas: [], updatedAt: .now,
                     errorMessage: error.localizedDescription,
                     state: .authenticationRequired
                 ),
@@ -369,21 +413,6 @@ final class UsageStore {
     }
 
     private func isRefreshCurrent(_ refreshID: UUID) -> Bool { activeRefreshID == refreshID }
-
-    private var canMutateSubscriptions: Bool {
-        guard !migrationInProgress else { return false }
-        guard !subscriptionsLoadFailed else {
-            lastPersistenceError = "订阅配置文件无法读取，已阻止修改以保留原文件。"
-            return false
-        }
-        return true
-    }
-
-    /// Explicitly retry after repairing or replacing the metadata file.
-    func retryLoadingSubscriptions() {
-        guard !migrationInProgress else { return }
-        loadSubscriptions()
-    }
 
     /// 订阅已被删除时，清除刷新期间可能被 Provider 重新写回的凭证。
     /// 仅对「订阅已不存在」做清理；编辑（订阅仍在）场景由取消机制保护，
@@ -407,40 +436,6 @@ final class UsageStore {
         case UsageProviderError.notConfigured: return "notConfigured"
         case UsageProviderError.unsupported: return "unsupported"
         default: return "other"
-        }
-    }
-
-    private func loadSubscriptions() {
-        guard FileManager.default.fileExists(atPath: metadataURL.path) else {
-            subscriptionsLoadFailed = false
-            lastPersistenceError = nil
-            return
-        }
-        do {
-            let data = try Data(contentsOf: metadataURL)
-            subscriptions = try decoder.decode([Subscription].self, from: data)
-            subscriptionsLoadFailed = false
-            lastPersistenceError = nil
-        } catch {
-            subscriptionsLoadFailed = true
-            lastPersistenceError = "订阅配置文件无法读取，原文件已保留。"
-            UsageStoreLogger.logger.error("subscriptions metadata load failed error=\(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func saveSubscriptions() {
-        guard !subscriptionsLoadFailed else {
-            lastPersistenceError = "订阅配置文件无法读取，已阻止覆盖原文件。"
-            return
-        }
-        do {
-            let directory = metadataURL.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try encoder.encode(subscriptions).write(to: metadataURL, options: .atomic)
-            lastPersistenceError = nil
-        } catch {
-            lastPersistenceError = error.localizedDescription
-            UsageStoreLogger.logger.error("subscriptions metadata write failed error=\(error.localizedDescription, privacy: .public)")
         }
     }
 }

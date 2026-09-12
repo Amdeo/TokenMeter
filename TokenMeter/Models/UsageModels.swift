@@ -170,7 +170,6 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
     let providerID: ProviderID
     let quotas: [Quota]
     let updatedAt: Date
-    let isDemo: Bool
     let errorMessage: String?
     let state: UsageState
     let overallUsageRatio: Double?
@@ -183,7 +182,6 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         providerID: ProviderID,
         quotas: [Quota],
         updatedAt: Date,
-        isDemo: Bool,
         errorMessage: String?,
         state: UsageState,
         overallUsageRatio: Double? = nil,
@@ -194,7 +192,6 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         self.providerID = providerID
         self.quotas = quotas
         self.updatedAt = updatedAt
-        self.isDemo = isDemo
         self.errorMessage = errorMessage
         self.state = state
         self.overallUsageRatio = overallUsageRatio
@@ -202,7 +199,7 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, subscriptionID, quotas, updatedAt, isDemo, errorMessage, state, overallUsageRatio
+        case id, subscriptionID, quotas, updatedAt, errorMessage, state, overallUsageRatio
         case providerID
         case providerData
         case platform
@@ -220,7 +217,6 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         }
         quotas = try container.decode([Quota].self, forKey: .quotas)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
-        isDemo = try container.decode(Bool.self, forKey: .isDemo)
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
         state = try container.decode(UsageState.self, forKey: .state)
         overallUsageRatio = try container.decodeIfPresent(Double.self, forKey: .overallUsageRatio)
@@ -234,7 +230,6 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         try container.encode(providerID, forKey: .providerID)
         try container.encode(quotas, forKey: .quotas)
         try container.encode(updatedAt, forKey: .updatedAt)
-        try container.encode(isDemo, forKey: .isDemo)
         try container.encode(errorMessage, forKey: .errorMessage)
         try container.encode(state, forKey: .state)
         try container.encode(overallUsageRatio, forKey: .overallUsageRatio)
@@ -259,7 +254,6 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
             providerID: subscription.providerID,
             quotas: quotas,
             updatedAt: updatedAt,
-            isDemo: false,
             errorMessage: nil,
             state: .realtime,
             overallUsageRatio: overallUsageRatio,
@@ -268,11 +262,11 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
     }
 
     static func failure(subscription: Subscription, message: String, updatedAt: Date = .now) -> Self {
-        .init(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: updatedAt, isDemo: false, errorMessage: message, state: .error)
+        .init(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: updatedAt, errorMessage: message, state: .error)
     }
 
     static func unsupported(subscription: Subscription, message: String, updatedAt: Date = .now) -> Self {
-        .init(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: updatedAt, isDemo: false, errorMessage: message, state: .unsupported)
+        .init(subscriptionID: subscription.id, providerID: subscription.providerID, quotas: [], updatedAt: updatedAt, errorMessage: message, state: .unsupported)
     }
 }
 

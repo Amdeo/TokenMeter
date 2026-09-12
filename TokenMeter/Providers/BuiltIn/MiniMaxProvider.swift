@@ -29,12 +29,6 @@ struct MiniMaxProviderDefinition: ProviderDefinition {
         MiniMaxUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(name: "MiniMax Token", used: 340_000, limit: 1_000_000, resetAt: now.addingTimeInterval(15 * 86_400)),
-            Quota(name: "视频生成点数", used: 65, limit: 100, resetAt: now.addingTimeInterval(10 * 86_400))
-        ])
-    }
 }
 
 // MARK: - 用量提供者

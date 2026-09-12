@@ -36,15 +36,7 @@ struct NowCodingCardRenderer: ProviderCardRenderer {
 
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary? {
         guard let balance = snapshot.quotas.first(where: { $0.kind == .balance }) else { return nil }
-        let color = SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: balance.name, kind: balance.kind)
-            ? SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: balance)
-            : balance.status.tint
-        return CardSummary(
-            label: "余额",
-            value: balance.remainingText,
-            accessibilityLabel: "可用余额 \(balance.remainingText)",
-            colorRGB: color.tokenMeterRGB
-        )
+        return .balance(balance, subscription: subscription)
     }
 
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus {

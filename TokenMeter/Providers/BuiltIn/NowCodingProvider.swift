@@ -36,35 +36,6 @@ struct NowCodingProviderDefinition: ProviderDefinition {
         NowCodingUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        let balance = Quota(
-            name: "可用余额",
-            used: 0,
-            limit: 19.39,
-            resetAt: nil,
-            unit: .currency(code: "CNY", scale: 1),
-            kind: .balance
-        )
-        let sub1 = Quota(
-            name: "Codex 月卡 1500$",
-            used: 10.58,
-            limit: 50,
-            resetAt: now.addingTimeInterval(8 * 3600),
-            expiresAt: now.addingTimeInterval(26 * 86400),
-            unit: .currency(code: "CNY", scale: 1),
-            kind: .generic
-        )
-        let sub2 = Quota(
-            name: "Codex 月卡 900$",
-            used: 29.97,
-            limit: 30,
-            resetAt: now.addingTimeInterval(8 * 3600),
-            expiresAt: now.addingTimeInterval(20 * 86400),
-            unit: .currency(code: "CNY", scale: 1),
-            kind: .generic
-        )
-        return .realtime(subscription: subscription, quotas: [balance, sub1, sub2])
-    }
 }
 
 // MARK: - 站点常量

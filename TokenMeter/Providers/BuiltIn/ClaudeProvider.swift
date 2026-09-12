@@ -34,12 +34,6 @@ struct ClaudeProviderDefinition: ProviderDefinition {
         ClaudeUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(name: "5 小时额度", used: 24, limit: 100, resetAt: now.addingTimeInterval(2 * 3_600), kind: .fiveHour),
-            Quota(name: "每周额度", used: 61, limit: 100, resetAt: now.addingTimeInterval(4 * 86_400), kind: .weekly)
-        ])
-    }
 }
 
 struct ClaudeUsageProvider: UsageProvider {

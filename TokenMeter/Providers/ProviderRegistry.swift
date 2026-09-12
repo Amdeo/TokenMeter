@@ -102,9 +102,6 @@ struct UnsupportedProviderDefinition: ProviderDefinition {
         UnsupportedUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .unsupported(subscription: subscription, message: "未知供应商")
-    }
 }
 
 /// 始终抛出 unsupported 的占位 provider（未知供应商刷新时不会崩溃）。

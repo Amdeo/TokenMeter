@@ -351,7 +351,6 @@ struct StatusPreviewOverlay: View {
             providerID: .kimi,
             quotas: [],
             updatedAt: .now,
-            isDemo: false,
             errorMessage: "OAuth 令牌已过期",
             state: .authenticationRequired
         )

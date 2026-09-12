@@ -1,24 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// 凭据保存校验：委托给 AuthFlowRegistry 按 flowID 判断。
-@MainActor
-enum SubscriptionCredentialRequirement {
-    static func canSave(
-        original: AuthMethodID?,
-        selected: AuthMethodID,
-        flowID: AuthFlowID,
-        draft: SubscriptionEditorDraft
-    ) -> Bool {
-        AuthFlowRegistry.canSave(
-            originalAuthMethodID: original,
-            selected: selected,
-            flowID: flowID,
-            draft: draft
-        )
-    }
-}
-
 struct SubscriptionEditorSheet: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openURL) private var openURL
@@ -160,8 +142,8 @@ struct SubscriptionEditorSheet: View {
     }
 
     private var canSave: Bool {
-        SubscriptionCredentialRequirement.canSave(
-            original: subscription?.authMethodID,
+        AuthFlowRegistry.canSave(
+            originalAuthMethodID: subscription?.authMethodID,
             selected: draft.authMethodID,
             flowID: authFlowID,
             draft: draft
@@ -191,53 +173,44 @@ struct SubscriptionEditorSheet: View {
         } catch { draft.message = error.localizedDescription }
     }
 
+    /// 依次写入认证方式、名称与颜色；任一步落盘失败就停在原地并提示，不继续往下写。
     private func saveEditing(_ subscription: Subscription) {
         guard canSave else { draft.message = "切换认证方式后，请先提供对应的新凭证。"; return }
         do {
             store.invalidateRefresh(for: subscription)
             try saveCredential(for: subscription.id)
-            var updated = subscription
-            if subscription.authMethodID != draft.authMethodID {
-                store.updateAuthMethod(subscription, to: draft.authMethodID)
-                guard let persistenceError = store.lastPersistenceError else {
-                    updated.authMethodID = draft.authMethodID
-                    return saveEditingDetails(updated, original: subscription)
-                }
+        } catch {
+            draft.message = error.localizedDescription
+            return
+        }
+
+        var updated = subscription
+        if subscription.authMethodID != draft.authMethodID {
+            store.updateAuthMethod(subscription, to: draft.authMethodID)
+            if let persistenceError = store.lastPersistenceError {
                 draft.message = persistenceError
                 return
             }
-            saveEditingDetails(updated, original: subscription)
-        } catch { draft.message = error.localizedDescription }
-    }
-
-    private func saveEditingDetails(_ subscription: Subscription, original: Subscription) {
-        var updated = subscription
-        let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !name.isEmpty, name != original.name {
-            store.rename(original, to: name)
-            guard let persistenceError = store.lastPersistenceError else {
-                updated.name = name
-                return saveEditingQuotaColors(updated, original: original)
-            }
-            draft.message = persistenceError
-            return
+            updated.authMethodID = draft.authMethodID
         }
-        saveEditingQuotaColors(updated, original: original)
-    }
-
-    private func saveEditingQuotaColors(_ subscription: Subscription, original: Subscription) {
-        var updated = subscription
-        if draft.quotaColors != original.quotaColors {
-            store.updateQuotaColors(draft.quotaColors, for: original)
-            guard let persistenceError = store.lastPersistenceError else {
-                updated.quotaColors = draft.quotaColors
-                onClose()
-                store.refresh(updated)
+        let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty, name != subscription.name {
+            store.rename(subscription, to: name)
+            if let persistenceError = store.lastPersistenceError {
+                draft.message = persistenceError
                 return
             }
-            draft.message = persistenceError
-            return
+            updated.name = name
         }
+        if draft.quotaColors != subscription.quotaColors {
+            store.updateQuotaColors(draft.quotaColors, for: subscription)
+            if let persistenceError = store.lastPersistenceError {
+                draft.message = persistenceError
+                return
+            }
+            updated.quotaColors = draft.quotaColors
+        }
+
         onClose()
         store.refresh(updated)
     }
@@ -255,7 +228,7 @@ struct SubscriptionEditorSheet: View {
         resetOAuthState(); let sessionID = draft.oauthSessionID; draft.oauthStatus = "正在请求设备授权…"; draft.message = nil
         draft.oauthTask = Task { @MainActor in
             do {
-                let credential = try await DeviceOAuthService.authorize(
+                let credential = try await Self.deviceOAuthCredential(
                     providerID: draft.providerID,
                     authMethodID: draft.authMethodID
                 ) { device in
@@ -360,6 +333,23 @@ struct SubscriptionEditorSheet: View {
         case .nowCoding: EmbeddedWebLoginController(configuration: .nowCoding)
         case .siyu: EmbeddedWebLoginController(configuration: .siyu)
         default: EmbeddedWebLoginController(configuration: .kimi)
+        }
+    }
+
+    /// 设备授权按 (供应商, 认证方式) 配对分发；其余组合视为未配置。
+    @MainActor
+    private static func deviceOAuthCredential(
+        providerID: ProviderID,
+        authMethodID: AuthMethodID,
+        onDeviceAuthorization: @escaping @Sendable (DeviceOAuthAuthorization) async -> Void
+    ) async throws -> OAuthCredential {
+        switch (providerID, authMethodID) {
+        case (.kimi, .kimiDeviceOAuth):
+            return try await KimiOAuthService().authorize(onDeviceAuthorization: onDeviceAuthorization)
+        case (.codex, .codexDeviceOAuth):
+            return try await CodexOAuthService().authorize(onDeviceAuthorization: onDeviceAuthorization)
+        default:
+            throw UsageProviderError.notConfigured(providerID)
         }
     }
 

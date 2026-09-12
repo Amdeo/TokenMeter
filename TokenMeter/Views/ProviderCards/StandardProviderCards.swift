@@ -177,16 +177,7 @@ struct QuotaListCardRenderer: ProviderCardRenderer {
         } else {
             quota = snapshot.quotas[0]
         }
-        let percent = quota.fraction.formatted(.percent.precision(.fractionLength(0)))
-        let color = SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: quota.name, kind: quota.kind)
-            ? SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
-            : quota.status.tint
-        return CardSummary(
-            label: "\(quota.name) · 已用",
-            value: percent,
-            accessibilityLabel: "\(quota.name)，已用 \(percent)",
-            colorRGB: color.tokenMeterRGB
-        )
+        return .usage(quota, subscription: subscription)
     }
 
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus {

@@ -104,7 +104,7 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 └──────────────────────────────────────────┘
 ```
 
-确认/改选后按选择生成 3.1 中的 `cardRenderer` 与 `makeDemoSnapshot`。
+确认/改选后按选择生成 3.2/3.3 中的 `cardRenderer`。
 混合卡需额外：探测订阅接口（如 `/api/subscription/self`）的字段
 （`amount_total`/`amount_used`/`end_time`/`next_reset_time`/`plan_title`），
 并把订阅映射为 `Quota` 行（`kind: .generic`，`resetAt` 填日重置、`expiresAt` 填到期日）。
@@ -209,8 +209,7 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
             systemImage: "globe",
             tintRGB: <0xRRGGBB>,
             detail: "登录 <显示名> 账号（内置）"
-        ),
-        demoBalance: 10.00
+        )
     )
 ```
 
@@ -223,7 +222,6 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
   `cardRenderer` 按 0.5 的确认结果选：余额卡 → `BalanceCardRenderer()`；
   额度列表卡 → `QuotaListCardRenderer(anchorHint: 可选)`；
   混合卡 → 自定义 renderer（见 `Views/ProviderCards/NowCodingCardRenderer.swift`）。
-- `makeDemoSnapshot` 照抄现有实现，金额用演示值。
 
 ```swift
 struct <Name>UsageProvider: UsageProvider {

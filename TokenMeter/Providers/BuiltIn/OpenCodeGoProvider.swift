@@ -29,12 +29,6 @@ struct OpenCodeGoProviderDefinition: ProviderDefinition {
         OpenCodeGoUsageProvider(subscription: subscription)
     }
 
-    func makeDemoSnapshot(for subscription: Subscription, now: Date) -> UsageSnapshot {
-        .realtime(subscription: subscription, quotas: [
-            Quota(name: "订阅 Token", used: 9_300_000, limit: 10_000_000, resetAt: now.addingTimeInterval(2 * 86_400)),
-            Quota(name: "本周请求", used: 180, limit: 500, resetAt: now.addingTimeInterval(4 * 86_400))
-        ])
-    }
 }
 
 // MARK: - 用量提供者

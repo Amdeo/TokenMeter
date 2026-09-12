@@ -56,7 +56,7 @@ struct KimiCardRenderer: ProviderCardRenderer {
             )
         }
         if let quota = snapshot.quotas.first(where: { $0.kind == .fiveHour || $0.kind == .weekly }) {
-            return Self.quotaSummary(quota, colors: subscription.quotaColors)
+            return .usage(quota, subscription: subscription)
         }
         return nil
     }
@@ -66,18 +66,5 @@ struct KimiCardRenderer: ProviderCardRenderer {
         return snapshot.quotas.contains { coreKinds.contains($0.kind) }
             ? snapshot.status(for: coreKinds)
             : snapshot.status(for: [.balance])
-    }
-
-    private static func quotaSummary(_ quota: Quota, colors: [String: UInt32]) -> CardSummary {
-        let percent = quota.fraction.formatted(.percent.precision(.fractionLength(0)))
-        let color = SubscriptionQuotaColors.hasConfiguration(colors, name: quota.name, kind: quota.kind)
-            ? SubscriptionQuotaColors.resolve(colors, quota: quota)
-            : quota.status.tint
-        return CardSummary(
-            label: "\(quota.name) · 已用",
-            value: percent,
-            accessibilityLabel: "\(quota.name)，已用 \(percent)",
-            colorRGB: color.tokenMeterRGB
-        )
     }
 }
