@@ -18,6 +18,7 @@ All notable changes are documented here.
 
 ### Fixed
 
+- Grouped Siyu API plan windows by an explicit key instead of the displayed plan name, so two plans with the same name (or no name) stay separate sections, and omitted windows the API does not cap instead of rendering them as exhausted `$0.00 / $0.00` rows.
 - Surfaced the system's reason when notification authorization is refused (unsigned builds), instead of leaving the allow-notifications button apparently inert.
 - Prevented the test host from initializing production stores, windows, or background refreshes.
 - Derived OAuth form state from authorization data rather than status-message wording and cleared stale state when switching methods.

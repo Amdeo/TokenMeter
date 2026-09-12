@@ -47,21 +47,23 @@ struct SiyuProviderDefinition: ProviderDefinition {
         )
         // 每个订阅展示 每日/每周/每月 三个窗口；重置时间按窗口起点 + 1d/7d/30d 演示。
         let sub1 = SiyuUsageProvider.windowQuotas(
-            name: "DeepSeek大月卡",
+            key: "demo.1",
+            title: "DeepSeek大月卡",
             windows: [
                 .daily(used: 370, limit: 2000, windowStart: Self.iso(now.addingTimeInterval(-20 * 3600))),
                 .weekly(used: 2552, limit: 10000, windowStart: Self.iso(now.addingTimeInterval(-5 * 86400 - 4 * 3600))),
                 .monthly(used: 2552, limit: 35000, windowStart: Self.iso(now.addingTimeInterval(-5 * 86400 - 4 * 3600))),
-            ],
+            ].compactMap { $0 },
             expiresAt: now.addingTimeInterval(25 * 86400)
         )
         let sub2 = SiyuUsageProvider.windowQuotas(
-            name: "DeepSeek月卡",
+            key: "demo.2",
+            title: "DeepSeek月卡",
             windows: [
                 .daily(used: 0, limit: 1000, windowStart: nil),
                 .weekly(used: 691, limit: 5000, windowStart: Self.iso(now.addingTimeInterval(-4 * 86400 - 2 * 3600))),
                 .monthly(used: 12055, limit: 17500, windowStart: Self.iso(now.addingTimeInterval(-5 * 3600))),
-            ],
+            ].compactMap { $0 },
             expiresAt: now.addingTimeInterval(3 * 86400)
         )
         return .realtime(subscription: subscription, quotas: [balance] + sub1 + sub2)
@@ -137,7 +139,8 @@ struct SiyuUsageProvider: UsageProvider {
         }
         for item in SiyuUsageProvider.activeSubscriptions(subscriptions.data ?? [], now: .now) {
             quotas.append(contentsOf: Self.windowQuotas(
-                name: item.name,
+                key: item.key,
+                title: item.name,
                 windows: item.windows,
                 expiresAt: item.expiresAt
             ))
@@ -148,46 +151,57 @@ struct SiyuUsageProvider: UsageProvider {
         return .realtime(subscription: subscription, quotas: quotas)
     }
 
-    /// 把订阅的三个额度窗口转换为带供应商命名约定的额度行。
-    /// 名称形如 "DeepSeek大月卡 · 每日"，供 `SiyuCardRenderer` 按 " · " 分组还原订阅段落。
-    static func windowQuotas(name: String, windows: [UsageWindow], expiresAt: Date?) -> [Quota] {
+    /// 把套餐的额度窗口转换为额度行。
+    /// 显示名形如 "DeepSeek大月卡 · 每日"（配色与编辑页按名称取键），
+    /// 分组靠独立的 `key`/`title` 元数据，卡片不再解析名称字符串。
+    static func windowQuotas(key: String, title: String, windows: [UsageWindow], expiresAt: Date?) -> [Quota] {
         windows.map { window in
             Quota(
-                name: "\(name) · \(window.title)",
+                name: "\(title) · \(window.title)",
                 used: window.used,
                 limit: window.limit,
                 resetAt: window.resetAt,
                 expiresAt: expiresAt,
                 unit: .currency(code: SiyuSite.currencyCode, scale: 1),
-                kind: .generic
+                kind: .generic,
+                group: .init(key: key, title: title)
             )
         }
     }
 
     /// 有效订阅的展示信息：换算与标题清洗后的安全值。
     struct ActiveSubscription: Sendable, Equatable {
+        /// 分组键：同一条订阅的窗口共用，卡片按它归组（显示名可能重复，不能当身份）。
+        let key: String
         let name: String
         let expiresAt: Date
         let windows: [UsageWindow]
     }
 
     /// 单个额度窗口（每日/每周/每月）。
+    /// 服务端没给该窗口上限时 `nil`：没有上限就没有可展示的进度，
+    /// 否则会被当成 0 上限、在卡片里显示成「已用尽」。
     struct UsageWindow: Sendable, Equatable {
         let title: String
         let used: Double
         let limit: Double
         let resetAt: Date?
 
-        static func daily(used: Double, limit: Double, windowStart: String?) -> UsageWindow {
-            UsageWindow(title: "每日", used: used, limit: limit, resetAt: resetAfter(windowStart: windowStart, days: 1))
+        static func daily(used: Double, limit: Double?, windowStart: String?) -> UsageWindow? {
+            make(title: "每日", used: used, limit: limit, windowStart: windowStart, days: 1)
         }
 
-        static func weekly(used: Double, limit: Double, windowStart: String?) -> UsageWindow {
-            UsageWindow(title: "每周", used: used, limit: limit, resetAt: resetAfter(windowStart: windowStart, days: 7))
+        static func weekly(used: Double, limit: Double?, windowStart: String?) -> UsageWindow? {
+            make(title: "每周", used: used, limit: limit, windowStart: windowStart, days: 7)
         }
 
-        static func monthly(used: Double, limit: Double, windowStart: String?) -> UsageWindow {
-            UsageWindow(title: "每月", used: used, limit: limit, resetAt: resetAfter(windowStart: windowStart, days: 30))
+        static func monthly(used: Double, limit: Double?, windowStart: String?) -> UsageWindow? {
+            make(title: "每月", used: used, limit: limit, windowStart: windowStart, days: 30)
+        }
+
+        private static func make(title: String, used: Double, limit: Double?, windowStart: String?, days: Int) -> UsageWindow? {
+            guard let limit, limit > 0 else { return nil }
+            return UsageWindow(title: title, used: used, limit: limit, resetAt: resetAfter(windowStart: windowStart, days: days))
         }
 
         /// 窗口起点 + N 天即下次重置时刻；无窗口起点（等待首次使用）时不显示重置提示。
@@ -199,21 +213,25 @@ struct SiyuUsageProvider: UsageProvider {
 
     /// 过滤活动订阅：status == "active" 且到期时间在未来。
     /// 服务端 `/subscriptions/active` 已过滤，这里作为本地双保险，排除过期的订阅数据。
+    /// 只保留服务端给出上限的窗口；一条订阅若没有任何上限，就没有可展示的进度行，整体省略。
     static func activeSubscriptions(_ items: [SubscriptionsResponse.Item], now: Date) -> [ActiveSubscription] {
-        items.compactMap { item in
+        items.enumerated().compactMap { index, item in
             guard item.status == "active",
                   let raw = item.expiresAt,
                   let expiresAt = SiyuDate.parse(raw),
                   expiresAt > now else { return nil }
             let group = item.group
+            let windows = [
+                UsageWindow.daily(used: item.dailyUsageUSD ?? 0, limit: group?.dailyLimitUSD, windowStart: item.dailyWindowStart),
+                UsageWindow.weekly(used: item.weeklyUsageUSD ?? 0, limit: group?.weeklyLimitUSD, windowStart: item.weeklyWindowStart),
+                UsageWindow.monthly(used: item.monthlyUsageUSD ?? 0, limit: group?.monthlyLimitUSD, windowStart: item.monthlyWindowStart),
+            ].compactMap { $0 }
+            guard !windows.isEmpty else { return nil }
             return ActiveSubscription(
+                key: "siyu.plan.\(index)",
                 name: group?.name ?? "订阅",
                 expiresAt: expiresAt,
-                windows: [
-                    .daily(used: item.dailyUsageUSD ?? 0, limit: group?.dailyLimitUSD ?? 0, windowStart: item.dailyWindowStart),
-                    .weekly(used: item.weeklyUsageUSD ?? 0, limit: group?.weeklyLimitUSD ?? 0, windowStart: item.weeklyWindowStart),
-                    .monthly(used: item.monthlyUsageUSD ?? 0, limit: group?.monthlyLimitUSD ?? 0, windowStart: item.monthlyWindowStart),
-                ]
+                windows: windows
             )
         }
     }

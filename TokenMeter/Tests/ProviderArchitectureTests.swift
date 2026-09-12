@@ -627,9 +627,10 @@ struct SiyuTests {
         // 两个订阅 × 每日/每周/每月 三个窗口 = 6 个通用额度行。
         #expect(snapshot.quotas.filter { $0.kind == .generic }.count == 6)
         let groups = SiyuCardRenderer.planGroups(snapshot.quotas.filter { $0.kind == .generic })
-        #expect(groups.map(\.name) == ["DeepSeek大月卡", "DeepSeek月卡"])
+        #expect(groups.compactMap(\.title) == ["DeepSeek大月卡", "DeepSeek月卡"])
+        #expect(groups.map(\.key) == ["demo.1", "demo.2"])
         #expect(groups.allSatisfy { $0.windows.count == 3 })
-        #expect(groups.first?.windows.map { SiyuCardRenderer.windowTitle(from: $0.name) } == ["每日", "每周", "每月"])
+        #expect(groups.first?.windows.map(SiyuCardRenderer.rowTitle) == ["每日", "每周", "每月"])
     }
 
     // MARK: - 过期订阅排除
@@ -709,26 +710,66 @@ struct SiyuTests {
     }
 
     @Test
-    func siyuWindowQuotaNamesGroupByPlanInRenderer() {
+    func siyuWindowQuotasGroupByPlanKey() {
         let subscription = Subscription(providerID: .siyu, name: "Siyu API")
+        let windows = [
+            SiyuUsageProvider.UsageWindow.daily(used: 370, limit: 2000, windowStart: nil),
+            SiyuUsageProvider.UsageWindow.weekly(used: 2552, limit: 10000, windowStart: nil),
+            SiyuUsageProvider.UsageWindow.monthly(used: 2552, limit: 35000, windowStart: nil),
+        ].compactMap { $0 }
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
-            SiyuUsageProvider.windowQuotas(name: "DeepSeek大月卡", windows: [
-                .daily(used: 370, limit: 2000, windowStart: nil),
-                .weekly(used: 2552, limit: 10000, windowStart: nil),
-                .monthly(used: 2552, limit: 35000, windowStart: nil),
-            ], expiresAt: .now),
-            SiyuUsageProvider.windowQuotas(name: "DeepSeek月卡", windows: [
-                .daily(used: 0, limit: 1000, windowStart: nil),
-                .weekly(used: 691, limit: 5000, windowStart: nil),
-                .monthly(used: 12055, limit: 17500, windowStart: nil),
-            ], expiresAt: .now),
+            SiyuUsageProvider.windowQuotas(key: "plan-1", title: "DeepSeek大月卡", windows: windows, expiresAt: .now),
+            SiyuUsageProvider.windowQuotas(key: "plan-2", title: "DeepSeek月卡", windows: windows, expiresAt: .now),
         ].flatMap { $0 })
 
         let groups = SiyuCardRenderer.planGroups(snapshot.quotas)
-        #expect(groups.map(\.name) == ["DeepSeek大月卡", "DeepSeek月卡"])
+        #expect(groups.map(\.key) == ["plan-1", "plan-2"])
+        #expect(groups.compactMap(\.title) == ["DeepSeek大月卡", "DeepSeek月卡"])
         #expect(groups.allSatisfy { $0.windows.count == 3 })
-        #expect(SiyuCardRenderer.windowTitle(from: "DeepSeek大月卡 · 每周") == "每周")
-        #expect(SiyuCardRenderer.planName(from: "DeepSeek大月卡 · 每周") == "DeepSeek大月卡")
+        #expect(SiyuCardRenderer.rowTitle(groups[1].windows[1]) == "每周")
+    }
+
+    /// 服务端没给套餐名时两条订阅都用兜底名「订阅」：
+    /// 分组必须靠 provider 给出的分组键，名字相同也要分成两个段落。
+    @Test
+    func siyuPlansWithSameDisplayNameStaySeparateGroups() throws {
+        let json = """
+        {"code":0,"message":"success","data":[\
+        {"id":1,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","monthly_usage_usd":10,"group":{"monthly_limit_usd":100}},\
+        {"id":2,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","monthly_usage_usd":20,"group":{"monthly_limit_usd":200}}]}
+        """
+        let response = try JSONDecoder().decode(SubscriptionsResponse.self, from: Data(json.utf8))
+        let quotas = SiyuUsageProvider.activeSubscriptions(response.data ?? [], now: .now)
+            .flatMap { SiyuUsageProvider.windowQuotas(key: $0.key, title: $0.name, windows: $0.windows, expiresAt: $0.expiresAt) }
+
+        let groups = SiyuCardRenderer.planGroups(quotas)
+        #expect(groups.count == 2)
+        #expect(groups.compactMap(\.title) == ["订阅", "订阅"])
+        #expect(groups.map { $0.windows.first?.limit } == [100, 200])
+    }
+
+    /// 服务端只给了月限额：没有上限的窗口没有可展示的进度，不能渲染成 0 上限的「已用尽」行。
+    @Test
+    func siyuOmitsWindowsWithoutLimits() throws {
+        let json = """
+        {"code":0,"message":"success","data":[{"id":1470,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","daily_usage_usd":383,"weekly_usage_usd":2565,"monthly_usage_usd":2565,"group":{"id":17,"name":"DeepSeek大月卡","status":"active","monthly_limit_usd":35000}}]}
+        """
+        let response = try JSONDecoder().decode(SubscriptionsResponse.self, from: Data(json.utf8))
+        let active = try #require(SiyuUsageProvider.activeSubscriptions(response.data ?? [], now: .now).first)
+
+        #expect(active.windows.map(\.title) == ["每月"])
+        #expect(active.windows.map(\.limit) == [35000])
+    }
+
+    /// 一条订阅完全没有限额时没有任何进度行可展示，整条省略。
+    @Test
+    func siyuDropsPlansWithoutAnyLimit() throws {
+        let json = """
+        {"code":0,"message":"success","data":[{"id":1470,"status":"active","expires_at":"2099-01-01T00:00:00.000000+08:00","daily_usage_usd":383,"group":{"id":17,"name":"DeepSeek大月卡","status":"active"}}]}
+        """
+        let response = try JSONDecoder().decode(SubscriptionsResponse.self, from: Data(json.utf8))
+
+        #expect(SiyuUsageProvider.activeSubscriptions(response.data ?? [], now: .now).isEmpty)
     }
 
     @Test

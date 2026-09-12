@@ -343,6 +343,14 @@ struct Quota: Identifiable, Codable, Sendable {
         case weekly
     }
 
+    /// 额度行的分组元数据：同一分组（如一个订阅套餐的每日/每周/每月窗口）在卡片中归入同一段落。
+    /// `key` 只在单个快照内唯一；`title` 是段落标题。显示名可能重复
+    /// （如服务端没给套餐信息时的兜底名），因此不能拿 `name` 当分组身份。
+    struct Group: Codable, Sendable, Hashable {
+        let key: String
+        let title: String
+    }
+
     let id: UUID
     let name: String
     let used: Double
@@ -352,8 +360,9 @@ struct Quota: Identifiable, Codable, Sendable {
     let expiresAt: Date?
     let unit: QuotaUnit
     let kind: Kind
+    let group: Group?
 
-    init(id: UUID = UUID(), name: String, used: Double, limit: Double, resetAt: Date?, expiresAt: Date? = nil, unit: QuotaUnit = .tokens, kind: Kind = .generic) {
+    init(id: UUID = UUID(), name: String, used: Double, limit: Double, resetAt: Date?, expiresAt: Date? = nil, unit: QuotaUnit = .tokens, kind: Kind = .generic, group: Group? = nil) {
         self.id = id
         self.name = name
         self.used = used
@@ -362,10 +371,11 @@ struct Quota: Identifiable, Codable, Sendable {
         self.expiresAt = expiresAt
         self.unit = unit
         self.kind = kind
+        self.group = group
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, used, limit, resetAt, expiresAt, unit, kind
+        case id, name, used, limit, resetAt, expiresAt, unit, kind, group
     }
 
     init(from decoder: Decoder) throws {
@@ -378,6 +388,7 @@ struct Quota: Identifiable, Codable, Sendable {
         expiresAt = try container.decodeIfPresent(Date.self, forKey: .expiresAt)
         unit = try container.decodeIfPresent(QuotaUnit.self, forKey: .unit) ?? .tokens
         kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .generic
+        group = try container.decodeIfPresent(Group.self, forKey: .group)
     }
 
     var remaining: Double {
