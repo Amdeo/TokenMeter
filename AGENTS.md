@@ -77,6 +77,8 @@ Use the following stable page IDs when referring to screens in tasks, issues, re
 
 When a request names a page ID, first inspect the corresponding entry point above. `SubscriptionUsageView`, `PlatformLogo`, `StatusBadge`, and other smaller `View` types are shared components, not separate pages.
 
+完成需求，构建一下项目，并重新启动APP。
+
 ## Agent skills
 
 ### Issue tracker
