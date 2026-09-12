@@ -54,6 +54,8 @@ struct QuotaProgressRow: View {
     var valueOverride: String? = nil
     /// 隐藏每日重置提示（如订阅型额度已带到期日，避免两行时间信息重复）。
     var hideResetHint: Bool = false
+    /// 隐藏到期提示（如订阅段落头已单独展示到期日，避免每个窗口行重复）。
+    var hideExpiryHint: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -84,7 +86,7 @@ struct QuotaProgressRow: View {
                     Text(quota.status == .normal ? "正常" : quota.status.label)
                         .foregroundStyle(quota.status == .normal ? TM.textTertiary : quota.status.tint)
                     Spacer(minLength: 4)
-                    if let expiresAt = quota.expiresAt {
+                    if let expiresAt = quota.expiresAt, !hideExpiryHint {
                         Text(Self.expiryHintText(for: expiresAt))
                             .foregroundStyle(TM.textTertiary)
                             .lineLimit(1)
