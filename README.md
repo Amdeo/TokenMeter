@@ -104,6 +104,12 @@ TokenMeter 不包含遥测、崩溃上报或广告代码，但它会直接访问
 
 项目使用 Swift 6、SwiftUI、AppKit、ServiceManagement 和 UserNotifications，不含第三方依赖。离线测试与贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；新增供应商还必须遵循[供应商开发指南](docs/provider-development.md)。公开问题请使用 GitHub Issues，并且绝不要附带 API Key、token、cookie 或完整凭据文件。
 
+## 打赏
+
+如果 TokenMeter 帮你省了时间，欢迎用微信扫码打赏：
+
+<img src="docs/images/wechat-donate.png" alt="微信赞赏码" width="260">
+
 ## 许可证
 
 [GPL-3.0](./LICENSE)

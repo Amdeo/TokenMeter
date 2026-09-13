@@ -104,6 +104,12 @@ Do not publish these files, screenshots, logs, or browser exports. See [SECURITY
 
 The project uses Swift 6, SwiftUI, AppKit, ServiceManagement, and UserNotifications, with no third-party dependencies. The offline test requirement and contribution process are in [CONTRIBUTING.md](CONTRIBUTING.md); provider changes must also follow the [provider development guide](docs/provider-development.md). Public reports belong in GitHub Issues—never attach API keys, tokens, cookies, or a complete credential file.
 
+## Sponsor
+
+If TokenMeter saves you time, you can tip via WeChat Pay:
+
+<img src="docs/images/wechat-donate.png" alt="WeChat Pay QR code" width="260">
+
 ## License
 
 [GPL-3.0](./LICENSE)
