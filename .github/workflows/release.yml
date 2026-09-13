@@ -99,7 +99,18 @@ jobs:
           {
             echo "未签名 universal 构建（arm64 + x86_64）。首次打开会被 Gatekeeper 拦截，步骤见 README 的「安装 → 已发布版本」；下载后用同名 .sha256 文件校验。"
             echo
-            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq .body
+            # Release notes come from the CHANGELOG section for this tag; fall back
+            # to commit-generated notes when the section is missing.
+            awk -v version="$VERSION" '
+              index($0, "## [v" version "]") == 1 { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md > dist/changelog.md
+            if [ -s dist/changelog.md ]; then
+              cat dist/changelog.md
+            else
+              gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq .body
+            fi
           } > dist/notes.md
           gh release create "$RELEASE_TAG" dist/*.zip dist/*.sha256 \
             --title "TokenMeter $VERSION" --notes-file dist/notes.md
