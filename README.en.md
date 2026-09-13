@@ -66,13 +66,13 @@ Provider APIs and account permissions determine what can be displayed; TokenMete
 
 ### Published release
 
-[v0.1.0](https://github.com/Amdeo/TokenMeter/releases/tag/v0.1.0) provides `TokenMeter-0.1.0-macOS.zip`. It is an unsigned build: download it from the GitHub Release, unpack it, and follow macOS security prompts. The release and `main` are different: `main` contains development changes made after the release and is intended for users building from source.
+See [Releases](https://github.com/Amdeo/TokenMeter/releases) for the latest version. Every release is built by GitHub Actions and attaches a universal (Apple Silicon + Intel) `TokenMeter-<version>-macos-universal.zip` plus a matching `.sha256` checksum. It is an unsigned build: download it from the GitHub Release, unpack it, and follow macOS security prompts. The release and `main` are different: `main` contains development changes made after the release and is intended for users building from source.
 
 The unsigned build has no Developer ID signature and is not notarized, so macOS blocks it on first launch:
 
 1. Unpack the archive and move `TokenMeter.app` into `/Applications`.
 2. In Finder, Control-click the app, choose **Open**, then choose **Open** again in the dialog; or open **System Settings → Privacy & Security** and choose **Open Anyway** for the blocked app.
-3. If macOS reports the app is damaged, compare `shasum -a 256` against the checksum published with the release first. When it matches, run `xattr -dr com.apple.quarantine /Applications/TokenMeter.app` and open the app again.
+3. If macOS reports the app is damaged, compare `shasum -a 256` against the `.sha256` asset from the same release first. When it matches, run `xattr -dr com.apple.quarantine /Applications/TokenMeter.app` and open the app again.
 
 Download builds only from this repository's GitHub Release. Signing and notarization are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 

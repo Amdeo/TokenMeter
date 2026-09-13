@@ -2,10 +2,20 @@
 
 All notable changes are documented here.
 
-## Unreleased
+## [v0.2.0](https://github.com/Amdeo/TokenMeter/releases/tag/v0.2.0) — 2026-09-13
+
+### Added
+
+- Added Claude (OAuth authorization code, Pro/Max plan quota windows) and OpenAI Codex (device OAuth, Codex quota windows) providers.
+- Added the Siyu API relay provider with balance and daily/weekly/monthly plan windows.
+- Made providers a folder-based extension point: each provider owns its stable IDs, login site, authorization handlers, card renderer, and icon under `Providers/Extensions/<id>/`, so adding one takes a new folder plus a single line in `ProviderCatalog`; shipped a copy-ready template, the provider development guide, and an add-relay skill.
+- Published releases from a tag-driven GitHub Actions workflow (`Release`) that runs the test suite, builds the universal unsigned archive, writes the SHA-256 checksum, and attaches both to the GitHub Release; signed/notarized packages are still built locally.
 
 ### Changed
 
+- Merged the relay providers into one site-driven implementation; the shared machinery now lives in `Providers/Common/` instead of the app-level `Services/` layer.
+- Restored subscription drag-to-reorder with animated drop placement, and balanced the overview header icon spacing and card insets.
+- **Release archives are now named `TokenMeter-<version>-macos-universal.zip` and published with a matching `.sha256` file.**
 - Moved add-subscription, settings, and quit into a right-click menu on the menu-bar icon; the overview's bottom action row is gone and the synchronization status now sits next to the service count in the header.
 - Showed Siyu API plans as daily, weekly, and monthly quota windows with reset hints instead of a single monthly row, and listed Siyu in the README provider tables.
 - Added an opt-in frosted-glass panel background for light appearance; the light panel is plain white by default.
