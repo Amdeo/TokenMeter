@@ -257,7 +257,8 @@ struct MenuBarView: View {
                 isReordering: isReordering,
                 onToggleReorder: store.subscriptions.count > 1 ? { toggleReordering() } : nil
             )
-            .padding(.bottom, 10)
+            // 6 + 列表的 2pt 顶部内边距 = 根容器的 8pt 顶部内边距，让图标上下留白对称。
+            .padding(.bottom, 6)
 
             if let error = store.lastPersistenceError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
