@@ -1,5 +1,11 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let miniMax = ProviderID(rawValue: "minimax")
+}
+
 // MARK: - 定义
 
 struct MiniMaxProviderDefinition: ProviderDefinition {

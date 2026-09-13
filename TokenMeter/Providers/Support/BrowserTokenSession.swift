@@ -48,6 +48,8 @@ enum BrowserLoginError: LocalizedError, Sendable, Equatable {
 
 /// token 型网页登录态的站点差异：localStorage 键名与续期用的短名。
 ///
+/// 站点常量（域名、登录页、键名、续期前缀）与供应商放在一起，
+/// 见 `Providers/Extensions/<id>/`。
 /// 登录窗口与凭证提取规则统一由 `BrowserLoginRecipe` 承担，本类型只提供
 /// 「站点身份（错误文案短名）+ 续期所需信息」这一运行时视图，提取逻辑因此
 /// 只有一份实现。
@@ -88,66 +90,6 @@ struct BrowserTokenSite: Sendable {
     }
 }
 
-extension BrowserTokenSite {
-    /// Kimi：登录页即用量页，localStorage 键为 access_token，refresh token 也须是带 exp 的 JWT。
-    static let kimi = BrowserTokenSite(
-        displayName: "Kimi",
-        loginWindowTitle: "登录 Kimi 账号",
-        accessTokenKey: "access_token",
-        validatesRefreshTokenExpiry: true,
-        sessionDomains: ["kimi.com"],
-        loginPageURL: URL(string: ChromeSessionImporter.quotaURL)!
-    )
-
-    /// CCBus（AI 巴士）。
-    static let ccbus = BrowserTokenSite(
-        displayName: "CCBus",
-        loginWindowTitle: "登录 CCBus（AI 巴士）账号",
-        accessTokenKey: "auth_token",
-        sessionDomains: ["ccbus.top"],
-        loginPageURL: URL(string: "https://ccbus.top/login")!
-    )
-
-    /// APIKEY.FUN。
-    static let apiKeyFun = BrowserTokenSite(
-        displayName: "APIKEY.FUN",
-        loginWindowTitle: "登录 APIKEY.FUN 账号",
-        accessTokenKey: "auth_token",
-        sessionDomains: ["apikey.fun"],
-        loginPageURL: URL(string: "https://apikey.fun/login")!
-    )
-
-    /// Siyu API。
-    static let siyu = BrowserTokenSite(
-        displayName: "Siyu API",
-        loginWindowTitle: "登录 Siyu API 账号",
-        accessTokenKey: "auth_token",
-        sessionDomains: ["siyu.site"],
-        loginPageURL: URL(string: "https://siyu.site/login")!
-    )
-}
-
-// MARK: - 登录配方
-
-/// 各站点的登录配方：供应商的认证方式定义引用这里，共享代码据此构造登录窗口。
-extension BrowserLoginRecipe {
-    /// token 型站点的配方直接由站点定义派生，域名与键名不必写两遍。
-    static let kimi = BrowserTokenSite.kimi.loginRecipe
-    static let ccbus = BrowserTokenSite.ccbus.loginRecipe
-    static let apiKeyFun = BrowserTokenSite.apiKeyFun.loginRecipe
-    static let siyu = BrowserTokenSite.siyu.loginRecipe
-
-    /// NowCoding：new-api 新版认证，localStorage 无 token，
-    /// 登录态是 WKWebsiteDataStore 里的 HttpOnly session cookie + localStorage 用户 ID。
-    static let nowCoding = BrowserLoginRecipe(
-        displayName: "NowCoding",
-        windowTitle: "登录 NowCoding 账号",
-        sessionDomains: ["nowcoding.ai"],
-        loginPageURL: NowCodingSite.loginPageURL,
-        extraction: .sessionCookie(name: NowCodingSite.sessionCookieName, userIDLocalStorageKey: "user")
-    )
-}
-
 // MARK: - 中转站续期
 
 /// 中转站续期端点：与 `BrowserTokenSite` 组合，表示
@@ -177,16 +119,4 @@ struct BrowserRelayRefresher: Sendable {
             throw BrowserLoginError.refreshFailed(provider: site.displayName, message: message)
         }
     }
-}
-
-extension BrowserRelayRefresher {
-    static let ccbus = BrowserRelayRefresher(
-        site: .ccbus, apiBase: URL(string: "https://ccbus.top/api/v1")!
-    )
-    static let apiKeyFun = BrowserRelayRefresher(
-        site: .apiKeyFun, apiBase: URL(string: "https://apikey.fun/api/v1")!
-    )
-    static let siyu = BrowserRelayRefresher(
-        site: .siyu, apiBase: URL(string: "https://siyu.site/api/v1")!
-    )
 }

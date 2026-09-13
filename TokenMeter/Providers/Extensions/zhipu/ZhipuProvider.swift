@@ -1,5 +1,11 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let zhipu = ProviderID(rawValue: "zhipu")
+}
+
 // MARK: - 定义
 
 struct ZhipuProviderDefinition: ProviderDefinition {

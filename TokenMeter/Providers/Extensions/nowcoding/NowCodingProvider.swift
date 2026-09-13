@@ -1,5 +1,29 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let nowCoding = ProviderID(rawValue: "nowcoding")
+}
+
+extension AuthMethodID {
+    static let nowCodingBrowserSession = AuthMethodID(rawValue: "nowcoding-browser-session")
+}
+
+// MARK: - 登录站点
+
+extension BrowserLoginRecipe {
+    /// NowCoding：new-api 新版认证，localStorage 无 token，
+    /// 登录态是 WKWebsiteDataStore 里的 HttpOnly session cookie + localStorage 用户 ID。
+    static let nowCoding = BrowserLoginRecipe(
+        displayName: "NowCoding",
+        windowTitle: "登录 NowCoding 账号",
+        sessionDomains: ["nowcoding.ai"],
+        loginPageURL: NowCodingSite.loginPageURL,
+        extraction: .sessionCookie(name: NowCodingSite.sessionCookieName, userIDLocalStorageKey: "user")
+    )
+}
+
 // MARK: - 定义
 
 struct NowCodingProviderDefinition: ProviderDefinition {

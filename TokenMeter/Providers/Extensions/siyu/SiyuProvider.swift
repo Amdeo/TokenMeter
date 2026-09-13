@@ -1,5 +1,38 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let siyu = ProviderID(rawValue: "siyu")
+}
+
+extension AuthMethodID {
+    static let siyuBrowserSession = AuthMethodID(rawValue: "siyu-browser-session")
+}
+
+// MARK: - 登录站点
+
+extension BrowserTokenSite {
+    /// Siyu API：localStorage 键为 auth_token，续期走 `POST {apiBase}/auth/refresh`。
+    static let siyu = BrowserTokenSite(
+        displayName: "Siyu API",
+        loginWindowTitle: "登录 Siyu API 账号",
+        accessTokenKey: "auth_token",
+        sessionDomains: ["siyu.site"],
+        loginPageURL: URL(string: "https://siyu.site/login")!
+    )
+}
+
+extension BrowserLoginRecipe {
+    static let siyu = BrowserTokenSite.siyu.loginRecipe
+}
+
+extension BrowserRelayRefresher {
+    static let siyu = BrowserRelayRefresher(
+        site: .siyu, apiBase: URL(string: "https://siyu.site/api/v1")!
+    )
+}
+
 // MARK: - 定义
 
 struct SiyuProviderDefinition: ProviderDefinition {

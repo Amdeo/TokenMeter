@@ -1,5 +1,16 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let kimi = ProviderID(rawValue: "kimi")
+}
+
+extension AuthMethodID {
+    static let kimiDeviceOAuth = AuthMethodID(rawValue: "kimi-device-oauth")
+    static let kimiBrowserSession = AuthMethodID(rawValue: "kimi-browser-session")
+}
+
 // MARK: - 定义
 
 struct KimiProviderDefinition: ProviderDefinition {

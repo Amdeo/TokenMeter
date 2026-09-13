@@ -1,5 +1,11 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let deepSeek = ProviderID(rawValue: "deepseek")
+}
+
 // MARK: - 定义
 
 struct DeepSeekProviderDefinition: ProviderDefinition {

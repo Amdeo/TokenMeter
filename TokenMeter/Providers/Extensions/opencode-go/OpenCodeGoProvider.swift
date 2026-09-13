@@ -1,5 +1,11 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let openCodeGo = ProviderID(rawValue: "opencode-go")
+}
+
 // MARK: - 定义
 
 struct OpenCodeGoProviderDefinition: ProviderDefinition {

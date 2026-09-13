@@ -9,10 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000010000000000000001 /* TokenMeterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* TokenMeterApp.swift */; };
 		A10000010000000000000002 /* UsageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000002 /* UsageModels.swift */; };
-		A10000010000000000000003 /* UsageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000003 /* UsageProvider.swift */; };
 		A10000010000000000000005 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* CredentialStore.swift */; };
-			A10000010000000000000021 /* KimiOAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* KimiOAuthService.swift */; };
-		A10000010000000000000022 /* ChromeSessionImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000022 /* ChromeSessionImporter.swift */; };
 		A10000010000000000000032 /* MenuBarPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000032 /* MenuBarPanelController.swift */; };
 		A10000010000000000000006 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* UsageStore.swift */; };
 		A10000010000000000000007 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* MenuBarView.swift */; };
@@ -32,62 +29,27 @@
 			A10000010000000000000019 /* icon-minimax.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000019 /* icon-minimax.png */; };
 		A10000010000000000000052 /* icon-ccbus.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000052 /* icon-ccbus.png */; };
 		A10000010000000000000057 /* icon-apikeyfun.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000057 /* icon-apikeyfun.png */; };
-		A10000010000000000000058 /* NowCodingProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000058 /* NowCodingProvider.swift */; };
-		A10000010000000000000084 /* RelayBalanceProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000084 /* RelayBalanceProvider.swift */; };
-		A10000010000000000000061 /* NowCodingCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000061 /* NowCodingCardRenderer.swift */; };
 		A10000010000000000000062 /* icon-nowcoding.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000062 /* icon-nowcoding.png */; };
-		B10000010000000000000001 /* QuotaAndKimiTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* QuotaAndKimiTests.swift */; };
-		B10000010000000000000002 /* SettingsAndNotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000003 /* SettingsAndNotificationTests.swift */; };
-		B10000010000000000000003 /* ProviderArchitectureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000004 /* ProviderArchitectureTests.swift */; };
-		B10000010000000000000004 /* MigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000005 /* MigrationTests.swift */; };
-		B10000010000000000000005 /* CodexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* CodexTests.swift */; };
-		B10000010000000000000006 /* ClaudeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000007 /* ClaudeTests.swift */; };
-		B10000010000000000000008 /* BrowserSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000009 /* BrowserSessionTests.swift */; };
-		A10000010000000000000071 /* ClaudeOAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000071 /* ClaudeOAuthService.swift */; };
-		A10000010000000000000072 /* ClaudeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000072 /* ClaudeProvider.swift */; };
 		A10000010000000000000073 /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000073 /* JWT.swift */; };
 		A10000010000000000000074 /* EmbeddedWebLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000074 /* EmbeddedWebLoginController.swift */; };
 		A10000010000000000000075 /* BrowserSessionRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000075 /* BrowserSessionRefresher.swift */; };
-		A10000010000000000000083 /* BrowserTokenLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000083 /* BrowserTokenLogin.swift */; };
 		A10000010000000000000033 /* ProviderID.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000033 /* ProviderID.swift */; };
 		A10000010000000000000034 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000034 /* JSONValue.swift */; };
-		A10000010000000000000035 /* ProviderDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000035 /* ProviderDefinition.swift */; };
-		A10000010000000000000036 /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000036 /* ProviderRegistry.swift */; };
-		A10000010000000000000037 /* DeepSeekProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000037 /* DeepSeekProvider.swift */; };
-		A10000010000000000000038 /* KimiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000038 /* KimiProvider.swift */; };
-		A10000010000000000000039 /* ZhipuProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000039 /* ZhipuProvider.swift */; };
-		A10000010000000000000040 /* OpenCodeGoProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000040 /* OpenCodeGoProvider.swift */; };
-		A10000010000000000000041 /* MiniMaxProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000041 /* MiniMaxProvider.swift */; };
-		A10000010000000000000042 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000042 /* APIClient.swift */; };
 		A10000010000000000000043 /* AuthFlowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000043 /* AuthFlowRegistry.swift */; };
 		A10000010000000000000044 /* StandardProviderCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000044 /* StandardProviderCards.swift */; };
-		A10000010000000000000045 /* KimiCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000045 /* KimiCardRenderer.swift */; };
 		A10000010000000000000046 /* SubscriptionMenuCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000046 /* SubscriptionMenuCard.swift */; };
-		A10000010000000000000063 /* BrowserSessionFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000063 /* BrowserSessionFlow.swift */; };
 		A10000010000000000000064 /* MigrationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000064 /* MigrationModels.swift */; };
 		A10000010000000000000065 /* CredentialMigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000065 /* CredentialMigrationService.swift */; };
 		A10000010000000000000066 /* MigrationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000066 /* MigrationPanel.swift */; };
-		A10000010000000000000067 /* CodexOAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000067 /* CodexOAuthService.swift */; };
-		A10000010000000000000069 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000069 /* CodexProvider.swift */; };
-		A10000010000000000000070 /* HTTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000070 /* HTTPTransport.swift */; };
-		A10000010000000000000077 /* SiyuProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000077 /* SiyuProvider.swift */; };
-		A10000010000000000000080 /* SiyuCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000080 /* SiyuCardRenderer.swift */; };
 		A10000010000000000000082 /* QuotaColorEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000082 /* QuotaColorEditor.swift */; };
 		A10000010000000000000081 /* icon-siyu.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000081 /* icon-siyu.png */; };
 		A10000010000000000000076 /* TokenMeter.icns in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000076 /* TokenMeter.icns */; };
-		A10000010000000000000085 /* ProviderCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000085 /* ProviderCatalog.swift */; };
-		A10000010000000000000086 /* BrowserLoginRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000086 /* BrowserLoginRecipe.swift */; };
-		A10000010000000000000087 /* BrowserCookieCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000087 /* BrowserCookieCredential.swift */; };
-		A10000010000000000000088 /* AuthorizationServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000088 /* AuthorizationServices.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000010000000000000001 /* TokenMeterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenMeterApp.swift; sourceTree = "<group>"; };
 		A20000010000000000000002 /* UsageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageModels.swift; sourceTree = "<group>"; };
-		A20000010000000000000003 /* UsageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageProvider.swift; sourceTree = "<group>"; };
 		A20000010000000000000005 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
-			A20000010000000000000021 /* KimiOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiOAuthService.swift; sourceTree = "<group>"; };
-		A20000010000000000000022 /* ChromeSessionImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeSessionImporter.swift; sourceTree = "<group>"; };
 		A20000010000000000000032 /* MenuBarPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelController.swift; sourceTree = "<group>"; };
 		A20000010000000000000006 /* UsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStore.swift; sourceTree = "<group>"; };
 		A20000010000000000000007 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
@@ -106,78 +68,46 @@
 			A20000010000000000000019 /* icon-minimax.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-minimax.png"; sourceTree = "<group>"; };
 		A20000010000000000000052 /* icon-ccbus.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-ccbus.png"; sourceTree = "<group>"; };
 		A20000010000000000000057 /* icon-apikeyfun.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-apikeyfun.png"; sourceTree = "<group>"; };
-		A20000010000000000000058 /* NowCodingProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowCodingProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000084 /* RelayBalanceProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayBalanceProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000061 /* NowCodingCardRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowCodingCardRenderer.swift; sourceTree = "<group>"; };
 		A20000010000000000000062 /* icon-nowcoding.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-nowcoding.png"; sourceTree = "<group>"; };
 		A20000010000000000000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000010000000000000010 /* TokenMeter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenMeter.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		B20000010000000000000001 /* QuotaAndKimiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaAndKimiTests.swift; sourceTree = "<group>"; };
-		B20000010000000000000003 /* SettingsAndNotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndNotificationTests.swift; sourceTree = "<group>"; };
-		B20000010000000000000004 /* ProviderArchitectureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderArchitectureTests.swift; sourceTree = "<group>"; };
-		B20000010000000000000005 /* MigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationTests.swift; sourceTree = "<group>"; };
-		B20000010000000000000006 /* CodexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexTests.swift; sourceTree = "<group>"; };
-		B20000010000000000000007 /* ClaudeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeTests.swift; sourceTree = "<group>"; };
-		B20000010000000000000009 /* BrowserSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSessionTests.swift; sourceTree = "<group>"; };
-		A20000010000000000000071 /* ClaudeOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeOAuthService.swift; sourceTree = "<group>"; };
-		A20000010000000000000072 /* ClaudeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProvider.swift; sourceTree = "<group>"; };
 		A20000010000000000000073 /* JWT.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JWT.swift; sourceTree = "<group>"; };
 		A20000010000000000000074 /* EmbeddedWebLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedWebLoginController.swift; sourceTree = "<group>"; };
 		A20000010000000000000075 /* BrowserSessionRefresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSessionRefresher.swift; sourceTree = "<group>"; };
-		A20000010000000000000083 /* BrowserTokenLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserTokenLogin.swift; sourceTree = "<group>"; };
 		B20000010000000000000002 /* TokenMeterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenMeterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000010000000000000033 /* ProviderID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderID.swift; sourceTree = "<group>"; };
 		A20000010000000000000034 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
-		A20000010000000000000035 /* ProviderDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderDefinition.swift; sourceTree = "<group>"; };
-		A20000010000000000000036 /* ProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRegistry.swift; sourceTree = "<group>"; };
-		A20000010000000000000037 /* DeepSeekProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000038 /* KimiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000039 /* ZhipuProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZhipuProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000040 /* OpenCodeGoProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeGoProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000041 /* MiniMaxProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniMaxProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000042 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		A20000010000000000000043 /* AuthFlowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowRegistry.swift; sourceTree = "<group>"; };
 		A20000010000000000000044 /* StandardProviderCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandardProviderCards.swift; sourceTree = "<group>"; };
-		A20000010000000000000045 /* KimiCardRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiCardRenderer.swift; sourceTree = "<group>"; };
 		A20000010000000000000046 /* SubscriptionMenuCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionMenuCard.swift; sourceTree = "<group>"; };
-		A20000010000000000000063 /* BrowserSessionFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSessionFlow.swift; sourceTree = "<group>"; };
 		A20000010000000000000064 /* MigrationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationModels.swift; sourceTree = "<group>"; };
 		A20000010000000000000065 /* CredentialMigrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialMigrationService.swift; sourceTree = "<group>"; };
 		A20000010000000000000066 /* MigrationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationPanel.swift; sourceTree = "<group>"; };
-		A20000010000000000000067 /* CodexOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexOAuthService.swift; sourceTree = "<group>"; };
-		A20000010000000000000070 /* HTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransport.swift; sourceTree = "<group>"; };
-		A20000010000000000000069 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000077 /* SiyuProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiyuProvider.swift; sourceTree = "<group>"; };
-		A20000010000000000000080 /* SiyuCardRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiyuCardRenderer.swift; sourceTree = "<group>"; };
 		A20000010000000000000082 /* QuotaColorEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaColorEditor.swift; sourceTree = "<group>"; };
 		A20000010000000000000081 /* icon-siyu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-siyu.png"; sourceTree = "<group>"; };
 		A20000010000000000000076 /* TokenMeter.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = TokenMeter.icns; sourceTree = "<group>"; };
-		A20000010000000000000085 /* ProviderCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderCatalog.swift; sourceTree = "<group>"; };
-		A20000010000000000000086 /* BrowserLoginRecipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserLoginRecipe.swift; sourceTree = "<group>"; };
-		A20000010000000000000087 /* BrowserCookieCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserCookieCredential.swift; sourceTree = "<group>"; };
-		A20000010000000000000088 /* AuthorizationServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthorizationServices.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		AF0000010000000000000001 /* Providers */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Providers; sourceTree = "<group>"; };
+		AF0000010000000000000002 /* Tests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Tests; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXGroup section */
-		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000003, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A30000010000000000000008, A20000010000000000000009, A20000010000000000000001, B30000010000000000000001, ); path = TokenMeter; sourceTree = "<group>"; };
+		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A20000010000000000000009, A20000010000000000000001, AF0000010000000000000001, AF0000010000000000000002, ); path = TokenMeter; sourceTree = "<group>"; };
 		A30000010000000000000002 = {isa = PBXGroup; children = (A20000010000000000000002, A20000010000000000000033, A20000010000000000000034, A20000010000000000000064, ); name = Models; path = Models; sourceTree = "<group>"; };
-		A30000010000000000000003 = {isa = PBXGroup; children = (A20000010000000000000003, A20000010000000000000035, A20000010000000000000036, A30000010000000000000012, A30000010000000000000013, A30000010000000000000015, ); name = Providers; path = Providers; sourceTree = "<group>"; };
-		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000083, A20000010000000000000005, A20000010000000000000021, A20000010000000000000022, A20000010000000000000025, A20000010000000000000026, A20000010000000000000027, A20000010000000000000032, A20000010000000000000043, A20000010000000000000065, A20000010000000000000067, A20000010000000000000071, A20000010000000000000073, A20000010000000000000074, A20000010000000000000075, ); name = Services; path = Services; sourceTree = "<group>"; };
+		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000025, A20000010000000000000026, A20000010000000000000027, A20000010000000000000032, A20000010000000000000043, A20000010000000000000065, A20000010000000000000073, A20000010000000000000074, A20000010000000000000075, ); name = Services; path = Services; sourceTree = "<group>"; };
 		A30000010000000000000005 = {isa = PBXGroup; children = (A20000010000000000000006, ); name = Store; path = Store; sourceTree = "<group>"; };
 		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000028, A20000010000000000000023, A20000010000000000000024, A20000010000000000000014, A20000010000000000000031, A20000010000000000000046, A20000010000000000000082, A20000010000000000000066, A30000010000000000000014, ); name = Views; path = Views; sourceTree = "<group>"; };
-		A30000010000000000000012 = {isa = PBXGroup; children = (A20000010000000000000084, A20000010000000000000037, A20000010000000000000038, A20000010000000000000039, A20000010000000000000040, A20000010000000000000041, A20000010000000000000058, A20000010000000000000069, A20000010000000000000072, A20000010000000000000077, ); name = BuiltIn; path = BuiltIn; sourceTree = "<group>"; };
-		A30000010000000000000013 = {isa = PBXGroup; children = (A20000010000000000000042, A20000010000000000000063, A20000010000000000000070, A20000010000000000000086, A20000010000000000000087, A20000010000000000000088, ); name = Support; path = Support; sourceTree = "<group>"; };
-		A30000010000000000000014 = {isa = PBXGroup; children = (A20000010000000000000044, A20000010000000000000045, A20000010000000000000061, A20000010000000000000080, ); name = ProviderCards; path = ProviderCards; sourceTree = "<group>"; };
+		A30000010000000000000014 = {isa = PBXGroup; children = (A20000010000000000000044, ); name = ProviderCards; path = ProviderCards; sourceTree = "<group>"; };
 			A30000010000000000000010 = {isa = PBXGroup; children = (A30000010000000000000011, A20000010000000000000076, ); name = Resources; path = Resources; sourceTree = "<group>"; };
 			A30000010000000000000011 = {isa = PBXGroup; children = (A20000010000000000000015, A20000010000000000000016, A20000010000000000000017, A20000010000000000000018, A20000010000000000000019, A20000010000000000000052, A20000010000000000000057, A20000010000000000000062, A20000010000000000000081, ); name = PlatformIcons; path = PlatformIcons; sourceTree = "<group>"; };
 		A30000010000000000000007 = {isa = PBXGroup; children = (A20000010000000000000010, B20000010000000000000002, ); name = Products; sourceTree = "<group>"; };
-		B30000010000000000000001 = {isa = PBXGroup; children = (B20000010000000000000001, B20000010000000000000003, B20000010000000000000004, B20000010000000000000005, B20000010000000000000006, B20000010000000000000007, B20000010000000000000009, ); name = TokenMeterTests; path = Tests; sourceTree = "<group>"; };
-		A30000010000000000000015 = {isa = PBXGroup; children = (A20000010000000000000085, ); name = Extensions; path = Extensions; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = A50000010000000000000002; buildPhases = (A60000010000000000000001, A60000010000000000000002, A60000010000000000000003, ); buildRules = ( ); dependencies = ( ); name = TokenMeter; productName = TokenMeter; productReference = A20000010000000000000010; productType = "com.apple.product-type.application"; };
-		B40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B50000010000000000000001; buildPhases = (B60000010000000000000001, B60000010000000000000002, B60000010000000000000003, ); buildRules = ( ); dependencies = (B91000010000000000000001, ); name = TokenMeterTests; productName = TokenMeterTests; productReference = B20000010000000000000002; productType = "com.apple.product-type.bundle.unit-test"; };
+		A40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = A50000010000000000000002; buildPhases = (A60000010000000000000001, A60000010000000000000002, A60000010000000000000003, ); buildRules = ( ); dependencies = ( ); fileSystemSynchronizedGroups = (AF0000010000000000000001, ); name = TokenMeter; productName = TokenMeter; productReference = A20000010000000000000010; productType = "com.apple.product-type.application"; };
+		B40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B50000010000000000000001; buildPhases = (B60000010000000000000001, B60000010000000000000002, B60000010000000000000003, ); buildRules = ( ); dependencies = (B91000010000000000000001, ); fileSystemSynchronizedGroups = (AF0000010000000000000002, ); name = TokenMeterTests; productName = TokenMeterTests; productReference = B20000010000000000000002; productType = "com.apple.product-type.bundle.unit-test"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -189,12 +119,12 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000003, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000028, A10000010000000000000014, A10000010000000000000021, A10000010000000000000022, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, A10000010000000000000027, A10000010000000000000031, A10000010000000000000032, A10000010000000000000033, A10000010000000000000034, A10000010000000000000035, A10000010000000000000036, A10000010000000000000037, A10000010000000000000038, A10000010000000000000039, A10000010000000000000040, A10000010000000000000041, A10000010000000000000042, A10000010000000000000043, A10000010000000000000044, A10000010000000000000045, A10000010000000000000046, A10000010000000000000082, A10000010000000000000058, A10000010000000000000061, A10000010000000000000063, A10000010000000000000064, A10000010000000000000065, A10000010000000000000066, A10000010000000000000067, A10000010000000000000069, A10000010000000000000070, A10000010000000000000071, A10000010000000000000072, A10000010000000000000073, A10000010000000000000074, A10000010000000000000075, A10000010000000000000077, A10000010000000000000080, A10000010000000000000083, A10000010000000000000084, A10000010000000000000085, A10000010000000000000086, A10000010000000000000087, A10000010000000000000088, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000028, A10000010000000000000014, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, A10000010000000000000027, A10000010000000000000031, A10000010000000000000032, A10000010000000000000033, A10000010000000000000034, A10000010000000000000043, A10000010000000000000044, A10000010000000000000046, A10000010000000000000082, A10000010000000000000064, A10000010000000000000065, A10000010000000000000066, A10000010000000000000073, A10000010000000000000074, A10000010000000000000075, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 	A60000010000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
-		B60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B10000010000000000000001, B10000010000000000000002, B10000010000000000000003, B10000010000000000000004, B10000010000000000000005, B10000010000000000000006, B10000010000000000000008, ); runOnlyForDeploymentPostprocessing = 0; };
+		B60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		B60000010000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
 		B60000010000000000000003 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */

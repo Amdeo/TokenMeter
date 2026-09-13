@@ -1,5 +1,15 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let codex = ProviderID(rawValue: "codex")
+}
+
+extension AuthMethodID {
+    static let codexDeviceOAuth = AuthMethodID(rawValue: "codex-device-oauth")
+}
+
 struct CodexProviderDefinition: ProviderDefinition {
     let id = ProviderID.codex
 
