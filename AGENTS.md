@@ -31,6 +31,8 @@ Shared code never switches on a provider. `ProviderRegistry` derives
 `isSupported` / `authFlow` from the definition itself, the editor reads the
 login/authorization declarations carried by each `AuthMethodDefinition`, and
 `APIClient` takes the 401/403 semantics from the caller's `HTTPStatusPolicy`.
+Supplier-specific historical identifiers likewise belong to the definition
+(`legacyPlatformNames`, `AuthMethodDefinition.legacyIDs`), not to a shared table.
 If adding a provider seems to require editing a shared file, that is a design
 regression — discuss it instead. Full guide: `docs/provider-development.md`;
 relay-specific playbook: `.pi/skills/add-relay-provider/SKILL.md`.
