@@ -194,13 +194,9 @@ extension BrowserTokenSite {
     )
 }
 
-extension BrowserLoginRecipe {
-    static let <id> = BrowserTokenSite.<id>.loginRecipe
-}
-
 extension BrowserRelayRefresher {
     static let <id> = BrowserRelayRefresher(
-        site: .<id>,
+        tokenSite: .<id>,
         apiBase: URL(string: "<API前缀，如 https://ccbus.top/api/v1>")!
     )
 }
@@ -209,7 +205,7 @@ extension BrowserRelayRefresher {
 
 extension RelayBalanceProviderDefinition {
     static let <id> = RelayBalanceProviderDefinition(
-        site: .<id>,
+        refresher: .<id>,
         id: .<id>,
         displayName: "<显示名>",
         iconResourceName: nil,                        // 有 PNG 时填 "icon-<id>"
@@ -223,7 +219,7 @@ extension RelayBalanceProviderDefinition {
             systemImage: "globe",
             tintRGB: <0xRRGGBB>,
             detail: "登录 <显示名> 账号（内置）",
-            loginRecipe: .<id>          // 漏掉它会落到编辑页的显式报错
+            loginRecipe: BrowserTokenSite.<id>.loginRecipe
         )
     )
 }
@@ -260,7 +256,7 @@ struct <Name>UsageProvider: UsageProvider {
         )
     }
 
-    private func fetchBalance(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
+    private func fetchBalance(credential: BrowserTokenCredential) async throws -> UsageSnapshot {
         let response: MeResponse = try await APIClient.get(
             BrowserRelayRefresher.<id>.apiBase.appendingPathComponent("<余额路径>"),
             providerID: subscription.providerID,
@@ -330,8 +326,8 @@ RelayBalanceProviderDefinition.<id>,
 ## 5. 测试
 
 测试文件放在 `TokenMeter/Tests/`（同样是同步组，新增文件无需登记）。
-新增供应商后需要在 `ProviderArchitectureTests.swift` 的
-`registryExposesAllBuiltInProvidersWithUniqueIDs` 里追加 ID（该断言是有序全量列表）。
+注册表测试只断言 ID 唯一、命名合法、以及与 `ProviderCatalog` 一致；
+新增供应商不必改 `ProviderArchitectureTests.swift`。
 
 按需追加 `@MainActor struct <Name>Tests`：
 

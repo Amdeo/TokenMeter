@@ -2,9 +2,9 @@ import Foundation
 
 //  ██  新增供应商模板  ██
 //
-//  这个文件是一个可编译的「余额型中转站」模板。复制它、改名、填参数，
+//  这个文件是「余额型中转站」模板，放在 docs/ 下，不编进 App。
+//  复制到 `Providers/Extensions/<id>/`、改名、填参数，
 //  再在 `Providers/Extensions/ProviderCatalog.swift` 里加一行，就完成了接入。
-//  本模板本身没有登记在目录里，因此不会被 App 使用，只作为起点和写法参照。
 //
 //  ## 步骤
 //
@@ -52,20 +52,17 @@ extension BrowserTokenSite {
         displayName: "<短名，用于错误文案>",
         loginWindowTitle: "登录 <显示名> 账号",
         accessTokenKey: "auth_token",
-        sessionDomains: ["<域名，不含 https>"],
-        loginPageURL: URL(string: "https://<域名>/login")!
+        sessionDomains: ["example.invalid"],  // 换成真实域名，不含 https
+        loginPageURL: URL(string: "https://example.invalid/login")!  // 换成真实登录页
     )
 }
 
-extension BrowserLoginRecipe {
-    static let template = BrowserTokenSite.template.loginRecipe
-}
 
 /// 续期入口：`POST {apiBase}/auth/refresh`。接口不同构时删掉这段。
 extension BrowserRelayRefresher {
     static let template = BrowserRelayRefresher(
-        site: .template,
-        apiBase: URL(string: "https://<域名>/api/v1")!
+        tokenSite: .template,
+        apiBase: URL(string: "https://example.invalid/api/v1")!  // 换成真实 API 前缀
     )
 }
 
@@ -73,14 +70,14 @@ extension BrowserRelayRefresher {
 
 extension RelayBalanceProviderDefinition {
     static let template = RelayBalanceProviderDefinition(
-        site: .template,
+        refresher: .template,
         id: .template,
         displayName: "<显示名>",
         // PNG 放在本文件夹即可，同步组会自动收录；不用图标时留 nil。
         iconResourceName: nil,
         fallbackSystemImage: "bolt.fill",
         tintRGB: 0x2DD4BF,
-        homepageURL: URL(string: "https://<域名>")!,
+        homepageURL: URL(string: "https://example.invalid")!,  // 换成真实官网
         authMethod: AuthMethodDefinition(
             id: .templateBrowserSession,
             flowID: .browserSession,
@@ -88,7 +85,7 @@ extension RelayBalanceProviderDefinition {
             systemImage: "globe",
             tintRGB: 0x2DD4BF,
             detail: "登录 <显示名> 账号（内置）",
-            loginRecipe: .template
+            loginRecipe: BrowserTokenSite.template.loginRecipe
         )
     )
 }

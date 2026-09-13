@@ -23,13 +23,10 @@ extension BrowserTokenSite {
     )
 }
 
-extension BrowserLoginRecipe {
-    static let ccbus = BrowserTokenSite.ccbus.loginRecipe
-}
 
 extension BrowserRelayRefresher {
     static let ccbus = BrowserRelayRefresher(
-        site: .ccbus, apiBase: URL(string: "https://ccbus.top/api/v1")!
+        tokenSite: .ccbus, apiBase: URL(string: "https://ccbus.top/api/v1")!
     )
 }
 
@@ -38,7 +35,7 @@ extension BrowserRelayRefresher {
 /// 余额型中转站：接口与卡片由 `RelayBalanceProviderDefinition` 提供，这里只有站点差异。
 extension RelayBalanceProviderDefinition {
     static let ccbus = RelayBalanceProviderDefinition(
-        site: .ccbus,
+        refresher: .ccbus,
         id: .ccbus,
         displayName: "CCBus（AI 巴士）",
         iconResourceName: "icon-ccbus",
@@ -52,7 +49,7 @@ extension RelayBalanceProviderDefinition {
             systemImage: "globe",
             tintRGB: 0x2DD4BF,
             detail: "登录 CCBus 账号（内置）",
-            loginRecipe: .ccbus
+            loginRecipe: BrowserTokenSite.ccbus.loginRecipe
         )
     )
 }

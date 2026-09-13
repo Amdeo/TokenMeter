@@ -36,10 +36,10 @@ enum BrowserSessionRefresher {
     /// - Note: 响应不是 HTTP 响应时由 `HTTPTransport.live` 抛 `URLError(.badServerResponse)`，
     ///   调用方按「暂时失败」处理（与原先 `.refreshFailed("无效响应")` 的归属一致）。
     static func refresh(
-        _ credential: KimiBrowserCredential,
+        _ credential: BrowserTokenCredential,
         apiBase: URL,
         transport: HTTPTransport = .live
-    ) async throws -> KimiBrowserCredential {
+    ) async throws -> BrowserTokenCredential {
         var request = URLRequest(url: apiBase.appendingPathComponent("/auth/refresh"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -76,7 +76,7 @@ enum BrowserSessionRefresher {
             throw Failure.invalidCredentials
         }
 
-        return KimiBrowserCredential(
+        return BrowserTokenCredential(
             accessToken: accessToken,
             refreshToken: refreshToken,
             expiresAt: expiresAt,

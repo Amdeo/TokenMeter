@@ -39,10 +39,10 @@ Providers/
 │   └── RelayBalanceProvider.swift  余额型中转站的通用定义
 └── Extensions/                  ← 唯一扩展点（Xcode 文件系统同步组，新增文件零登记）
     ├── ProviderCatalog.swift    唯一手写清单：一行一个供应商
-    ├── _Template/               复制即用的模板
-    ├── ccbus/ apikey-fun/ siyu/ nowcoding/ …
-    └── deepseek/ kimi/ zhipu/ opencode-go/ minimax/ codex/ claude/
+    └── ccbus/ kimi/ zhipu/ …    各供应商一个文件夹
 ```
+
+复制即用的模板在 `docs/templates/TemplateRelayProvider.swift`，不编进 App。
 
 两个关键约束：
 
@@ -111,7 +111,7 @@ extension AuthMethodID {
 ## 新增余额型中转站（最省事）
 
 中转站大多同构：网页登录 → localStorage 存 JWT → 余额接口 → refresh 续期。
-这类只需要一个文件加一行目录登记，可直接复制 `Extensions/_Template/TemplateRelayProvider.swift`。
+这类只需要一个文件加一行目录登记，可直接复制 `docs/templates/TemplateRelayProvider.swift`。
 
 ```swift
 // Providers/Extensions/my-relay/MyRelayProvider.swift
@@ -134,19 +134,15 @@ extension BrowserTokenSite {
     )
 }
 
-extension BrowserLoginRecipe {
-    static let myRelay = BrowserTokenSite.myRelay.loginRecipe
-}
-
 extension BrowserRelayRefresher {
     static let myRelay = BrowserRelayRefresher(
-        site: .myRelay, apiBase: URL(string: "https://myrelay.example/api/v1")!
+        tokenSite: .myRelay, apiBase: URL(string: "https://myrelay.example/api/v1")!
     )
 }
 
 extension RelayBalanceProviderDefinition {
     static let myRelay = RelayBalanceProviderDefinition(
-        site: .myRelay, id: .myRelay, displayName: "MyRelay",
+        refresher: .myRelay, id: .myRelay, displayName: "MyRelay",
         iconResourceName: nil,                        // PNG 放本文件夹即可
         fallbackSystemImage: "bolt.fill",
         tintRGB: 0x2DD4BF,
@@ -154,7 +150,8 @@ extension RelayBalanceProviderDefinition {
         authMethod: AuthMethodDefinition(
             id: .myRelayBrowserSession, flowID: .browserSession,
             title: "网页登录态", systemImage: "globe", tintRGB: 0x2DD4BF,
-            detail: "登录 MyRelay 账号（内置）", loginRecipe: .myRelay
+            detail: "登录 MyRelay 账号（内置）",
+            loginRecipe: BrowserTokenSite.myRelay.loginRecipe
         )
     )
 }
@@ -239,9 +236,9 @@ extension RelayBalanceProviderDefinition {
 - 每个供应商至少一个**解析 fixture 测试**：最小 JSON 响应 → decode → 断言额度字段。
 - 至少一个**失败响应测试**：空数据 / 缺字段 / 非 2xx → 断言抛出对应
   `UsageProviderError`。
-- 注册表测试（`ProviderArchitectureTests.swift`）覆盖：ID 唯一、metadata 完整、
-  authMethods 正确、每种 flow 的声明齐全、factory 可用。新增供应商后该文件里的
-  ID 有序列表断言需要同步追加。
+- 注册表测试（`ProviderArchitectureTests.swift`）覆盖：ID 唯一且符合命名规则、
+  metadata 完整、authMethods 正确、每种 flow 的声明齐全、factory 可用。
+  新增供应商不必改这份测试。
 - 本地验证：
 
 ```bash

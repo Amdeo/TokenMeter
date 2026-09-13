@@ -16,7 +16,7 @@ struct OAuthCredential: Codable, Sendable, Equatable {
     }
 }
 
-struct KimiBrowserCredential: Codable, Sendable, Equatable {
+struct BrowserTokenCredential: Codable, Sendable, Equatable {
     let accessToken: String
     let refreshToken: String
     let expiresAt: Date
@@ -31,7 +31,7 @@ struct CookieSessionCredential: Codable, Sendable, Equatable {
 
 /// 浏览器会话登录的结果：token 型（Kimi/CCBus/APIKEY.FUN）或 cookie 型（new-api 新版）。
 enum BrowserLoginResult: Sendable, Equatable {
-    case token(KimiBrowserCredential)
+    case token(BrowserTokenCredential)
     case cookie(CookieSessionCredential)
 }
 
@@ -39,7 +39,7 @@ enum BrowserLoginResult: Sendable, Equatable {
 struct CredentialEntry: Codable, Sendable, Equatable {
     var apiKey: String?
     var oauthCredential: OAuthCredential?
-    var browserCredential: KimiBrowserCredential?
+    var browserCredential: BrowserTokenCredential?
     var cookieCredential: CookieSessionCredential?
 }
 
@@ -47,7 +47,7 @@ struct CredentialEntry: Codable, Sendable, Equatable {
 enum StoredCredential: Sendable, Equatable {
     case apiKey(String)
     case oauth(OAuthCredential)
-    case browserSession(KimiBrowserCredential)
+    case browserSession(BrowserTokenCredential)
     case cookieSession(CookieSessionCredential)
 
     /// 从旧 Entry 中解析对应 flow 的凭据。
@@ -144,7 +144,7 @@ struct CredentialStore: Sendable {
         }
     }
 
-    func browserCredential(for subscriptionID: UUID) -> KimiBrowserCredential? {
+    func browserCredential(for subscriptionID: UUID) -> BrowserTokenCredential? {
         Self.fileLock.withLock {
             try? load().entries[subscriptionID.uuidString]?.browserCredential
         }
@@ -204,7 +204,7 @@ struct CredentialStore: Sendable {
         }
     }
 
-    func save(browserCredential: KimiBrowserCredential, for subscriptionID: UUID) throws {
+    func save(browserCredential: BrowserTokenCredential, for subscriptionID: UUID) throws {
         try Self.fileLock.withLock {
             var file = try load()
             var entry = file.entries[subscriptionID.uuidString] ??

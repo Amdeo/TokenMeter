@@ -43,7 +43,7 @@ extension BrowserLoginRecipe {
 
     /// 校验 JWT 并构造凭证：格式错、缺字段、已过期分别抛对应错误。
     /// 仅 `localStorageTokens` 型有意义；其余类型的站点走 cookie 提取。
-    func tokenCredential(from rawValue: String) throws -> KimiBrowserCredential {
+    func tokenCredential(from rawValue: String) throws -> BrowserTokenCredential {
         guard case .localStorageTokens(_, _, let validatesRefreshTokenExpiry) = extraction else {
             throw BrowserLoginError.invalidCredentials(provider: displayName)
         }
@@ -66,7 +66,7 @@ extension BrowserLoginRecipe {
         guard expiresAt > .now else {
             throw BrowserLoginError.expired(provider: displayName)
         }
-        return KimiBrowserCredential(
+        return BrowserTokenCredential(
             accessToken: accessToken,
             refreshToken: refreshToken,
             expiresAt: expiresAt,

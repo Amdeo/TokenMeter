@@ -75,49 +75,6 @@ struct DeviceOAuthAuthorization: Sendable {
     let expiresAt: Date
 }
 
-/// 供应商支持的认证方式定义（编辑页选项 + 表单驱动）。
-///
-/// 认证方式所需的行为差异全部声明在这里，而不是散在编辑页的 switch 里：
-/// `flowID` 决定表单形态，`loginRecipe` 决定内置浏览器登录怎么提取登录态，
-/// `deviceAuthorization` / `authorizationCode` 决定用哪个授权服务实现。
-struct AuthMethodDefinition: Identifiable, Sendable {
-    let id: AuthMethodID
-    let flowID: AuthFlowID
-    let title: String
-    let systemImage: String
-    /// 可选的 chip 强调色（0xRRGGBB），缺省使用通用强调色。
-    var tintRGB: UInt32?
-    let detail: String
-    /// `browserSession` 流程的登录配方；缺失时编辑页明确报错，不会退回别的站点。
-    var loginRecipe: BrowserLoginRecipe?
-    /// `deviceOAuth` 流程的设备授权实现。
-    var deviceAuthorization: DeviceAuthorizationKind?
-    /// `oauthCode` 流程的授权码实现。
-    var authorizationCode: AuthorizationCodeKind?
-
-    init(
-        id: AuthMethodID,
-        flowID: AuthFlowID,
-        title: String,
-        systemImage: String,
-        tintRGB: UInt32? = nil,
-        detail: String,
-        loginRecipe: BrowserLoginRecipe? = nil,
-        deviceAuthorization: DeviceAuthorizationKind? = nil,
-        authorizationCode: AuthorizationCodeKind? = nil
-    ) {
-        self.id = id
-        self.flowID = flowID
-        self.title = title
-        self.systemImage = systemImage
-        self.tintRGB = tintRGB
-        self.detail = detail
-        self.loginRecipe = loginRecipe
-        self.deviceAuthorization = deviceAuthorization
-        self.authorizationCode = authorizationCode
-    }
-}
-
 // MARK: - 供应商元数据
 
 /// 供应商展示层元数据。纯数据、可 Sendable；渲染由 `PlatformLogo` 与选择页读取。

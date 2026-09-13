@@ -34,7 +34,7 @@ struct KimiProviderDefinition: ProviderDefinition {
         [
             AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台"),
             AuthMethodDefinition(id: .kimiDeviceOAuth, flowID: .deviceOAuth, title: "Kimi Code OAuth", systemImage: "lock.shield.fill", tintRGB: 0x5E5CE6, detail: "实验性设备授权", deviceAuthorization: .kimiCode),
-            AuthMethodDefinition(id: .kimiBrowserSession, flowID: .browserSession, title: "网页登录态", systemImage: "globe", tintRGB: 0x32D74B, detail: "登录 Kimi 账号（内置）", loginRecipe: .kimi),
+            AuthMethodDefinition(id: .kimiBrowserSession, flowID: .browserSession, title: "网页登录态", systemImage: "globe", tintRGB: 0x32D74B, detail: "登录 Kimi 账号（内置）", loginRecipe: BrowserTokenSite.kimi.loginRecipe),
         ]
     }
 
@@ -177,7 +177,7 @@ struct KimiUsageProvider: UsageProvider {
 
     /// 对应 kimi.com/settings/subscription?tab=quota 的业务请求。
     /// GetSubscriptionStats 是网页登录态的唯一数据源，直接提供 5 小时、7 天和总使用量。
-    private func fetchBrowserUsage(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
+    private func fetchBrowserUsage(credential: BrowserTokenCredential) async throws -> UsageSnapshot {
         let authorization = "\(credential.tokenType) \(credential.accessToken)"
         let response: KimiSubscriptionStatsResponse = try await APIClient.post(
             URL(string: "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats")!,

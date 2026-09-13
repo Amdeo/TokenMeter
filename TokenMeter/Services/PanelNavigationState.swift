@@ -184,7 +184,7 @@ final class SubscriptionEditorDraft {
     var quotaColors: [String: UInt32]
     var apiKey = ""
     var oauthCredential: OAuthCredential?
-    var browserCredential: KimiBrowserCredential?
+    var browserCredential: BrowserTokenCredential?
     var cookieCredential: CookieSessionCredential?
     var oauthDevice: DeviceOAuthAuthorization?
     /// 授权码流程（Claude）：浏览器授权后粘贴回来的授权码或回调地址。

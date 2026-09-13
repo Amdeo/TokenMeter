@@ -23,13 +23,10 @@ extension BrowserTokenSite {
     )
 }
 
-extension BrowserLoginRecipe {
-    static let apiKeyFun = BrowserTokenSite.apiKeyFun.loginRecipe
-}
 
 extension BrowserRelayRefresher {
     static let apiKeyFun = BrowserRelayRefresher(
-        site: .apiKeyFun, apiBase: URL(string: "https://apikey.fun/api/v1")!
+        tokenSite: .apiKeyFun, apiBase: URL(string: "https://apikey.fun/api/v1")!
     )
 }
 
@@ -38,7 +35,7 @@ extension BrowserRelayRefresher {
 /// 余额型中转站：接口与卡片由 `RelayBalanceProviderDefinition` 提供，这里只有站点差异。
 extension RelayBalanceProviderDefinition {
     static let apiKeyFun = RelayBalanceProviderDefinition(
-        site: .apiKeyFun,
+        refresher: .apiKeyFun,
         id: .apikeyFun,
         displayName: "APIKEY.FUN",
         iconResourceName: "icon-apikeyfun",
@@ -52,7 +49,7 @@ extension RelayBalanceProviderDefinition {
             systemImage: "globe",
             tintRGB: 0x6E6CF0,
             detail: "登录 APIKEY.FUN 账号（内置）",
-            loginRecipe: .apiKeyFun
+            loginRecipe: BrowserTokenSite.apiKeyFun.loginRecipe
         )
     )
 }

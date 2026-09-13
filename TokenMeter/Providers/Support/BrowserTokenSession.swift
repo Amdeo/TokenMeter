@@ -33,13 +33,13 @@ enum BrowserLoginError: LocalizedError, Sendable, Equatable {
     var errorDescription: String? {
         switch self {
         case .credentialsMissing(let provider):
-            "未找到 \(provider) 登录态，请先登录后重试。"
+            "未找到 \(provider) 网页登录态凭证，请先登录后重试。"
         case .invalidCredentials(let provider):
-            "\(provider) 登录态格式无效，请重新登录后重试。"
+            "\(provider) 网页登录态凭证格式无效，请重新登录后重试。"
         case .expired(let provider):
-            "\(provider) 登录态已过期，请重新登录后重试。"
+            "\(provider) 网页登录态凭证已过期，请重新登录后重试。"
         case .refreshFailed(let provider, let message):
-            "刷新 \(provider) 登录态失败：\(message)。请稍后重试。"
+            "刷新 \(provider) 网页登录态凭证失败：\(message)。请稍后重试。"
         }
     }
 }
@@ -85,7 +85,7 @@ struct BrowserTokenSite: Sendable {
 
     var extractionJavaScript: String { loginRecipe.extractionJavaScript }
 
-    func credential(from rawValue: String) throws -> KimiBrowserCredential {
+    func credential(from rawValue: String) throws -> BrowserTokenCredential {
         try loginRecipe.tokenCredential(from: rawValue)
     }
 }
@@ -96,27 +96,27 @@ struct BrowserTokenSite: Sendable {
 /// 「`POST {apiBase}/auth/refresh` 可续期」的站点。
 /// CCBus / APIKEY.FUN / Siyu 的前端续期接口同构，共用 `BrowserSessionRefresher`。
 struct BrowserRelayRefresher: Sendable {
-    let site: BrowserTokenSite
+    let tokenSite: BrowserTokenSite
     let apiBase: URL
 
     /// 续期入口（`BrowserSessionFlow` 的 refresh 闭包直接引用）。
-    func refresh(_ credential: KimiBrowserCredential) async throws -> KimiBrowserCredential {
+    func refresh(_ credential: BrowserTokenCredential) async throws -> BrowserTokenCredential {
         try await refresh(credential, transport: .live)
     }
 
     /// 同一流程，额外暴露传输层以便测试覆盖错误映射。
     func refresh(
-        _ credential: KimiBrowserCredential,
+        _ credential: BrowserTokenCredential,
         transport: HTTPTransport
-    ) async throws -> KimiBrowserCredential {
+    ) async throws -> BrowserTokenCredential {
         do {
             return try await BrowserSessionRefresher.refresh(
                 credential, apiBase: apiBase, transport: transport
             )
         } catch BrowserSessionRefresher.Failure.invalidCredentials {
-            throw BrowserLoginError.expired(provider: site.displayName)
+            throw BrowserLoginError.expired(provider: tokenSite.displayName)
         } catch BrowserSessionRefresher.Failure.requestFailed(let message) {
-            throw BrowserLoginError.refreshFailed(provider: site.displayName, message: message)
+            throw BrowserLoginError.refreshFailed(provider: tokenSite.displayName, message: message)
         }
     }
 }

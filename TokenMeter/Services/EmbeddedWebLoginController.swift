@@ -139,8 +139,8 @@ final class EmbeddedWebLoginController: NSObject, NSWindowDelegate {
 /// 登录窗口配置完全由供应商声明的 `BrowserLoginRecipe` 决定：
 /// 共享代码不认识任何供应商，新增站点不需要改这里。
 extension EmbeddedWebLoginController.Configuration {
-    static func browserLogin(_ recipe: BrowserLoginRecipe) -> Self {
-        .init(
+    init(recipe: BrowserLoginRecipe) {
+        self.init(
             title: recipe.windowTitle,
             sessionDomains: recipe.sessionDomains,
             loginPageURL: recipe.loginPageURL,
@@ -165,6 +165,10 @@ extension EmbeddedWebLoginController.Configuration {
                 }
             }
         )
+    }
+
+    static func browserLogin(_ recipe: BrowserLoginRecipe) -> Self {
+        .init(recipe: recipe)
     }
 
     /// 读取 localStorage 中某个键对应对象的用户 ID。

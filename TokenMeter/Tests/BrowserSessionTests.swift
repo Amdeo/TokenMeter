@@ -80,9 +80,9 @@ struct EmbeddedWebLoginControllerTests {
 
     @Test
     func loginRecipesKeepProviderDomains() {
-        #expect(BrowserLoginRecipe.kimi.sessionDomains == ["kimi.com"])
-        #expect(BrowserLoginRecipe.ccbus.sessionDomains == ["ccbus.top"])
-        #expect(BrowserLoginRecipe.apiKeyFun.sessionDomains == ["apikey.fun"])
+        #expect(BrowserTokenSite.kimi.loginRecipe.sessionDomains == ["kimi.com"])
+        #expect(BrowserTokenSite.ccbus.loginRecipe.sessionDomains == ["ccbus.top"])
+        #expect(BrowserTokenSite.apiKeyFun.loginRecipe.sessionDomains == ["apikey.fun"])
         #expect(BrowserLoginRecipe.nowCoding.sessionDomains == ["nowcoding.ai"])
     }
 
@@ -90,7 +90,7 @@ struct EmbeddedWebLoginControllerTests {
     @MainActor
     func loginControllerExposesSessionDomainsForSiteDataClearing() {
         // 切换账号时靠这个属性清除对应域的站点数据，必须与配方一致。
-        let controller = EmbeddedWebLoginController(configuration: .browserLogin(.ccbus))
+        let controller = EmbeddedWebLoginController(configuration: .init(recipe: BrowserTokenSite.ccbus.loginRecipe))
         #expect(controller.sessionDomains == ["ccbus.top"])
     }
 }
@@ -105,8 +105,8 @@ struct BrowserSessionRefresherTests {
         #"{"code":0,"message":"success","data":{"access_token":"new-access","refresh_token":"new-refresh","expires_in":7200}}"#.utf8
     )
 
-    private static func credential() -> KimiBrowserCredential {
-        KimiBrowserCredential(
+    private static func credential() -> BrowserTokenCredential {
+        BrowserTokenCredential(
             accessToken: "old-access", refreshToken: "old-refresh", expiresAt: .now, tokenType: "Bearer"
         )
     }

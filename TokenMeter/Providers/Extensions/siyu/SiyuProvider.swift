@@ -23,13 +23,10 @@ extension BrowserTokenSite {
     )
 }
 
-extension BrowserLoginRecipe {
-    static let siyu = BrowserTokenSite.siyu.loginRecipe
-}
 
 extension BrowserRelayRefresher {
     static let siyu = BrowserRelayRefresher(
-        site: .siyu, apiBase: URL(string: "https://siyu.site/api/v1")!
+        tokenSite: .siyu, apiBase: URL(string: "https://siyu.site/api/v1")!
     )
 }
 
@@ -45,7 +42,7 @@ struct SiyuProviderDefinition: ProviderDefinition {
             fallbackSystemImage: "bolt.fill",
             tintRGB: 0x6366F1,
             capabilityDescription: "支持账户余额与订阅额度，可通过网页登录态获取。",
-            authPageURL: BrowserRelayRefresher.siyu.site.loginPageURL,
+            authPageURL: BrowserRelayRefresher.siyu.tokenSite.loginPageURL,
             homepageURL: URL(string: "https://siyu.site"),
             authenticationSummary: "网页登录态 · 余额 + 订阅"
         )
@@ -59,7 +56,7 @@ struct SiyuProviderDefinition: ProviderDefinition {
             systemImage: "globe",
             tintRGB: 0x6366F1,
             detail: "登录 Siyu API 账号（内置）",
-            loginRecipe: .siyu
+            loginRecipe: BrowserTokenSite.siyu.loginRecipe
         )]
     }
 
@@ -106,7 +103,7 @@ struct SiyuUsageProvider: UsageProvider {
     /// 同时拉取余额 + 活动订阅，合并为一个快照。
     /// 订阅只保留有效项：status 必须为 active 且到期时间晚于当前时间（过期订阅排除）。
     /// 每个订阅展开为 每日/每周/每月 三个额度窗口，重置时间取窗口起点 + 1d/7d/30d。
-    private func fetchAll(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
+    private func fetchAll(credential: BrowserTokenCredential) async throws -> UsageSnapshot {
         let me: MeResponse = try await APIClient.get(
             BrowserRelayRefresher.siyu.apiBase.appendingPathComponent("/auth/me"),
             providerID: subscription.providerID,

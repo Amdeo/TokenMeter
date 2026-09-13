@@ -10,8 +10,11 @@ struct ProviderRegistryTests {
     @Test
     func registryExposesAllBuiltInProvidersWithUniqueIDs() {
         let ids = ProviderRegistry.all.map(\.id.rawValue)
+        #expect(!ids.isEmpty)
         #expect(Set(ids).count == ids.count)
-        #expect(ids == ["deepseek", "kimi", "zhipu", "opencode-go", "minimax", "ccbus", "apikey-fun", "nowcoding", "siyu", "codex", "claude"])
+        // 稳定 ID 一经发布不可改：小写字母 + 短横线。顺序由 ProviderCatalog 决定，新增供应商不必改本测试。
+        #expect(ids.allSatisfy { $0 == $0.lowercased() && !$0.contains(" ") && !$0.isEmpty })
+        #expect(ids == ProviderCatalog.providers.map(\.id.rawValue))
     }
 
     @Test
@@ -228,7 +231,7 @@ struct StoredCredentialTests {
         #expect(store.credential(for: id, flowID: .deviceOAuth) == .oauth(oauth))
         #expect(store.credential(for: id, flowID: .apiKey) == nil)
 
-        let browser = KimiBrowserCredential(accessToken: "b", refreshToken: "r", expiresAt: .distantFuture, tokenType: "Bearer")
+        let browser = BrowserTokenCredential(accessToken: "b", refreshToken: "r", expiresAt: .distantFuture, tokenType: "Bearer")
         try store.save(.browserSession(browser), for: id)
         #expect(store.credential(for: id, flowID: .browserSession) == .browserSession(browser))
         #expect(store.credential(for: id, flowID: .deviceOAuth) == nil)
@@ -511,7 +514,7 @@ struct NowCodingTests {
             .domain: "nowcoding.ai",
             .path: "/",
         ])!
-        #expect(throws: BrowserCookieCredentialError.credentialsMissing(provider: "NowCoding")) {
+        #expect(throws: BrowserLoginError.credentialsMissing(provider: "NowCoding")) {
             _ = try BrowserCookieCredential.credential(
                 cookie: cookie, name: "session", userID: "21", displayName: "NowCoding"
             )
@@ -526,7 +529,7 @@ struct NowCodingTests {
             .domain: "nowcoding.ai",
             .path: "/",
         ])!
-        #expect(throws: BrowserCookieCredentialError.invalidCredentials(provider: "NowCoding")) {
+        #expect(throws: BrowserLoginError.invalidCredentials(provider: "NowCoding")) {
             _ = try BrowserCookieCredential.credential(
                 cookie: cookie, name: "session", userID: " ", displayName: "NowCoding"
             )
@@ -546,7 +549,7 @@ struct NowCodingTests {
         #expect(store.cookieSession(for: id)?.userID == "9")
         #expect(store.apiKey(for: id) == nil)
 
-        try store.save(.browserSession(KimiBrowserCredential(accessToken: "a", refreshToken: "r", expiresAt: Date.now.addingTimeInterval(3600), tokenType: "Bearer")), for: id)
+        try store.save(.browserSession(BrowserTokenCredential(accessToken: "a", refreshToken: "r", expiresAt: Date.now.addingTimeInterval(3600), tokenType: "Bearer")), for: id)
         #expect(store.cookieSession(for: id) == nil)
         #expect(store.browserCredential(for: id)?.accessToken == "a")
     }
@@ -782,8 +785,8 @@ struct BrowserSessionFlowTests {
         return (CredentialStore(fileURL: url), url)
     }
 
-    private func makeCredential(expiresIn: TimeInterval) -> KimiBrowserCredential {
-        KimiBrowserCredential(
+    private func makeCredential(expiresIn: TimeInterval) -> BrowserTokenCredential {
+        BrowserTokenCredential(
             accessToken: "access", refreshToken: "refresh",
             expiresAt: Date.now.addingTimeInterval(expiresIn), tokenType: "Bearer"
         )
@@ -792,7 +795,7 @@ struct BrowserSessionFlowTests {
     private func makeConfiguration(
         store: CredentialStore,
         id: UUID,
-        refresh: @escaping (KimiBrowserCredential) async throws -> KimiBrowserCredential
+        refresh: @escaping (BrowserTokenCredential) async throws -> BrowserTokenCredential
     ) -> BrowserSessionFlow.Configuration {
         BrowserSessionFlow.Configuration(
             providerID: .ccbus,

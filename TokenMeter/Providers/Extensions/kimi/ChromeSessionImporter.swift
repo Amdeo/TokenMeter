@@ -15,7 +15,7 @@ struct ChromeSessionImporter: Sendable {
 
     /// 用 refresh_token 换取新的网页登录态。Kimi 网页的 access_token 有效期很短
     /// （约一小时），refresh_token 长期有效，刷新成功后须回写凭证文件。
-    static func refresh(_ credential: KimiBrowserCredential) async throws -> KimiBrowserCredential {
+    static func refresh(_ credential: BrowserTokenCredential) async throws -> BrowserTokenCredential {
         var request = URLRequest(url: refreshTokenEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

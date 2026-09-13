@@ -15,6 +15,3 @@ extension BrowserTokenSite {
     )
 }
 
-extension BrowserLoginRecipe {
-    static let kimi = BrowserTokenSite.kimi.loginRecipe
-}

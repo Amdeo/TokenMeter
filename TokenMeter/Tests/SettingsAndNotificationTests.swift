@@ -91,7 +91,7 @@ struct SettingsAndNotificationTests {
             draft: draft
         ))
         draft.authMethodID = .kimiBrowserSession
-        draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+        draft.browserCredential = BrowserTokenCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
         draft.browserImportTask = Task {}
         #expect(!AuthFlowRegistry.canSave(
             originalAuthMethodID: .apiKey,
@@ -100,7 +100,7 @@ struct SettingsAndNotificationTests {
             draft: draft
         ))
         draft.cancelTasks()
-        draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+        draft.browserCredential = BrowserTokenCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
         #expect(AuthFlowRegistry.canSave(
             originalAuthMethodID: .apiKey,
             selected: .kimiBrowserSession,
@@ -918,7 +918,7 @@ struct PanelNavigationTests {
         let draft = SubscriptionEditorDraft(providerID: .kimi)
         let originalGeneration = draft.browserImportSessionID
         draft.browserImportTask = Task {}
-        draft.browserCredential = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+        draft.browserCredential = BrowserTokenCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
 
         draft.leaveBrowserAuthentication()
 
@@ -944,8 +944,8 @@ struct PanelNavigationTests {
         OAuthCredential(accessToken: "oauth", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
     }
 
-    private var testBrowserCredential: KimiBrowserCredential {
-        KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+    private var testBrowserCredential: BrowserTokenCredential {
+        BrowserTokenCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
     }
 
     private func isRecovery(_ content: PanelNavigationState.Content) -> Bool {

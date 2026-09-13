@@ -7,7 +7,7 @@ import Foundation
 /// 具体站点在各自目录里用一条 `static let` 实例化它，见 `Providers/Extensions/<id>/`。
 struct RelayBalanceProviderDefinition: ProviderDefinition {
     /// 站点常量与续期入口。
-    let site: BrowserRelayRefresher
+    let refresher: BrowserRelayRefresher
     let id: ProviderID
     /// 选择页/卡片展示名（可与错误文案里的短名不同，如「CCBus（AI 巴士）」）。
     let displayName: String
@@ -25,7 +25,7 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
             fallbackSystemImage: fallbackSystemImage,
             tintRGB: tintRGB,
             capabilityDescription: "支持账户余额，可通过网页登录态获取。",
-            authPageURL: site.site.loginPageURL,
+            authPageURL: refresher.tokenSite.loginPageURL,
             homepageURL: homepageURL,
             authenticationSummary: "网页登录态 · 支持账户余额"
         )
@@ -36,7 +36,7 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
     @MainActor var cardRenderer: any ProviderCardRenderer { BalanceCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
-        RelayBalanceUsageProvider(subscription: subscription, site: site)
+        RelayBalanceUsageProvider(subscription: subscription, refresher: refresher)
     }
 
 }
@@ -45,7 +45,7 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
 
 struct RelayBalanceUsageProvider: UsageProvider {
     let subscription: Subscription
-    let site: BrowserRelayRefresher
+    let refresher: BrowserRelayRefresher
     private let credentials = CredentialStore()
 
     func fetchUsage() async throws -> UsageSnapshot {
@@ -56,9 +56,9 @@ struct RelayBalanceUsageProvider: UsageProvider {
             providerID: subscription.providerID,
             subscriptionID: subscription.id,
             credentials: credentials,
-            providerName: site.site.displayName,
+            providerName: refresher.tokenSite.displayName,
             isUsable: { $0.expiresAt.timeIntervalSinceNow > 300 },
-            refresh: { try await site.refresh($0) }
+            refresh: { try await refresher.refresh($0) }
         )
         return try await BrowserSessionFlow.fetchWithRetry(
             configuration, stored: stored,
@@ -66,16 +66,16 @@ struct RelayBalanceUsageProvider: UsageProvider {
         )
     }
 
-    private func fetchBalance(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
+    private func fetchBalance(credential: BrowserTokenCredential) async throws -> UsageSnapshot {
         let response: MeResponse = try await APIClient.get(
-            site.apiBase.appendingPathComponent("/auth/me"),
+            refresher.apiBase.appendingPathComponent("/auth/me"),
             providerID: subscription.providerID,
             authorization: "\(credential.tokenType) \(credential.accessToken)",
             statusPolicy: .raw
         )
         guard response.code == 0, let data = response.data else {
             throw UsageProviderError.invalidResponse(
-                subscription.providerID, "\(site.site.displayName) 返回中缺少余额字段"
+                subscription.providerID, "\(refresher.tokenSite.displayName) 返回中缺少余额字段"
             )
         }
         return UsageSnapshot.realtime(subscription: subscription, quotas: [
