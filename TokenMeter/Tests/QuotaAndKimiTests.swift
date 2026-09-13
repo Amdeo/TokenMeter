@@ -49,7 +49,7 @@ struct QuotaAndKimiTests {
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
         let store = CredentialStore(fileURL: fileURL)
         let subscriptionID = UUID()
-        let credential = KimiBrowserCredential(
+        let credential = BrowserTokenCredential(
             accessToken: "access",
             refreshToken: "refresh",
             expiresAt: Date(timeIntervalSince1970: 1_900_000_000),
@@ -342,7 +342,7 @@ extension QuotaAndKimiTests {
         let store = CredentialStore(fileURL: fileURL)
         let id = UUID()
         let oauth = OAuthCredential(accessToken: "oauth", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
-        let browser = KimiBrowserCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
+        let browser = BrowserTokenCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
 
         try store.save(apiKey: "manual", for: id)
         #expect(store.apiKey(for: id) == "manual")

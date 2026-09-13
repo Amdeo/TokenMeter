@@ -1,8 +1,31 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let nowCoding = ProviderID(rawValue: "nowcoding")
+}
+
+extension AuthMethodID {
+    static let nowCodingBrowserSession = AuthMethodID(rawValue: "nowcoding-browser-session")
+}
+
+// MARK: - 登录站点
+
+extension BrowserLoginRecipe {
+    /// NowCoding：new-api 新版认证，localStorage 无 token，
+    /// 登录态是 WKWebsiteDataStore 里的 HttpOnly session cookie + localStorage 用户 ID。
+    static let nowCoding = BrowserLoginRecipe(
+        displayName: "NowCoding",
+        windowTitle: "登录 NowCoding 账号",
+        sessionDomains: ["nowcoding.ai"],
+        loginPageURL: NowCodingSite.loginPageURL,
+        extraction: .sessionCookie(name: NowCodingSite.sessionCookieName, userIDLocalStorageKey: "user")
+    )
+}
+
 // MARK: - 定义
 
-@MainActor
 struct NowCodingProviderDefinition: ProviderDefinition {
     let id = ProviderID.nowCoding
 
@@ -26,11 +49,12 @@ struct NowCodingProviderDefinition: ProviderDefinition {
             title: "网页登录态",
             systemImage: "globe",
             tintRGB: 0x6E6CF0,
-            detail: "登录 NowCoding 账号（内置）"
+            detail: "登录 NowCoding 账号（内置）",
+            loginRecipe: .nowCoding
         )]
     }
 
-    let cardRenderer: any ProviderCardRenderer = NowCodingCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { NowCodingCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         NowCodingUsageProvider(subscription: subscription)
@@ -81,13 +105,15 @@ struct NowCodingUsageProvider: UsageProvider {
             NowCodingSite.apiBase.appendingPathComponent("user/self"),
             providerID: subscription.providerID,
             authorization: "",
-            headers: headers
+            headers: headers,
+            statusPolicy: .raw
         )
         let subscriptions: SubscriptionResponse = try await APIClient.get(
             NowCodingSite.apiBase.appendingPathComponent("subscription/self"),
             providerID: subscription.providerID,
             authorization: "",
-            headers: headers
+            headers: headers,
+            statusPolicy: .raw
         )
 
         var quotas: [Quota] = []

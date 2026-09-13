@@ -1,6 +1,15 @@
 import Foundation
 
-@MainActor
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let claude = ProviderID(rawValue: "claude")
+}
+
+extension AuthMethodID {
+    static let claudeOAuth = AuthMethodID(rawValue: "claude-oauth")
+}
+
 struct ClaudeProviderDefinition: ProviderDefinition {
     let id = ProviderID.claude
 
@@ -24,11 +33,12 @@ struct ClaudeProviderDefinition: ProviderDefinition {
             title: "Claude OAuth",
             systemImage: "lock.shield.fill",
             tintRGB: 0xD97757,
-            detail: "浏览器完成 claude.ai 授权后粘贴授权码"
+            detail: "浏览器完成 claude.ai 授权后粘贴授权码",
+            authorizationCode: .claudePKCE
         )]
     }
 
-    let cardRenderer: any ProviderCardRenderer = QuotaListCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         ClaudeUsageProvider(subscription: subscription)
@@ -88,6 +98,7 @@ struct ClaudeUsageProvider: UsageProvider {
                 providerID: subscription.providerID,
                 authorization: "\(credential.tokenType) \(credential.accessToken)",
                 headers: Self.usageHeaders,
+                statusPolicy: .raw,
                 transport: transport
             )
             return try Self.parseUsage(response, subscription: subscription)

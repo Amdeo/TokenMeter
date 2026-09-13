@@ -184,7 +184,7 @@ final class SubscriptionEditorDraft {
     var quotaColors: [String: UInt32]
     var apiKey = ""
     var oauthCredential: OAuthCredential?
-    var browserCredential: KimiBrowserCredential?
+    var browserCredential: BrowserTokenCredential?
     var cookieCredential: CookieSessionCredential?
     var oauthDevice: DeviceOAuthAuthorization?
     /// 授权码流程（Claude）：浏览器授权后粘贴回来的授权码或回调地址。
@@ -207,11 +207,8 @@ final class SubscriptionEditorDraft {
         originalAuthMethodID = .apiKey
         initialProviderID = providerID
         self.providerID = providerID
-        authMethodID = switch providerID {
-        case .codex: .codexDeviceOAuth
-        case .claude: .claudeOAuth
-        default: .apiKey
-        }
+        // 默认认证方式取供应商声明的第一个认证方式；新增供应商无需在此登记。
+        authMethodID = ProviderRegistry.defaultAuthMethod(for: providerID) ?? .apiKey
         name = ""
         quotaColors = [:]
     }

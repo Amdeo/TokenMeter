@@ -1,8 +1,37 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let siyu = ProviderID(rawValue: "siyu")
+}
+
+extension AuthMethodID {
+    static let siyuBrowserSession = AuthMethodID(rawValue: "siyu-browser-session")
+}
+
+// MARK: - 登录站点
+
+extension BrowserTokenSite {
+    /// Siyu API：localStorage 键为 auth_token，续期走 `POST {apiBase}/auth/refresh`。
+    static let siyu = BrowserTokenSite(
+        displayName: "Siyu API",
+        loginWindowTitle: "登录 Siyu API 账号",
+        accessTokenKey: "auth_token",
+        sessionDomains: ["siyu.site"],
+        loginPageURL: URL(string: "https://siyu.site/login")!
+    )
+}
+
+
+extension BrowserRelayRefresher {
+    static let siyu = BrowserRelayRefresher(
+        tokenSite: .siyu, apiBase: URL(string: "https://siyu.site/api/v1")!
+    )
+}
+
 // MARK: - 定义
 
-@MainActor
 struct SiyuProviderDefinition: ProviderDefinition {
     let id = ProviderID.siyu
 
@@ -13,7 +42,7 @@ struct SiyuProviderDefinition: ProviderDefinition {
             fallbackSystemImage: "bolt.fill",
             tintRGB: 0x6366F1,
             capabilityDescription: "支持账户余额与订阅额度，可通过网页登录态获取。",
-            authPageURL: BrowserRelayRefresher.siyu.site.loginPageURL,
+            authPageURL: BrowserRelayRefresher.siyu.tokenSite.loginPageURL,
             homepageURL: URL(string: "https://siyu.site"),
             authenticationSummary: "网页登录态 · 余额 + 订阅"
         )
@@ -26,11 +55,12 @@ struct SiyuProviderDefinition: ProviderDefinition {
             title: "网页登录态",
             systemImage: "globe",
             tintRGB: 0x6366F1,
-            detail: "登录 Siyu API 账号（内置）"
+            detail: "登录 Siyu API 账号（内置）",
+            loginRecipe: BrowserTokenSite.siyu.loginRecipe
         )]
     }
 
-    let cardRenderer: any ProviderCardRenderer = SiyuCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { SiyuCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         SiyuUsageProvider(subscription: subscription)
@@ -73,16 +103,18 @@ struct SiyuUsageProvider: UsageProvider {
     /// 同时拉取余额 + 活动订阅，合并为一个快照。
     /// 订阅只保留有效项：status 必须为 active 且到期时间晚于当前时间（过期订阅排除）。
     /// 每个订阅展开为 每日/每周/每月 三个额度窗口，重置时间取窗口起点 + 1d/7d/30d。
-    private func fetchAll(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
+    private func fetchAll(credential: BrowserTokenCredential) async throws -> UsageSnapshot {
         let me: MeResponse = try await APIClient.get(
             BrowserRelayRefresher.siyu.apiBase.appendingPathComponent("/auth/me"),
             providerID: subscription.providerID,
-            authorization: "\(credential.tokenType) \(credential.accessToken)"
+            authorization: "\(credential.tokenType) \(credential.accessToken)",
+            statusPolicy: .raw
         )
         let subscriptions: SubscriptionsResponse = try await APIClient.get(
             BrowserRelayRefresher.siyu.apiBase.appendingPathComponent("/subscriptions/active"),
             providerID: subscription.providerID,
-            authorization: "\(credential.tokenType) \(credential.accessToken)"
+            authorization: "\(credential.tokenType) \(credential.accessToken)",
+            statusPolicy: .raw
         )
 
         var quotas: [Quota] = []

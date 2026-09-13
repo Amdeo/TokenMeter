@@ -1,8 +1,13 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let zhipu = ProviderID(rawValue: "zhipu")
+}
+
 // MARK: - 定义
 
-@MainActor
 struct ZhipuProviderDefinition: ProviderDefinition {
     let id = ProviderID.zhipu
 
@@ -23,7 +28,7 @@ struct ZhipuProviderDefinition: ProviderDefinition {
         [AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台")]
     }
 
-    let cardRenderer: any ProviderCardRenderer = QuotaListCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         ZhipuUsageProvider(subscription: subscription)

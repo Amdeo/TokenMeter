@@ -1,6 +1,15 @@
 import Foundation
 
-@MainActor
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let codex = ProviderID(rawValue: "codex")
+}
+
+extension AuthMethodID {
+    static let codexDeviceOAuth = AuthMethodID(rawValue: "codex-device-oauth")
+}
+
 struct CodexProviderDefinition: ProviderDefinition {
     let id = ProviderID.codex
 
@@ -18,10 +27,10 @@ struct CodexProviderDefinition: ProviderDefinition {
     }
 
     var authMethods: [AuthMethodDefinition] {
-        [AuthMethodDefinition(id: .codexDeviceOAuth, flowID: .deviceOAuth, title: "OpenAI Codex OAuth", systemImage: "lock.shield.fill", tintRGB: 0x10A37F, detail: "实验性，接口可能变动")]
+        [AuthMethodDefinition(id: .codexDeviceOAuth, flowID: .deviceOAuth, title: "OpenAI Codex OAuth", systemImage: "lock.shield.fill", tintRGB: 0x10A37F, detail: "实验性，接口可能变动", deviceAuthorization: .codexCode)]
     }
 
-    let cardRenderer: any ProviderCardRenderer = QuotaListCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         CodexUsageProvider(subscription: subscription)
@@ -77,6 +86,7 @@ struct CodexUsageProvider: UsageProvider {
                 providerID: subscription.providerID,
                 authorization: "\(credential.tokenType) \(credential.accessToken)",
                 headers: ["ChatGPT-Account-Id": accountID],
+                statusPolicy: .raw,
                 transport: transport
             )
             return try Self.parseUsage(response, subscription: subscription)

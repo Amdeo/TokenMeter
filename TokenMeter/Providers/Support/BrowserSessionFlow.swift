@@ -3,7 +3,7 @@ import Foundation
 /// Kimi / CCBus / APIKEY.FUN 共用的「浏览器令牌会话」通用刷新流程。
 ///
 /// 三家供应商的登录态结构相同（accessToken + refreshToken + expiresAt，
-/// 即 `KimiBrowserCredential`），刷新接口同构（用 refresh_token 换新），
+/// 即 `BrowserTokenCredential`），刷新接口同构（用 refresh_token 换新），
 /// 业务请求遇到 401/403 时兑底再刷新一次。把这份同构逻辑收敛到这里，
 /// 避免三个 Provider 各维护一份几乎相同的 fetchUsage 骨架。
 ///
@@ -19,9 +19,9 @@ enum BrowserSessionFlow {
         /// 展示给用户的供应商名，用于「XX 网页登录态已过期」文案。
         let providerName: String
         /// 现有凭证是否仍可直接使用（通常按 expiresAt 判断）。
-        let isUsable: (KimiBrowserCredential) -> Bool
+        let isUsable: (BrowserTokenCredential) -> Bool
         /// 以 refresh_token 换新登录态。
-        let refresh: (KimiBrowserCredential) async throws -> KimiBrowserCredential
+        let refresh: (BrowserTokenCredential) async throws -> BrowserTokenCredential
 
         /// 凭证失效时呈现的认证失效消息。
         var invalidMessage: String {
@@ -39,9 +39,9 @@ enum BrowserSessionFlow {
     /// - Parameter forceRefresh: 置 true 时无条件刷新（401/403 兑底重试场景）。
     static func refreshedCredential(
         _ configuration: Configuration,
-        stored: KimiBrowserCredential,
+        stored: BrowserTokenCredential,
         forceRefresh: Bool = false
-    ) async throws -> KimiBrowserCredential {
+    ) async throws -> BrowserTokenCredential {
         if !forceRefresh, configuration.isUsable(stored) { return stored }
         do {
             let refreshed = try await configuration.refresh(stored)
@@ -66,8 +66,8 @@ enum BrowserSessionFlow {
     /// 本周期尚未刷新过时，再兑底刷新一次重试；否则按凭证失效处理。
     static func fetchWithRetry<Result>(
         _ configuration: Configuration,
-        stored: KimiBrowserCredential,
-        fetch: (KimiBrowserCredential) async throws -> Result
+        stored: BrowserTokenCredential,
+        fetch: (BrowserTokenCredential) async throws -> Result
     ) async throws -> Result {
         var credential = stored
         var didRefresh = false

@@ -1,8 +1,18 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let kimi = ProviderID(rawValue: "kimi")
+}
+
+extension AuthMethodID {
+    static let kimiDeviceOAuth = AuthMethodID(rawValue: "kimi-device-oauth")
+    static let kimiBrowserSession = AuthMethodID(rawValue: "kimi-browser-session")
+}
+
 // MARK: - 定义
 
-@MainActor
 struct KimiProviderDefinition: ProviderDefinition {
     let id = ProviderID.kimi
 
@@ -23,12 +33,12 @@ struct KimiProviderDefinition: ProviderDefinition {
     var authMethods: [AuthMethodDefinition] {
         [
             AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台"),
-            AuthMethodDefinition(id: .kimiDeviceOAuth, flowID: .deviceOAuth, title: "Kimi Code OAuth", systemImage: "lock.shield.fill", tintRGB: 0x5E5CE6, detail: "实验性设备授权"),
-            AuthMethodDefinition(id: .kimiBrowserSession, flowID: .browserSession, title: "网页登录态", systemImage: "globe", tintRGB: 0x32D74B, detail: "登录 Kimi 账号（内置）"),
+            AuthMethodDefinition(id: .kimiDeviceOAuth, flowID: .deviceOAuth, title: "Kimi Code OAuth", systemImage: "lock.shield.fill", tintRGB: 0x5E5CE6, detail: "实验性设备授权", deviceAuthorization: .kimiCode),
+            AuthMethodDefinition(id: .kimiBrowserSession, flowID: .browserSession, title: "网页登录态", systemImage: "globe", tintRGB: 0x32D74B, detail: "登录 Kimi 账号（内置）", loginRecipe: BrowserTokenSite.kimi.loginRecipe),
         ]
     }
 
-    let cardRenderer: any ProviderCardRenderer = KimiCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { KimiCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         KimiUsageProvider(subscription: subscription)
@@ -159,20 +169,22 @@ struct KimiUsageProvider: UsageProvider {
             URL(string: "https://api.kimi.com/coding/v1/usages")!,
             providerID: subscription.providerID,
             authorization: authorization,
-            headers: Self.commonHeaders
+            headers: Self.commonHeaders,
+            statusPolicy: .raw
         )
         return try Self.parseCodingUsage(response, subscription: subscription)
     }
 
     /// 对应 kimi.com/settings/subscription?tab=quota 的业务请求。
     /// GetSubscriptionStats 是网页登录态的唯一数据源，直接提供 5 小时、7 天和总使用量。
-    private func fetchBrowserUsage(credential: KimiBrowserCredential) async throws -> UsageSnapshot {
+    private func fetchBrowserUsage(credential: BrowserTokenCredential) async throws -> UsageSnapshot {
         let authorization = "\(credential.tokenType) \(credential.accessToken)"
         let response: KimiSubscriptionStatsResponse = try await APIClient.post(
             URL(string: "https://www.kimi.com/apiv2/kimi.gateway.membership.v2.MembershipService/GetSubscriptionStats")!,
             providerID: subscription.providerID,
             authorization: authorization,
-            headers: Self.browserHeaders
+            headers: Self.browserHeaders,
+            statusPolicy: .raw
         )
         // 网页额度页只请求 GetSubscriptionStats；5 小时窗口的零值由该响应的
         // ratelimitCode5h.enabled=true + 缺省 ratio 表示，不能再用 coding 接口覆盖它。
@@ -183,7 +195,8 @@ struct KimiUsageProvider: UsageProvider {
         let response: KimiBalanceResponse = try await APIClient.get(
             URL(string: "https://api.moonshot.cn/v1/users/me/balance")!,
             providerID: subscription.providerID,
-            authorization: "Bearer \(key)"
+            authorization: "Bearer \(key)",
+            statusPolicy: .raw
         )
         let balances = [
             ("可用余额", response.data.availableBalance),

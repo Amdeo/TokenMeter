@@ -13,19 +13,9 @@ struct ProviderID: RawRepresentable, Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// 供应商的稳定 ID 常量与供应商实现放在一起（`Providers/Extensions/<id>/`），
+/// 本文件只保留类型与旧数据映射。
 extension ProviderID {
-    static let deepSeek = ProviderID(rawValue: "deepseek")
-    static let kimi = ProviderID(rawValue: "kimi")
-    static let zhipu = ProviderID(rawValue: "zhipu")
-    static let openCodeGo = ProviderID(rawValue: "opencode-go")
-    static let miniMax = ProviderID(rawValue: "minimax")
-    static let ccbus = ProviderID(rawValue: "ccbus")
-    static let apikeyFun = ProviderID(rawValue: "apikey-fun")
-    static let nowCoding = ProviderID(rawValue: "nowcoding")
-    static let siyu = ProviderID(rawValue: "siyu")
-    static let codex = ProviderID(rawValue: "codex")
-    static let claude = ProviderID(rawValue: "claude")
-
     /// 兼容旧 `Platform` 枚举的原始值映射。
     static func legacyPlatformMapping(_ rawValue: String) -> ProviderID {
         switch rawValue {
@@ -52,15 +42,8 @@ struct AuthMethodID: RawRepresentable, Codable, Hashable, Sendable {
 }
 
 extension AuthMethodID {
+    /// 所有 API Key 型供应商共用的认证方式 ID。
     static let apiKey = AuthMethodID(rawValue: "api-key")
-    static let kimiDeviceOAuth = AuthMethodID(rawValue: "kimi-device-oauth")
-    static let kimiBrowserSession = AuthMethodID(rawValue: "kimi-browser-session")
-    static let ccbusBrowserSession = AuthMethodID(rawValue: "ccbus-browser-session")
-    static let apikeyFunBrowserSession = AuthMethodID(rawValue: "apikey-fun-browser-session")
-    static let nowCodingBrowserSession = AuthMethodID(rawValue: "nowcoding-browser-session")
-    static let siyuBrowserSession = AuthMethodID(rawValue: "siyu-browser-session")
-    static let codexDeviceOAuth = AuthMethodID(rawValue: "codex-device-oauth")
-    static let claudeOAuth = AuthMethodID(rawValue: "claude-oauth")
 
     /// 兼容旧认证枚举值：`manualAPIKey` / `piAuth` / `officialAuth` → api-key，
     /// `kimiOAuth` → kimi-device-oauth，`kimiBrowserSession` → kimi-browser-session。
@@ -90,26 +73,6 @@ struct DeviceOAuthAuthorization: Sendable {
     let userCode: String
     let verificationURL: URL
     let expiresAt: Date
-}
-
-/// 供应商支持的认证方式定义（编辑页选项 + 表单驱动）。
-struct AuthMethodDefinition: Identifiable, Sendable {
-    let id: AuthMethodID
-    let flowID: AuthFlowID
-    let title: String
-    let systemImage: String
-    /// 可选的 chip 强调色（0xRRGGBB），缺省使用通用强调色。
-    var tintRGB: UInt32?
-    let detail: String
-
-    init(id: AuthMethodID, flowID: AuthFlowID, title: String, systemImage: String, tintRGB: UInt32? = nil, detail: String) {
-        self.id = id
-        self.flowID = flowID
-        self.title = title
-        self.systemImage = systemImage
-        self.tintRGB = tintRGB
-        self.detail = detail
-    }
 }
 
 // MARK: - 供应商元数据

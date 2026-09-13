@@ -1,8 +1,13 @@
 import Foundation
 
+// MARK: - 稳定 ID
+
+extension ProviderID {
+    static let openCodeGo = ProviderID(rawValue: "opencode-go")
+}
+
 // MARK: - 定义
 
-@MainActor
 struct OpenCodeGoProviderDefinition: ProviderDefinition {
     let id = ProviderID.openCodeGo
 
@@ -23,7 +28,7 @@ struct OpenCodeGoProviderDefinition: ProviderDefinition {
         [AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台")]
     }
 
-    let cardRenderer: any ProviderCardRenderer = QuotaListCardRenderer(anchorHint: "月")
+    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer(anchorHint: "月") }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         OpenCodeGoUsageProvider(subscription: subscription)

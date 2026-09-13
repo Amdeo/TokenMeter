@@ -1,15 +1,6 @@
 import AppKit
 import WebKit
 
-/// 内嵌 WKWebView 的浏览器登录窗口协议：返回网页登录态凭证。
-/// 各供应商的登录页加载与 localStorage 提取逻辑由 `EmbeddedWebLoginController.Configuration` 提供。
-@MainActor
-protocol BrowserSessionLogining {
-    /// 内置浏览器会话覆盖的目标域（含子域），切换账号时用于清除站点数据。
-    var sessionDomains: [String] { get }
-    func login() async throws -> BrowserLoginResult
-}
-
 /// 内置浏览器会话的站点数据：按域清除 WKWebView 持久化数据，使登录页回到未登录态。
 /// 只影响内嵌登录窗口的免登录会话，不影响已保存到凭证文件的网页登录态凭证。
 enum BrowserSessionSiteData {
@@ -42,7 +33,7 @@ enum BrowserSessionSiteData {
 /// 原先 Kimi / CCBus / APIKEY.FUN / NowCoding 各自维护了一份逐行相同的控制器，
 /// 差异只有标题、域名、登录页地址与提取方式；现在这些差异收敛为 `Configuration`。
 @MainActor
-final class EmbeddedWebLoginController: NSObject, NSWindowDelegate, BrowserSessionLogining {
+final class EmbeddedWebLoginController: NSObject, NSWindowDelegate {
     /// 单个供应商的登录窗口配置。窗口尺寸、轮询间隔与超时对所有供应商一致。
     struct Configuration {
         /// 窗口标题，例如「登录 Kimi 账号」。
@@ -143,64 +134,48 @@ final class EmbeddedWebLoginController: NSObject, NSWindowDelegate, BrowserSessi
     }
 }
 
-// MARK: - 各供应商配置
+// MARK: - 由配方构造配置
 
-/// 各供应商的登录窗口配置。差异只在标题、域名、登录页地址与提取方式；
-/// 窗口行为由 `EmbeddedWebLoginController` 统一承担。
+/// 登录窗口配置完全由供应商声明的 `BrowserLoginRecipe` 决定：
+/// 共享代码不认识任何供应商，新增站点不需要改这里。
 extension EmbeddedWebLoginController.Configuration {
-    /// token 型供应商（Kimi / CCBus / APIKEY.FUN / Siyu）：差异全在 `BrowserTokenSite`。
-    static func tokenLogin(_ site: BrowserTokenSite) -> Self {
-        .init(
-            title: site.loginWindowTitle,
-            sessionDomains: site.sessionDomains,
-            loginPageURL: site.loginPageURL,
+    init(recipe: BrowserLoginRecipe) {
+        self.init(
+            title: recipe.windowTitle,
+            sessionDomains: recipe.sessionDomains,
+            loginPageURL: recipe.loginPageURL,
             extract: { webView in
-                guard let raw = try? await webView.evaluateJavaScript(
-                    site.extractionJavaScript
-                ) as? String, !raw.isEmpty else { return nil }
-                return (try? site.credential(from: raw)).map(BrowserLoginResult.token)
+                switch recipe.extraction {
+                case .localStorageTokens:
+                    guard let raw = try? await webView.evaluateJavaScript(
+                        recipe.extractionJavaScript
+                    ) as? String, !raw.isEmpty else { return nil }
+                    return (try? recipe.tokenCredential(from: raw)).map(BrowserLoginResult.token)
+                case .sessionCookie(let name, let userIDLocalStorageKey):
+                    let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+                    // 共享 Cookie Store 可能含其它站点的同名 cookie，必须按域名过滤。
+                    guard let session = cookies.first(where: {
+                        $0.name == name
+                            && EmbeddedWebLoginController.matches(host: $0.domain, domains: recipe.sessionDomains)
+                    }) else { return nil }
+                    let userID = await Self.readUserID(from: webView, localStorageKey: userIDLocalStorageKey)
+                    return (try? BrowserCookieCredential.credential(
+                        cookie: session, name: name, userID: userID, displayName: recipe.displayName
+                    )).map(BrowserLoginResult.cookie)
+                }
             }
         )
     }
 
-    /// Kimi：登录页即用量页。
-    static var kimi: Self { tokenLogin(.kimi) }
-
-    /// CCBus（AI 巴士）。
-    static var ccbus: Self { tokenLogin(.ccbus) }
-
-    /// Siyu API。
-    static var siyu: Self { tokenLogin(.siyu) }
-
-    /// APIKEY.FUN。
-    static var apiKeyFun: Self { tokenLogin(.apiKeyFun) }
-
-    /// NowCoding：new-api 新版认证，localStorage 无 token，
-    /// 登录态是 WKWebsiteDataStore 里的 HttpOnly session cookie + localStorage 用户 ID。
-    static var nowCoding: Self {
-        .init(
-            title: "登录 NowCoding 账号",
-            sessionDomains: ["nowcoding.ai"],
-            loginPageURL: NowCodingSite.loginPageURL,
-            extract: { webView in
-                let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
-                // 共享 Cookie Store 可能含其它站点的同名 session cookie，必须按域名过滤。
-                guard let session = cookies.first(where: {
-                    $0.name == NowCodingSite.sessionCookieName
-                        && EmbeddedWebLoginController.matches(host: $0.domain, domains: ["nowcoding.ai"])
-                }) else { return nil }
-                let userID = await Self.readUserID(from: webView)
-                return (try? NowCodingBrowserCredentialExtractor.credential(cookie: session, userID: userID))
-                    .map(BrowserLoginResult.cookie)
-            }
-        )
+    static func browserLogin(_ recipe: BrowserLoginRecipe) -> Self {
+        .init(recipe: recipe)
     }
 
-    /// 读取 localStorage 中 `user` 对象的用户 ID。
+    /// 读取 localStorage 中某个键对应对象的用户 ID。
     @MainActor
-    private static func readUserID(from webView: WKWebView) async -> String? {
+    private static func readUserID(from webView: WKWebView, localStorageKey: String) async -> String? {
         guard let raw = try? await webView.evaluateJavaScript(
-            NowCodingBrowserCredentialExtractor.userIDJavaScript
+            BrowserCookieCredential.userIDJavaScript(localStorageKey: localStorageKey)
         ) as? String, !raw.isEmpty else { return nil }
         return try? JSONDecoder().decode(UserIDPayload.self, from: Data(raw.utf8)).id
     }
