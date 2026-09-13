@@ -2,7 +2,6 @@ import Foundation
 
 // MARK: - 定义
 
-@MainActor
 struct MiniMaxProviderDefinition: ProviderDefinition {
     let id = ProviderID.miniMax
 
@@ -23,7 +22,7 @@ struct MiniMaxProviderDefinition: ProviderDefinition {
         [AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台")]
     }
 
-    let cardRenderer: any ProviderCardRenderer = QuotaListCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         MiniMaxUsageProvider(subscription: subscription)

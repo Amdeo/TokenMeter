@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 struct CodexProviderDefinition: ProviderDefinition {
     let id = ProviderID.codex
 
@@ -21,7 +20,7 @@ struct CodexProviderDefinition: ProviderDefinition {
         [AuthMethodDefinition(id: .codexDeviceOAuth, flowID: .deviceOAuth, title: "OpenAI Codex OAuth", systemImage: "lock.shield.fill", tintRGB: 0x10A37F, detail: "实验性，接口可能变动")]
     }
 
-    let cardRenderer: any ProviderCardRenderer = QuotaListCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         CodexUsageProvider(subscription: subscription)

@@ -4,7 +4,6 @@ import Foundation
 
 /// 中转站供应商（CCBus / APIKEY.FUN）：同一套前端接口（`/auth/refresh`、`/auth/me`）
 /// 与同一张余额卡片，差异只有站点常量与展示元数据。
-@MainActor
 struct RelayBalanceProviderDefinition: ProviderDefinition {
     /// 站点常量与续期入口。
     let site: BrowserRelayRefresher
@@ -32,7 +31,7 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
 
     var authMethods: [AuthMethodDefinition] { [authMethod] }
 
-    let cardRenderer: any ProviderCardRenderer = BalanceCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { BalanceCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         RelayBalanceUsageProvider(subscription: subscription, site: site)

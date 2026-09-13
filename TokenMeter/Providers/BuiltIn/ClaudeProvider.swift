@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 struct ClaudeProviderDefinition: ProviderDefinition {
     let id = ProviderID.claude
 
@@ -28,7 +27,7 @@ struct ClaudeProviderDefinition: ProviderDefinition {
         )]
     }
 
-    let cardRenderer: any ProviderCardRenderer = QuotaListCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         ClaudeUsageProvider(subscription: subscription)

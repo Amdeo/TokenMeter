@@ -3,13 +3,19 @@ import SwiftUI
 // MARK: - 供应商定义
 
 /// 单个供应商的完整定义：元数据、认证方式、用量提供者工厂与卡片渲染器。
-/// 新增供应商时实现本协议并注册到 `ProviderRegistry.all`。
-@MainActor
-protocol ProviderDefinition: Identifiable {
+///
+/// 新增供应商时在 `Providers/Extensions/` 下新建模块，并在 `ProviderCatalog` 登记一行。
+///
+/// 协议本身不做 actor 隔离：`id`、`metadata`、`authMethods` 与 `makeUsageProvider`
+/// 都是可跨并发域传递的纯数据，注册表因此能在非隔离上下文里完成 ID 与认证方式查找
+/// （凭据迁移等非 UI 路径依赖这一点）。只有 SwiftUI 卡片渲染器是 `@MainActor`，
+/// 所以实现方把它写成计算属性——渲染器不是 Sendable，不能作为存储属性留在
+/// Sendable 的定义类型里。
+protocol ProviderDefinition: Identifiable, Sendable {
     var id: ProviderID { get }
     var metadata: ProviderMetadata { get }
     var authMethods: [AuthMethodDefinition] { get }
-    var cardRenderer: any ProviderCardRenderer { get }
+    @MainActor var cardRenderer: any ProviderCardRenderer { get }
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider
 }
 

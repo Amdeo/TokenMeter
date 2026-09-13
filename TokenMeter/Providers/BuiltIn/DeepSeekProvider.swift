@@ -2,7 +2,6 @@ import Foundation
 
 // MARK: - 定义
 
-@MainActor
 struct DeepSeekProviderDefinition: ProviderDefinition {
     let id = ProviderID.deepSeek
 
@@ -24,7 +23,7 @@ struct DeepSeekProviderDefinition: ProviderDefinition {
         [AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台")]
     }
 
-    let cardRenderer: any ProviderCardRenderer = BalanceCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { BalanceCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         DeepSeekUsageProvider(subscription: subscription)

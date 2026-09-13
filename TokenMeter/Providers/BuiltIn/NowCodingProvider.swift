@@ -2,7 +2,6 @@ import Foundation
 
 // MARK: - 定义
 
-@MainActor
 struct NowCodingProviderDefinition: ProviderDefinition {
     let id = ProviderID.nowCoding
 
@@ -30,7 +29,7 @@ struct NowCodingProviderDefinition: ProviderDefinition {
         )]
     }
 
-    let cardRenderer: any ProviderCardRenderer = NowCodingCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { NowCodingCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         NowCodingUsageProvider(subscription: subscription)

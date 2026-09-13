@@ -2,7 +2,6 @@ import Foundation
 
 // MARK: - 定义
 
-@MainActor
 struct KimiProviderDefinition: ProviderDefinition {
     let id = ProviderID.kimi
 
@@ -28,7 +27,7 @@ struct KimiProviderDefinition: ProviderDefinition {
         ]
     }
 
-    let cardRenderer: any ProviderCardRenderer = KimiCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { KimiCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         KimiUsageProvider(subscription: subscription)

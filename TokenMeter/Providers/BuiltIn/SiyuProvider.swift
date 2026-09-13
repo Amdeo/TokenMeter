@@ -2,7 +2,6 @@ import Foundation
 
 // MARK: - 定义
 
-@MainActor
 struct SiyuProviderDefinition: ProviderDefinition {
     let id = ProviderID.siyu
 
@@ -30,7 +29,7 @@ struct SiyuProviderDefinition: ProviderDefinition {
         )]
     }
 
-    let cardRenderer: any ProviderCardRenderer = SiyuCardRenderer()
+    @MainActor var cardRenderer: any ProviderCardRenderer { SiyuCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         SiyuUsageProvider(subscription: subscription)
