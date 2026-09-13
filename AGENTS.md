@@ -17,7 +17,8 @@ This is a macOS SwiftUI menu-bar app built by the `TokenMeter` target in
 - `Services/` owns local credential-file access and migration.
 - `Store/` contains `UsageStore`, the shared app state and refresh orchestration.
 - `Views/` contains SwiftUI screens and reusable view components.
-- `Resources/PlatformIcons/` contains bundled provider PNG assets.
+- Provider PNG assets sit beside their code in `Providers/Extensions/<id>/`
+  (`Resources/` only holds the app icon).
 
 `TokenMeter/Providers/` and `TokenMeter/Tests/` are Xcode **file-system
 synchronized groups**: new `.swift` and image files there are compiled and

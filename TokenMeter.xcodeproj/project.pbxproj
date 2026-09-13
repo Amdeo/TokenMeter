@@ -22,14 +22,6 @@
 			A10000010000000000000025 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000025 /* SettingsStore.swift */; };
 			A10000010000000000000026 /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000026 /* NotificationCoordinator.swift */; };
 			A10000010000000000000027 /* PanelNavigationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000027 /* PanelNavigationState.swift */; };
-			A10000010000000000000015 /* icon-deepseek.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* icon-deepseek.png */; };
-			A10000010000000000000016 /* icon-zhipu.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000016 /* icon-zhipu.png */; };
-			A10000010000000000000017 /* icon-kimi.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000017 /* icon-kimi.png */; };
-			A10000010000000000000018 /* icon-opencodego.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000018 /* icon-opencodego.png */; };
-			A10000010000000000000019 /* icon-minimax.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000019 /* icon-minimax.png */; };
-		A10000010000000000000052 /* icon-ccbus.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000052 /* icon-ccbus.png */; };
-		A10000010000000000000057 /* icon-apikeyfun.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000057 /* icon-apikeyfun.png */; };
-		A10000010000000000000062 /* icon-nowcoding.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000062 /* icon-nowcoding.png */; };
 		A10000010000000000000073 /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000073 /* JWT.swift */; };
 		A10000010000000000000074 /* EmbeddedWebLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000074 /* EmbeddedWebLoginController.swift */; };
 		A10000010000000000000075 /* BrowserSessionRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000075 /* BrowserSessionRefresher.swift */; };
@@ -42,7 +34,6 @@
 		A10000010000000000000065 /* CredentialMigrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000065 /* CredentialMigrationService.swift */; };
 		A10000010000000000000066 /* MigrationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000066 /* MigrationPanel.swift */; };
 		A10000010000000000000082 /* QuotaColorEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000082 /* QuotaColorEditor.swift */; };
-		A10000010000000000000081 /* icon-siyu.png in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000081 /* icon-siyu.png */; };
 		A10000010000000000000076 /* TokenMeter.icns in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000076 /* TokenMeter.icns */; };
 /* End PBXBuildFile section */
 
@@ -61,14 +52,6 @@
 			A20000010000000000000026 /* NotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
 			A20000010000000000000027 /* PanelNavigationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelNavigationState.swift; sourceTree = "<group>"; };
 			A20000010000000000000014 /* PlatformLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformLogo.swift; sourceTree = "<group>"; };
-			A20000010000000000000015 /* icon-deepseek.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-deepseek.png"; sourceTree = "<group>"; };
-			A20000010000000000000016 /* icon-zhipu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-zhipu.png"; sourceTree = "<group>"; };
-			A20000010000000000000017 /* icon-kimi.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-kimi.png"; sourceTree = "<group>"; };
-			A20000010000000000000018 /* icon-opencodego.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-opencodego.png"; sourceTree = "<group>"; };
-			A20000010000000000000019 /* icon-minimax.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-minimax.png"; sourceTree = "<group>"; };
-		A20000010000000000000052 /* icon-ccbus.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-ccbus.png"; sourceTree = "<group>"; };
-		A20000010000000000000057 /* icon-apikeyfun.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-apikeyfun.png"; sourceTree = "<group>"; };
-		A20000010000000000000062 /* icon-nowcoding.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-nowcoding.png"; sourceTree = "<group>"; };
 		A20000010000000000000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000010000000000000010 /* TokenMeter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenMeter.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000010000000000000073 /* JWT.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JWT.swift; sourceTree = "<group>"; };
@@ -84,7 +67,6 @@
 		A20000010000000000000065 /* CredentialMigrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialMigrationService.swift; sourceTree = "<group>"; };
 		A20000010000000000000066 /* MigrationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationPanel.swift; sourceTree = "<group>"; };
 		A20000010000000000000082 /* QuotaColorEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaColorEditor.swift; sourceTree = "<group>"; };
-		A20000010000000000000081 /* icon-siyu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-siyu.png"; sourceTree = "<group>"; };
 		A20000010000000000000076 /* TokenMeter.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = TokenMeter.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -100,8 +82,7 @@
 		A30000010000000000000005 = {isa = PBXGroup; children = (A20000010000000000000006, ); name = Store; path = Store; sourceTree = "<group>"; };
 		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000028, A20000010000000000000023, A20000010000000000000024, A20000010000000000000014, A20000010000000000000031, A20000010000000000000046, A20000010000000000000082, A20000010000000000000066, A30000010000000000000014, ); name = Views; path = Views; sourceTree = "<group>"; };
 		A30000010000000000000014 = {isa = PBXGroup; children = (A20000010000000000000044, ); name = ProviderCards; path = ProviderCards; sourceTree = "<group>"; };
-			A30000010000000000000010 = {isa = PBXGroup; children = (A30000010000000000000011, A20000010000000000000076, ); name = Resources; path = Resources; sourceTree = "<group>"; };
-			A30000010000000000000011 = {isa = PBXGroup; children = (A20000010000000000000015, A20000010000000000000016, A20000010000000000000017, A20000010000000000000018, A20000010000000000000019, A20000010000000000000052, A20000010000000000000057, A20000010000000000000062, A20000010000000000000081, ); name = PlatformIcons; path = PlatformIcons; sourceTree = "<group>"; };
+			A30000010000000000000010 = {isa = PBXGroup; children = (A20000010000000000000076, ); name = Resources; path = Resources; sourceTree = "<group>"; };
 		A30000010000000000000007 = {isa = PBXGroup; children = (A20000010000000000000010, B20000010000000000000002, ); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
@@ -115,7 +96,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A60000010000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000015, A10000010000000000000016, A10000010000000000000017, A10000010000000000000018, A10000010000000000000019, A10000010000000000000052, A10000010000000000000057, A10000010000000000000062, A10000010000000000000076, A10000010000000000000081, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000010000000000000002 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( A10000010000000000000076, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
