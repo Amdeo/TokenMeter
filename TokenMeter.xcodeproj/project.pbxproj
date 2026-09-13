@@ -22,12 +22,8 @@
 			A10000010000000000000025 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000025 /* SettingsStore.swift */; };
 			A10000010000000000000026 /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000026 /* NotificationCoordinator.swift */; };
 			A10000010000000000000027 /* PanelNavigationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000027 /* PanelNavigationState.swift */; };
-		A10000010000000000000073 /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000073 /* JWT.swift */; };
-		A10000010000000000000074 /* EmbeddedWebLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000074 /* EmbeddedWebLoginController.swift */; };
-		A10000010000000000000075 /* BrowserSessionRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000075 /* BrowserSessionRefresher.swift */; };
 		A10000010000000000000033 /* ProviderID.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000033 /* ProviderID.swift */; };
 		A10000010000000000000034 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000034 /* JSONValue.swift */; };
-		A10000010000000000000043 /* AuthFlowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000043 /* AuthFlowRegistry.swift */; };
 		A10000010000000000000044 /* StandardProviderCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000044 /* StandardProviderCards.swift */; };
 		A10000010000000000000046 /* SubscriptionMenuCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000046 /* SubscriptionMenuCard.swift */; };
 		A10000010000000000000064 /* MigrationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000064 /* MigrationModels.swift */; };
@@ -54,13 +50,9 @@
 			A20000010000000000000014 /* PlatformLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformLogo.swift; sourceTree = "<group>"; };
 		A20000010000000000000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000010000000000000010 /* TokenMeter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TokenMeter.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A20000010000000000000073 /* JWT.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JWT.swift; sourceTree = "<group>"; };
-		A20000010000000000000074 /* EmbeddedWebLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedWebLoginController.swift; sourceTree = "<group>"; };
-		A20000010000000000000075 /* BrowserSessionRefresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSessionRefresher.swift; sourceTree = "<group>"; };
 		B20000010000000000000002 /* TokenMeterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenMeterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000010000000000000033 /* ProviderID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderID.swift; sourceTree = "<group>"; };
 		A20000010000000000000034 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
-		A20000010000000000000043 /* AuthFlowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowRegistry.swift; sourceTree = "<group>"; };
 		A20000010000000000000044 /* StandardProviderCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandardProviderCards.swift; sourceTree = "<group>"; };
 		A20000010000000000000046 /* SubscriptionMenuCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionMenuCard.swift; sourceTree = "<group>"; };
 		A20000010000000000000064 /* MigrationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigrationModels.swift; sourceTree = "<group>"; };
@@ -78,7 +70,7 @@
 /* Begin PBXGroup section */
 		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A20000010000000000000009, A20000010000000000000001, AF0000010000000000000001, AF0000010000000000000002, ); path = TokenMeter; sourceTree = "<group>"; };
 		A30000010000000000000002 = {isa = PBXGroup; children = (A20000010000000000000002, A20000010000000000000033, A20000010000000000000034, A20000010000000000000064, ); name = Models; path = Models; sourceTree = "<group>"; };
-		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000025, A20000010000000000000026, A20000010000000000000027, A20000010000000000000032, A20000010000000000000043, A20000010000000000000065, A20000010000000000000073, A20000010000000000000074, A20000010000000000000075, ); name = Services; path = Services; sourceTree = "<group>"; };
+		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000025, A20000010000000000000026, A20000010000000000000027, A20000010000000000000032, A20000010000000000000065, ); name = Services; path = Services; sourceTree = "<group>"; };
 		A30000010000000000000005 = {isa = PBXGroup; children = (A20000010000000000000006, ); name = Store; path = Store; sourceTree = "<group>"; };
 		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000028, A20000010000000000000023, A20000010000000000000024, A20000010000000000000014, A20000010000000000000031, A20000010000000000000046, A20000010000000000000082, A20000010000000000000066, A30000010000000000000014, ); name = Views; path = Views; sourceTree = "<group>"; };
 		A30000010000000000000014 = {isa = PBXGroup; children = (A20000010000000000000044, ); name = ProviderCards; path = ProviderCards; sourceTree = "<group>"; };
@@ -100,7 +92,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000028, A10000010000000000000014, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, A10000010000000000000027, A10000010000000000000031, A10000010000000000000032, A10000010000000000000033, A10000010000000000000034, A10000010000000000000043, A10000010000000000000044, A10000010000000000000046, A10000010000000000000082, A10000010000000000000064, A10000010000000000000065, A10000010000000000000066, A10000010000000000000073, A10000010000000000000074, A10000010000000000000075, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000028, A10000010000000000000014, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, A10000010000000000000027, A10000010000000000000031, A10000010000000000000032, A10000010000000000000033, A10000010000000000000034, A10000010000000000000044, A10000010000000000000046, A10000010000000000000082, A10000010000000000000064, A10000010000000000000065, A10000010000000000000066, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */

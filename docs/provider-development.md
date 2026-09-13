@@ -36,6 +36,10 @@ Providers/
 │   ├── BrowserLoginRecipe.swift 登录配方数据类型与提取实现
 │   ├── BrowserCookieCredential.swift cookie 型登录态提取
 │   ├── AuthorizationServices.swift 设备授权 / 授权码的实现分派
+│   ├── AuthFlowRegistry.swift   按 flow 校验并保存凭据
+│   ├── EmbeddedWebLoginController.swift 内置浏览器登录窗口
+│   ├── BrowserSessionRefresher.swift `/auth/refresh` 续期实现
+│   ├── JWT.swift                token 过期时间解析
 │   └── RelayBalanceProvider.swift  余额型中转站的通用定义
 └── Extensions/                  ← 唯一扩展点（Xcode 文件系统同步组，新增文件零登记）
     ├── ProviderCatalog.swift    唯一手写清单：一行一个供应商
@@ -49,6 +53,8 @@ Providers/
 - **共享代码绝不按供应商 switch**。`ProviderRegistry` 的 `isSupported` 与
   `authFlow` 都从 `ProviderDefinition` 自身派生；编辑页的登录与授权分发读取
   认证方式里的声明。共享层里出现供应商名字就是设计错误。
+  应用层（`Views/`、`Store/`、`Services/`）只处理通用 UI 与存储，供应商接入
+  机制全部住在 `Providers/Common/`。
 - **`ProviderDefinition` 不做 actor 隔离**（只继承 `Sendable`）。`id`、`metadata`、
   `authMethods` 与 `makeUsageProvider` 都是可跨并发域传递的纯数据，凭据迁移等
   非 UI 路径因此能在不进入主 actor 的情况下查表。唯一的例外是 SwiftUI 卡片渲染器
