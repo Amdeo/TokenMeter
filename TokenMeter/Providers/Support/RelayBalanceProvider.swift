@@ -11,7 +11,8 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
     let id: ProviderID
     /// 选择页/卡片展示名（可与错误文案里的短名不同，如「CCBus（AI 巴士）」）。
     let displayName: String
-    let iconResourceName: String
+    /// Bundle 内图标资源名；nil 时使用 `fallbackSystemImage`。
+    let iconResourceName: String?
     let fallbackSystemImage: String
     let tintRGB: UInt32
     let homepageURL: URL

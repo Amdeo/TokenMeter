@@ -7,14 +7,32 @@ This is a macOS SwiftUI menu-bar app built by the `TokenMeter` target in
 
 - `TokenMeter/TokenMeterApp.swift` defines app and window entry points.
 - `Models/` contains Codable domain types such as subscriptions and quotas.
-- `Providers/` contains the provider protocol, demo data, and live API clients.
-- `Services/` owns local credential-file access and Kimi OAuth flows.
+- `Providers/ProviderDefinition.swift`, `ProviderRegistry.swift` and `UsageProvider.swift`
+  are the shared provider contracts; `Providers/Support/` holds provider-agnostic
+  machinery (HTTP, browser-session flow, relay balance definition).
+- **`Providers/Extensions/<provider-id>/` is the single extension point for
+  providers.** Each folder owns its stable IDs, login site, services, card
+  renderer and catalog entry; adding a provider means adding that folder plus one
+  line in `Providers/Extensions/ProviderCatalog.swift`.
+- `Services/` owns local credential-file access and migration.
 - `Store/` contains `UsageStore`, the shared app state and refresh orchestration.
 - `Views/` contains SwiftUI screens and reusable view components.
 - `Resources/PlatformIcons/` contains bundled provider PNG assets.
 
-Keep new files in the directory matching their responsibility and add them to
-the Xcode project target when needed.
+`TokenMeter/Providers/` and `TokenMeter/Tests/` are Xcode **file-system
+synchronized groups**: new `.swift` and image files there are compiled and
+bundled without editing `project.pbxproj`. Files anywhere else still have to be
+registered in the project file by hand.
+
+### Adding a provider
+
+Shared code never switches on a provider. `ProviderRegistry` derives
+`isSupported` / `authFlow` from the definition itself, the editor reads the
+login/authorization declarations carried by each `AuthMethodDefinition`, and
+`APIClient` takes the 401/403 semantics from the caller's `HTTPStatusPolicy`.
+If adding a provider seems to require editing a shared file, that is a design
+regression — discuss it instead. Full guide: `docs/provider-development.md`;
+relay-specific playbook: `.pi/skills/add-relay-provider/SKILL.md`.
 
 ## Build, Test, and Development Commands
 
