@@ -2,13 +2,38 @@
 
 [简体中文](README.md) | **English**
 
-> View usage and balances for configured AI coding accounts from the macOS menu bar.
+> **AI usage and balance monitoring in your macOS menu bar.** Official subscription quota windows (Kimi, Claude Code, Codex, Zhipu GLM, DeepSeek, MiniMax, OpenCode Go) and third-party AI relay balances (CCBus, APIKEY.FUN, NowCoding, Siyu) in one panel: always-on background refresh, with low-balance and failed-auth notifications.
 
 ![Screenshot](docs/images/menubar-screenshot.png)
 
 ![macOS](https://img.shields.io/badge/macOS-14.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![License](https://img.shields.io/badge/License-GPL--3.0-blue)
+[![CI](https://github.com/Amdeo/TokenMeter/actions/workflows/ci.yml/badge.svg)](https://github.com/Amdeo/TokenMeter/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Amdeo/TokenMeter)](https://github.com/Amdeo/TokenMeter/releases)
+
+**Keywords**: macOS menu bar AI usage tracker · LLM quota and balance monitor · Claude Code / Codex / Kimi / DeepSeek usage · API relay balance · SwiftUI menu bar app · status bar app
+
+## Why TokenMeter
+
+- **Official plans and relays in one place**: 11 providers, so official subscription quota windows and third-party relay balances need one tool and one sign-in, not two.
+- **Three authentication styles**: API key, OAuth (device flow / authorization code), and **browser session** — sign in once inside the embedded browser; no token copying and no plugins.
+- **Quota windows and balances side by side**: 5-hour / weekly / monthly windows, plan quotas, and account balances rendered as provider-specific cards, with multiple accounts and drag-to-reorder.
+- **Native**: Swift 6 + SwiftUI/AppKit with no third-party dependencies; lives in the menu bar and refreshes in the background, configurable from 60 seconds to 30 minutes.
+- **Quiet notifications**: only low balances, failed authentication, and repeated service errors — never quota exhaustion or plan expiry noise.
+- **Transparent and local**: no telemetry, no ads, no crash reporting; credentials stay in a private local file (directory `0700`, file `0600`), and an encrypted migration package is available.
+- **Extensible**: a new provider is one folder under `Providers/Extensions/<id>/` plus one line in `ProviderCatalog` — see the [provider development guide](docs/provider-development.md).
+
+## How it compares
+
+Each project has its own focus (capabilities per each project's own description). TokenMeter's bet is one panel for both official quota and relay balances:
+
+| Project | Focus | TokenMeter's approach |
+| --- | --- | --- |
+| [oh-myusage](https://github.com/Four-JJJJ/oh-myusage) | Menu bar summary of plan limits, relay balances, and local Codex accounts | Covers both data sources too, with an embedded browser login and encrypted credential migration on top |
+| [token-remain](https://github.com/Carstin520/token-remain) | Privacy-first tracking of AI coding quotas and reset times | Reads balances alongside quota windows, including CCBus / APIKEY.FUN / NowCoding / Siyu relays |
+| [Any-Api-Check](https://github.com/xiaopenghuang/Any-Api-Check) | Relay balances and call logs | Puts relay balances next to official quota on an always-on menu bar with low-balance notifications |
+| [limit-monitor](https://github.com/DjentieY/limit-monitor) | Rate-limit windows for Claude / Codex / Cursor | Covers quota windows and balances for 11 providers, including Kimi, Zhipu, MiniMax, OpenCode Go, and browser sessions |
 
 ## Current capabilities
 

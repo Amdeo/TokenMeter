@@ -2,13 +2,39 @@
 
 **简体中文** | [English](README.en.md)
 
-> 在 macOS 菜单栏集中查看已配置 AI Coding 账户的用量与余额。
+> **macOS 菜单栏上的 AI 用量与余额监控。** 把官方订阅的额度窗口（Kimi、Claude Code、Codex、智谱 GLM、DeepSeek、MiniMax、OpenCode Go）和第三方 AI 中转站余额（CCBus、APIKEY.FUN、NowCoding、Siyu）放进同一块菜单栏面板：常驻后台自动刷新，低余额与认证失效时通知你。
 
 ![Screenshot](docs/images/menubar-screenshot.png)
 
 ![macOS](https://img.shields.io/badge/macOS-14.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![License](https://img.shields.io/badge/License-GPL--3.0-blue)
+[![CI](https://github.com/Amdeo/TokenMeter/actions/workflows/ci.yml/badge.svg)](https://github.com/Amdeo/TokenMeter/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Amdeo/TokenMeter)](https://github.com/Amdeo/TokenMeter/releases)
+
+**中文关键词**：macOS 菜单栏 App · AI 用量监控 · 额度窗口（5 小时 / 每周 / 每月） · 余额查询 · **AI 中转站余额** · Kimi 余额 · Claude Code 用量 · Codex 用量 · 智谱 GLM · DeepSeek · MiniMax · OpenCode Go · CCBus / APIKEY.FUN / NowCoding / Siyu · API Key / OAuth / 网页登录态
+**English keywords**：macOS menu bar AI usage tracker · LLM quota and balance monitor · Claude Code / Codex / Kimi / DeepSeek usage · API relay balance · SwiftUI menu bar app
+
+## 为什么用 TokenMeter
+
+- **官方订阅与中转站放在一起**：11 个供应商，既有官方订阅的额度窗口，也有第三方中转站的账户余额，不用开两个工具、两套登录。
+- **三种认证都支持**：API Key、OAuth（设备授权 / 授权码），以及**网页登录态**——在内置浏览器里登录一次即可，不需要手动抠 token，也不用装插件。
+- **额度窗口与余额混排**：5 小时 / 每周 / 每月窗口、套餐额度与账户余额按供应商自适应成卡片，支持多账户与拖拽排序。
+- **原生实现**：Swift 6 + SwiftUI/AppKit，不含第三方依赖；菜单栏常驻，后台刷新 60 秒～30 分钟可调。
+- **克制的通知**：只报低余额、认证失效与连续服务错误，不推送额度耗尽、套餐到期这类噪音。
+- **透明且本地**：无遥测、无广告、无崩溃上报；凭据只保存在本机私有文件（目录 `0700`、文件 `0600`），并提供加密的凭据迁移包。
+- **可扩展**：新增一个供应商 = `Providers/Extensions/<id>/` 下一个目录 + `ProviderCatalog` 一行，参见[供应商开发指南](docs/provider-development.md)。
+
+## 与同类工具的差异
+
+同类项目各有侧重（各家能力以各自仓库说明为准），TokenMeter 的取向是「一块面板同时管官方额度与中转余额」：
+
+| 项目 | 侧重 | TokenMeter 的做法 |
+| --- | --- | --- |
+| [oh-myusage](https://github.com/Four-JJJJ/oh-myusage) | 菜单栏汇总官方订阅额度、中转余额与本地 Codex 账号状态 | 同样覆盖两类数据源，另提供内置浏览器网页登录态与加密凭据迁移 |
+| [token-remain](https://github.com/Carstin520/token-remain) | 隐私优先的 AI 编程额度与重置时间跟踪 | 余额与额度窗口一起读，并覆盖 CCBus / APIKEY.FUN / NowCoding / Siyu 等中转站 |
+| [Any-Api-Check](https://github.com/xiaopenghuang/Any-Api-Check) | 中转站余额与调用日志查询 | 中转余额与官方订阅额度同屏，常驻菜单栏自动刷新并做低余额通知 |
+| [limit-monitor](https://github.com/DjentieY/limit-monitor) | Claude / Codex / Cursor 的速率窗口 | 覆盖 11 家供应商的额度窗口与余额，含 Kimi、智谱、MiniMax、OpenCode Go 与网页登录态 |
 
 ## 当前能力
 
