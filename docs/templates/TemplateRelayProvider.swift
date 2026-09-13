@@ -93,7 +93,7 @@ extension RelayBalanceProviderDefinition {
 // MARK: - 接口不同构时：自定义用量提供者
 //
 // 余额不在 `{apiBase}/auth/me` 的 `data.balance` 时，别用上面的通用定义，
-// 改成实现自己的 ProviderDefinition / UsageProvider（参照 Support/RelayBalanceProvider.swift）。
+// 改成实现自己的 ProviderDefinition / UsageProvider（参照 Common/RelayBalanceProvider.swift）。
 //
 // 关键约定：
 // - 凭证读写一律走 `CredentialStore`，绝不写入订阅元数据。

@@ -231,7 +231,7 @@ extension RelayBalanceProviderDefinition {
 ### 3.2 字段不同构时的余额站点
 
 只改「请求哪个路径、取哪个字段、什么币种」的话，写自定义 `UsageProvider`
-放进同一个文件夹（参照 `Support/RelayBalanceProvider.swift`），关键骨架：
+放进同一个文件夹（参照 `Common/RelayBalanceProvider.swift`），关键骨架：
 
 ```swift
 struct <Name>UsageProvider: UsageProvider {
@@ -318,7 +318,7 @@ RelayBalanceProviderDefinition.<id>,
 - `Models/ProviderID.swift`：ID 常量已挪到供应商自己的文件里。
 - `Providers/ProviderRegistry.swift`：`isSupported` / `authFlow` 都从定义派生。
 - `Views/SubscriptionEditorSheet.swift`：登录与授权分发读认证方式的声明。
-- `Providers/Support/APIClient.swift`：状态码语义由调用方声明。
+- `Providers/Common/APIClient.swift`：状态码语义由调用方声明。
 - `TokenMeter.xcodeproj/project.pbxproj`：`Providers/` 是同步组。
 
 若发现必须改上面任何一处才能接入，那是架构回退，应该先讨论而不是直接改。
@@ -351,7 +351,7 @@ xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
 
 ## 7. 红线
 
-- 不在共享代码（View / Store / 认证编辑页 / Providers/Support）里新增按供应商的 `switch`。
+- 不在共享代码（View / Store / 认证编辑页 / Providers/Common）里新增按供应商的 `switch`。
 - 浏览器会话型的 `APIClient` 调用必须传 `statusPolicy: .raw`，
   否则 401/403 会被折叠成「需要重新登录」，刷新重试永远不会发生。
 - 登录态提取只读页面 localStorage / cookie；不注入脚本、不上传任何数据。

@@ -8,7 +8,7 @@ This is a macOS SwiftUI menu-bar app built by the `TokenMeter` target in
 - `TokenMeter/TokenMeterApp.swift` defines app and window entry points.
 - `Models/` contains Codable domain types such as subscriptions and quotas.
 - `Providers/ProviderDefinition.swift`, `ProviderRegistry.swift` and `UsageProvider.swift`
-  are the shared provider contracts; `Providers/Support/` holds provider-agnostic
+  are the shared provider contracts; `Providers/Common/` holds provider-agnostic
   machinery (HTTP, browser-session flow, relay balance definition).
 - **`Providers/Extensions/<provider-id>/` is the single extension point for
   providers.** Each folder owns its stable IDs, login site, services, card

@@ -29,7 +29,7 @@ Providers/
 ├── ProviderDefinition.swift     协议：元数据 / 认证方式 / 卡片渲染器 / usage provider 工厂
 ├── ProviderRegistry.swift       注册表门面：目录来自 ProviderCatalog，查找结果全部派生
 ├── UsageProvider.swift          fetchUsage 协议与统一错误
-├── Support/                     共享机制：不认识任何供应商
+├── Common/                      共享机制：不认识任何供应商
 │   ├── APIClient.swift          HTTP + 由调用方声明的 HTTPStatusPolicy
 │   ├── BrowserSessionFlow.swift 「先用手上凭证 → 401/403 刷新一次再重试」
 │   ├── BrowserTokenSession.swift 网页登录态类型：BrowserTokenSite / BrowserRelayRefresher / 错误
@@ -106,7 +106,7 @@ extension AuthMethodID {
 
 新增一种**全新协议**（既不是 API Key、网页登录态，也不是现有两种 OAuth）才需要：
 在 `AuthFlowID` 加 case、在 `AuthFlowRegistry` 加保存逻辑、在编辑页加表单，
-并在 `Providers/Support/` 里加对应的机制分派。这是机制扩展，不是新增供应商。
+并在 `Providers/Common/` 里加对应的机制分派。这是机制扩展，不是新增供应商。
 
 ## 新增余额型中转站（最省事）
 
@@ -158,7 +158,7 @@ extension RelayBalanceProviderDefinition {
 ```
 
 余额不在 `{apiBase}/auth/me` 的 `data.balance`、或需要额度窗口时，别用通用定义，
-仿照 `Support/RelayBalanceProvider.swift` 写自己的 `ProviderDefinition` 与
+仿照 `Common/RelayBalanceProvider.swift` 写自己的 `ProviderDefinition` 与
 `UsageProvider`，放进同一个文件夹。
 
 站点不提供续期（token 过期只能重新登录）时不要 `BrowserRelayRefresher`，
