@@ -231,14 +231,14 @@ struct SubscriptionEditorSheet: View {
 
     private func startOAuth() {
         if authFlowID == .oauthCode { startCodeOAuth(); return }
-        guard let kind = selectedAuthMethod?.deviceAuthorization else {
+        guard let handler = selectedAuthMethod?.deviceAuthorization else {
             draft.message = "该认证方式未声明设备授权实现。"
             return
         }
         resetOAuthState(); let sessionID = draft.oauthSessionID; draft.oauthStatus = "正在请求设备授权…"; draft.message = nil
         draft.oauthTask = Task { @MainActor in
             do {
-                let credential = try await DeviceAuthorizationServices.authorize(kind: kind) { device in
+                let credential = try await handler.authorize { device in
                     await MainActor.run {
                         guard sessionID == draft.oauthSessionID else { return }
                         draft.oauthDevice = device
@@ -260,11 +260,11 @@ struct SubscriptionEditorSheet: View {
             openURL(url)
             return
         }
-        guard let kind = selectedAuthMethod?.authorizationCode else {
+        guard let handler = selectedAuthMethod?.authorizationCode else {
             draft.message = "该认证方式未声明授权码实现。"
             return
         }
-        let request = AuthorizationCodeServices.begin(kind: kind)
+        let request = handler.begin()
         draft.oauthCodeVerifier = request.verifier
         draft.oauthCodeState = request.state
         draft.oauthCodeAuthorizeURL = request.url
@@ -282,7 +282,7 @@ struct SubscriptionEditorSheet: View {
             draft.message = "请先点「打开授权页面」开始授权。"
             return
         }
-        guard let kind = selectedAuthMethod?.authorizationCode else {
+        guard let handler = selectedAuthMethod?.authorizationCode else {
             draft.message = "该认证方式未声明授权码实现。"
             return
         }
@@ -294,12 +294,7 @@ struct SubscriptionEditorSheet: View {
         draft.oauthStatus = "正在用授权码换取令牌…"
         draft.oauthTask = Task { @MainActor in
             do {
-                let credential = try await AuthorizationCodeServices.complete(
-                    kind: kind,
-                    pastedText: input,
-                    verifier: verifier,
-                    state: state
-                )
+                let credential = try await handler.complete(input, verifier, state)
                 guard sessionID == draft.oauthSessionID else { return }
                 draft.oauthCredential = credential
                 draft.oauthCodeInput = ""

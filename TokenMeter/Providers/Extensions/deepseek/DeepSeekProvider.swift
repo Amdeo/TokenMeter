@@ -11,6 +11,9 @@ extension ProviderID {
 struct DeepSeekProviderDefinition: ProviderDefinition {
     let id = ProviderID.deepSeek
 
+    /// 旧 `Platform` 枚举里的名字。
+    var legacyPlatformNames: [String] { ["DeepSeek"] }
+
     var metadata: ProviderMetadata {
         ProviderMetadata(
             displayName: "DeepSeek",

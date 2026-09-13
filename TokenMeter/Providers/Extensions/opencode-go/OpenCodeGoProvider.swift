@@ -11,6 +11,9 @@ extension ProviderID {
 struct OpenCodeGoProviderDefinition: ProviderDefinition {
     let id = ProviderID.openCodeGo
 
+    /// 旧 `Platform` 枚举里的名字。
+    var legacyPlatformNames: [String] { ["OpenCode Go"] }
+
     var metadata: ProviderMetadata {
         ProviderMetadata(
             displayName: "OpenCode Go",

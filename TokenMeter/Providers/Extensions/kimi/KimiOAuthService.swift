@@ -233,3 +233,12 @@ struct KimiOAuthService: Sendable {
         }
     }
 }
+
+// MARK: - 授权实现句柄
+
+extension DeviceAuthorizationHandler {
+    /// Kimi Code 设备授权（RFC 8628）。
+    static let kimiCode = DeviceAuthorizationHandler { onDeviceAuthorization in
+        try await KimiOAuthService().authorize(onDeviceAuthorization: onDeviceAuthorization)
+    }
+}

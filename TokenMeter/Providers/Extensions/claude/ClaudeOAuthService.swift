@@ -264,3 +264,26 @@ struct ClaudeOAuthService: Sendable {
 private extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }
+
+// MARK: - 授权实现句柄
+
+extension AuthorizationCodeHandler {
+    /// Claude 授权码（PKCE）：浏览器授权后把整段回调地址粘回来。
+    static let claudePKCE = AuthorizationCodeHandler(
+        begin: {
+            let pkce = ClaudeOAuthService.makePKCE()
+            return AuthorizationCodeRequest(
+                url: ClaudeOAuthService.authorizationURL(pkce: pkce),
+                verifier: pkce.verifier,
+                state: pkce.state
+            )
+        },
+        complete: { pastedText, verifier, state in
+            try await ClaudeOAuthService().completeAuthorization(
+                pastedText: pastedText,
+                verifier: verifier,
+                state: state
+            )
+        }
+    )
+}

@@ -201,7 +201,7 @@ final class SubscriptionEditorDraft {
     var oauthSessionID = UUID()
     var message: String?
 
-    init(providerID: ProviderID = .deepSeek) {
+    init(providerID: ProviderID) {
         original = nil
         originalName = ""
         originalAuthMethodID = .apiKey

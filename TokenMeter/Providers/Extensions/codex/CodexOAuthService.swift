@@ -282,3 +282,12 @@ struct CodexOAuthService: Sendable {
 private extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }
+
+// MARK: - 授权实现句柄
+
+extension DeviceAuthorizationHandler {
+    /// Codex 设备授权（RFC 8628）。
+    static let codexCode = DeviceAuthorizationHandler { onDeviceAuthorization in
+        try await CodexOAuthService().authorize(onDeviceAuthorization: onDeviceAuthorization)
+    }
+}

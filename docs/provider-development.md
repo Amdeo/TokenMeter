@@ -103,8 +103,8 @@ extension AuthMethodID {
 | --- | --- | --- |
 | `.apiKey` | 无 | API Key 输入框。凭证只存本地私有文件。 |
 | `.browserSession` | `loginRecipe` | 内置浏览器登录：域名、登录页、窗口标题、登录态提取方式。 |
-| `.deviceOAuth` | `deviceAuthorization` | 设备授权（RFC 8628）用哪个实现（`.kimiCode` / `.codexCode`）。 |
-| `.oauthCode` | `authorizationCode` | 授权码（PKCE）用哪个实现（`.claudePKCE`）。 |
+| `.deviceOAuth` | `deviceAuthorization` | 设备授权（RFC 8628）用哪个实现句柄，实现常量写在自己目录里（`DeviceAuthorizationHandler.kimiCode`）。 |
+| `.oauthCode` | `authorizationCode` | 授权码（PKCE）用哪个实现句柄（`AuthorizationCodeHandler.claudePKCE`）。 |
 
 **声明缺失会在编辑页显式报错**，不会静默退回别的站点的配置——
 这正是以前那个按 `ProviderID` switch 的隐患。`ProviderArchitectureTests` 里有一条
@@ -112,7 +112,11 @@ extension AuthMethodID {
 
 新增一种**全新协议**（既不是 API Key、网页登录态，也不是现有两种 OAuth）才需要：
 在 `AuthFlowID` 加 case、在 `AuthFlowRegistry` 加保存逻辑、在编辑页加表单，
-并在 `Providers/Common/` 里加对应的机制分派。这是机制扩展，不是新增供应商。
+并在 `Providers/Common/` 里加对应的实现句柄类型。这是机制扩展，不是新增供应商。
+
+旧数据兼容也走同样的思路：供应商专有的历史名字（如旧的 `Platform` 枚举值、
+旧认证枚举值）写在自己的定义里（`legacyPlatformNames` / `AuthMethodDefinition.legacyIDs`），
+共享层的 `Providers/Common/LegacyIdentifierMapping.swift` 只负责查表。
 
 ## 新增余额型中转站（最省事）
 

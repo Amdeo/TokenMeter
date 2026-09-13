@@ -11,6 +11,9 @@ extension ProviderID {
 struct MiniMaxProviderDefinition: ProviderDefinition {
     let id = ProviderID.miniMax
 
+    /// 旧 `Platform` 枚举里的名字。
+    var legacyPlatformNames: [String] { ["MiniMax"] }
+
     var metadata: ProviderMetadata {
         ProviderMetadata(
             displayName: "MiniMax",

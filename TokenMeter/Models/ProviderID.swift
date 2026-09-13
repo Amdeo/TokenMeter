@@ -13,21 +13,9 @@ struct ProviderID: RawRepresentable, Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-/// 供应商的稳定 ID 常量与供应商实现放在一起（`Providers/Extensions/<id>/`），
-/// 本文件只保留类型与旧数据映射。
-extension ProviderID {
-    /// 兼容旧 `Platform` 枚举的原始值映射。
-    static func legacyPlatformMapping(_ rawValue: String) -> ProviderID {
-        switch rawValue {
-        case "DeepSeek": .deepSeek
-        case "Kimi": .kimi
-        case "智谱 AI": .zhipu
-        case "OpenCode Go": .openCodeGo
-        case "MiniMax": .miniMax
-        default: ProviderID(rawValue: rawValue)
-        }
-    }
-}
+// 供应商的稳定 ID 常量与供应商实现放在一起（`Providers/Extensions/<id>/`），
+// 本文件只保留类型。旧数据里的标识 → 稳定 ID 的映射在
+// `Providers/Common/LegacyIdentifierMapping.swift`，供应商专有的旧值由各定义声明。
 
 // MARK: - 认证方式稳定 ID
 
@@ -44,17 +32,6 @@ struct AuthMethodID: RawRepresentable, Codable, Hashable, Sendable {
 extension AuthMethodID {
     /// 所有 API Key 型供应商共用的认证方式 ID。
     static let apiKey = AuthMethodID(rawValue: "api-key")
-
-    /// 兼容旧认证枚举值：`manualAPIKey` / `piAuth` / `officialAuth` → api-key，
-    /// `kimiOAuth` → kimi-device-oauth，`kimiBrowserSession` → kimi-browser-session。
-    static func legacyMapping(_ rawValue: String) -> AuthMethodID {
-        switch rawValue {
-        case "manualAPIKey", "piAuth", "officialAuth": .apiKey
-        case "kimiOAuth": .kimiDeviceOAuth
-        case "kimiBrowserSession": .kimiBrowserSession
-        default: AuthMethodID(rawValue: rawValue)
-        }
-    }
 }
 
 // MARK: - 认证流程

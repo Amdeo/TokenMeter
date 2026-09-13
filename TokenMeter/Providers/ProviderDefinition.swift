@@ -17,6 +17,14 @@ protocol ProviderDefinition: Identifiable, Sendable {
     var authMethods: [AuthMethodDefinition] { get }
     @MainActor var cardRenderer: any ProviderCardRenderer { get }
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider
+    /// 旧 `Platform` 枚举里的原始值（历史迁移用）；只有经历过那次迁移的供应商需要声明。
+    /// 必须作为协议要求声明：仅在扩展里定义的话，`any ProviderDefinition` 会永远拿到默认值。
+    var legacyPlatformNames: [String] { get }
+}
+
+extension ProviderDefinition {
+    /// 旧 `Platform` 枚举里的原始值（历史迁移用）；只有经历过那次迁移的供应商需要声明。
+    var legacyPlatformNames: [String] { [] }
 }
 
 /// 供应商支持的认证方式定义（编辑页选项 + 表单驱动）。
@@ -34,10 +42,12 @@ struct AuthMethodDefinition: Identifiable, Sendable {
     let detail: String
     /// `browserSession` 流程的登录配方；缺失时编辑页明确报错，不会退回别的站点。
     var loginRecipe: BrowserLoginRecipe?
-    /// `deviceOAuth` 流程的设备授权实现。
-    var deviceAuthorization: DeviceAuthorizationKind?
+    /// `deviceOAuth` 流程的设备授权实现；由供应商在自己的目录里声明句柄。
+    var deviceAuthorization: DeviceAuthorizationHandler?
     /// `oauthCode` 流程的授权码实现。
-    var authorizationCode: AuthorizationCodeKind?
+    var authorizationCode: AuthorizationCodeHandler?
+    /// 旧数据里该认证方式的 ID（历史迁移用）；新供应商不需要声明。
+    var legacyIDs: [String] = []
 
     init(
         id: AuthMethodID,
@@ -47,8 +57,9 @@ struct AuthMethodDefinition: Identifiable, Sendable {
         tintRGB: UInt32? = nil,
         detail: String,
         loginRecipe: BrowserLoginRecipe? = nil,
-        deviceAuthorization: DeviceAuthorizationKind? = nil,
-        authorizationCode: AuthorizationCodeKind? = nil
+        deviceAuthorization: DeviceAuthorizationHandler? = nil,
+        authorizationCode: AuthorizationCodeHandler? = nil,
+        legacyIDs: [String] = []
     ) {
         self.id = id
         self.flowID = flowID
@@ -59,6 +70,7 @@ struct AuthMethodDefinition: Identifiable, Sendable {
         self.loginRecipe = loginRecipe
         self.deviceAuthorization = deviceAuthorization
         self.authorizationCode = authorizationCode
+        self.legacyIDs = legacyIDs
     }
 }
 

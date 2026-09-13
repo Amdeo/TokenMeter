@@ -11,6 +11,9 @@ extension ProviderID {
 struct ZhipuProviderDefinition: ProviderDefinition {
     let id = ProviderID.zhipu
 
+    /// 旧 `Platform` 枚举里的名字。
+    var legacyPlatformNames: [String] { ["智谱 AI"] }
+
     var metadata: ProviderMetadata {
         ProviderMetadata(
             displayName: "智谱 AI",
