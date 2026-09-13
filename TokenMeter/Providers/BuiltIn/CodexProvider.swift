@@ -76,6 +76,7 @@ struct CodexUsageProvider: UsageProvider {
                 providerID: subscription.providerID,
                 authorization: "\(credential.tokenType) \(credential.accessToken)",
                 headers: ["ChatGPT-Account-Id": accountID],
+                statusPolicy: .raw,
                 transport: transport
             )
             return try Self.parseUsage(response, subscription: subscription)

@@ -238,3 +238,74 @@ struct BrowserSessionRefresherTests {
         }
     }
 }
+
+// MARK: - HTTP 状态码策略
+
+/// 共享 HTTP 层不再按供应商特判：401/403 的语义由调用方声明的策略决定。
+/// 这个分类决定了浏览器会话型 provider 的「刷新一次再重试」能否触发——
+/// 一旦被折叠成「需要重新登录」，刷新逻辑就永远不会执行。
+struct HTTPStatusPolicyTests {
+    private func requestError(policy: HTTPStatusPolicy, status: Int) async -> UsageProviderError? {
+        let stub = HTTPStub { _, _ in (status, Data("{}".utf8)) }
+        let transport = await stub.transport
+        do {
+            let _: JSONValue = try await APIClient.get(
+                URL(string: "https://example.test/auth/me")!,
+                providerID: .ccbus,
+                authorization: "Bearer token",
+                statusPolicy: policy,
+                transport: transport
+            )
+            return nil
+        } catch let error as UsageProviderError {
+            return error
+        } catch {
+            Issue.record("非预期的错误类型：\(error)")
+            return nil
+        }
+    }
+
+    @Test
+    func rawPolicyKeepsUnauthorizedAsHTTPStatus() async {
+        let unauthorized = await requestError(policy: .raw, status: 401)
+        guard case .httpStatus(401)? = unauthorized else {
+            Issue.record("浏览器会话型必须拿到原始 httpStatus 才能刷新重试，实际 \(String(describing: unauthorized))")
+            return
+        }
+        let forbidden = await requestError(policy: .raw, status: 403)
+        guard case .httpStatus(403)? = forbidden else {
+            Issue.record("403 同样应保持原始状态码，实际 \(String(describing: forbidden))")
+            return
+        }
+    }
+
+    @Test
+    func defaultPolicyTreatsUnauthorizedAsInvalidCredential() async {
+        let error = await requestError(policy: .invalidCredential, status: 403)
+        guard case .authenticationRequired? = error else {
+            Issue.record("API Key 型的默认行为是凭证失效，实际 \(String(describing: error))")
+            return
+        }
+    }
+
+    @Test
+    func declaredStatusMessagesReplaceGenericClassification() async {
+        let policy = HTTPStatusPolicy(
+            unauthorizedMessage: "API Key 无效或无权访问余额接口",
+            messages: [402: "账户余额不足"]
+        )
+        let insufficient = await requestError(policy: policy, status: 402)
+        guard case .requestFailed(_, let message)? = insufficient else {
+            Issue.record("402 应使用供应商声明的文案，实际 \(String(describing: insufficient))")
+            return
+        }
+        #expect(message == "账户余额不足")
+
+        let unauthorized = await requestError(policy: policy, status: 401)
+        guard case .authenticationRequired(_, let unauthorizedMessage)? = unauthorized else {
+            Issue.record("401 应使用供应商声明的文案，实际 \(String(describing: unauthorized))")
+            return
+        }
+        #expect(unauthorizedMessage == "API Key 无效或无权访问余额接口")
+    }
+}

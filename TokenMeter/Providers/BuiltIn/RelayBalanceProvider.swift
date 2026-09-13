@@ -108,7 +108,8 @@ struct RelayBalanceUsageProvider: UsageProvider {
         let response: MeResponse = try await APIClient.get(
             site.apiBase.appendingPathComponent("/auth/me"),
             providerID: subscription.providerID,
-            authorization: "\(credential.tokenType) \(credential.accessToken)"
+            authorization: "\(credential.tokenType) \(credential.accessToken)",
+            statusPolicy: .raw
         )
         guard response.code == 0, let data = response.data else {
             throw UsageProviderError.invalidResponse(

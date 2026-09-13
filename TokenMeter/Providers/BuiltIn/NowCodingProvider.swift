@@ -81,13 +81,15 @@ struct NowCodingUsageProvider: UsageProvider {
             NowCodingSite.apiBase.appendingPathComponent("user/self"),
             providerID: subscription.providerID,
             authorization: "",
-            headers: headers
+            headers: headers,
+            statusPolicy: .raw
         )
         let subscriptions: SubscriptionResponse = try await APIClient.get(
             NowCodingSite.apiBase.appendingPathComponent("subscription/self"),
             providerID: subscription.providerID,
             authorization: "",
-            headers: headers
+            headers: headers,
+            statusPolicy: .raw
         )
 
         var quotas: [Quota] = []

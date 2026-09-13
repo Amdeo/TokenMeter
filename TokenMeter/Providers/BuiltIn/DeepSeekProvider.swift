@@ -37,6 +37,15 @@ struct DeepSeekUsageProvider: UsageProvider {
     let subscription: Subscription
     private let credentials = CredentialStore()
 
+    /// 余额接口的状态码语义：401/403 是 Key 无效，402 余额不足，429 限流。
+    private static let statusPolicy = HTTPStatusPolicy(
+        unauthorizedMessage: "API Key 无效或无权访问余额接口",
+        messages: [
+            402: "账户余额不足",
+            429: "请求过于频繁，请稍后重试",
+        ]
+    )
+
     func fetchUsage() async throws -> UsageSnapshot {
         guard let key = credentials.apiKey(for: subscription.id), !key.isEmpty else {
             throw UsageProviderError.notConfigured(subscription.providerID)
@@ -44,7 +53,8 @@ struct DeepSeekUsageProvider: UsageProvider {
         let response: DeepSeekBalanceResponse = try await APIClient.get(
             URL(string: "https://api.deepseek.com/user/balance")!,
             providerID: subscription.providerID,
-            authorization: "Bearer \(key)"
+            authorization: "Bearer \(key)",
+            statusPolicy: Self.statusPolicy
         )
         let balanceInfos = response.balanceInfos ?? []
         let validBalances = balanceInfos.compactMap { balance -> (currency: String, total: Double)? in

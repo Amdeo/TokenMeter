@@ -24,9 +24,42 @@ struct FlexibleNumber: Decodable, Sendable {
     }
 }
 
+/// 非 2xx 响应的错误映射策略。
+///
+/// 供应商在自己文件里声明用哪一种：API Key 型希望 401/403 直接呈现为「凭证失效」，
+/// 而浏览器会话型与 OAuth 型必须先拿到原始 `httpStatus`，才能触发
+/// `BrowserSessionFlow` 的「刷新一次再重试」。共享层因此不含任何供应商名字。
+struct HTTPStatusPolicy: Sendable {
+    enum UnauthorizedHandling: Sendable {
+        /// 转成 `authenticationRequired`：凭证直接判为失效。
+        case authenticationRequired
+        /// 原样抛出 `httpStatus`，由调用方决定是否刷新重试。
+        case raw
+    }
+
+    var unauthorized: UnauthorizedHandling = .authenticationRequired
+    /// 401/403 的专用文案；缺省使用通用文案。
+    var unauthorizedMessage: String?
+    /// 其它状态码的专用文案，例如余额不足（402）与限流（429）。
+    var messages: [Int: String] = [:]
+
+    /// API Key 型供应商的默认行为：401/403 视为凭证失效。
+    static let invalidCredential = HTTPStatusPolicy()
+
+    /// 浏览器会话型 / OAuth 型：401/403 交给各自的刷新流程处理。
+    static let raw = HTTPStatusPolicy(unauthorized: .raw)
+}
+
 /// 共享 HTTP 客户端：GET/POST JSON，统一的日志、状态码错误分类。
 enum APIClient {
-    static func get<Response: Decodable>(_ url: URL, providerID: ProviderID, authorization: String, headers: [String: String] = [:], transport: HTTPTransport = .live) async throws -> Response {
+    static func get<Response: Decodable>(
+        _ url: URL,
+        providerID: ProviderID,
+        authorization: String,
+        headers: [String: String] = [:],
+        statusPolicy: HTTPStatusPolicy = .invalidCredential,
+        transport: HTTPTransport = .live
+    ) async throws -> Response {
         UsageLogger.logger.debug("request started provider=\(providerID.rawValue, privacy: .public) type=\(String(describing: Response.self), privacy: .public)")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -45,16 +78,7 @@ enum APIClient {
                 type=\(String(describing: Response.self), privacy: .public) \
                 errorClass=httpStatus
                 """)
-            switch (providerID, httpResponse.statusCode) {
-            case (.deepSeek, 401), (.deepSeek, 403):
-                throw UsageProviderError.authenticationRequired(providerID, "API Key 无效或无权访问余额接口")
-            case (.deepSeek, 402):
-                throw UsageProviderError.requestFailed(providerID, "账户余额不足")
-            case (.deepSeek, 429):
-                throw UsageProviderError.requestFailed(providerID, "请求过于频繁，请稍后重试")
-            default:
-                throw statusError(providerID: providerID, status: httpResponse.statusCode)
-            }
+            throw statusError(providerID: providerID, status: httpResponse.statusCode, policy: statusPolicy)
         }
         do {
             let decoded = try JSONDecoder().decode(Response.self, from: data)
@@ -85,6 +109,7 @@ enum APIClient {
         authorization: String,
         headers: [String: String] = [:],
         body: Data = Data("{}".utf8),
+        statusPolicy: HTTPStatusPolicy = .invalidCredential,
         transport: HTTPTransport = .live
     ) async throws -> Response {
         UsageLogger.logger.debug("request started provider=\(providerID.rawValue, privacy: .public) type=\(String(describing: Response.self), privacy: .public)")
@@ -99,7 +124,7 @@ enum APIClient {
         request.httpBody = body
         let (data, httpResponse) = try await transport.send(request)
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw statusError(providerID: providerID, status: httpResponse.statusCode)
+            throw statusError(providerID: providerID, status: httpResponse.statusCode, policy: statusPolicy)
         }
         do {
             return try JSONDecoder().decode(Response.self, from: data)
@@ -108,16 +133,24 @@ enum APIClient {
         }
     }
 
-    /// 状态码 → 错误分类。401/403 对多数供应商是凭证无效（进入认证失效状态）；
-    /// 但回退余额（Kimi）与续期重试（CCBus/APIKEY.FUN/NowCoding/Codex/Claude）的 Provider 层
-    /// 自己处理 401/403 语义，这里保持 `httpStatus` 原样抛出。
-    private static func statusError(providerID: ProviderID, status: Int) -> UsageProviderError {
+    /// 状态码 → 错误分类。语义完全由调用方声明的 `HTTPStatusPolicy` 决定，
+    /// 这里不认识任何供应商。
+    private static func statusError(
+        providerID: ProviderID,
+        status: Int,
+        policy: HTTPStatusPolicy
+    ) -> UsageProviderError {
+        if let message = policy.messages[status] {
+            return .requestFailed(providerID, message)
+        }
         switch status {
         case 401, 403:
-            if providerID == .kimi || providerID == .ccbus || providerID == .apikeyFun || providerID == .nowCoding || providerID == .codex || providerID == .claude {
+            switch policy.unauthorized {
+            case .authenticationRequired:
+                return .authenticationRequired(providerID, policy.unauthorizedMessage ?? "凭证无效或无权访问接口")
+            case .raw:
                 return .httpStatus(status)
             }
-            return .authenticationRequired(providerID, "凭证无效或无权访问接口")
         default:
             return .httpStatus(status)
         }

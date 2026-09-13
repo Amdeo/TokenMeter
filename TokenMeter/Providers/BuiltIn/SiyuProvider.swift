@@ -77,12 +77,14 @@ struct SiyuUsageProvider: UsageProvider {
         let me: MeResponse = try await APIClient.get(
             BrowserRelayRefresher.siyu.apiBase.appendingPathComponent("/auth/me"),
             providerID: subscription.providerID,
-            authorization: "\(credential.tokenType) \(credential.accessToken)"
+            authorization: "\(credential.tokenType) \(credential.accessToken)",
+            statusPolicy: .raw
         )
         let subscriptions: SubscriptionsResponse = try await APIClient.get(
             BrowserRelayRefresher.siyu.apiBase.appendingPathComponent("/subscriptions/active"),
             providerID: subscription.providerID,
-            authorization: "\(credential.tokenType) \(credential.accessToken)"
+            authorization: "\(credential.tokenType) \(credential.accessToken)",
+            statusPolicy: .raw
         )
 
         var quotas: [Quota] = []

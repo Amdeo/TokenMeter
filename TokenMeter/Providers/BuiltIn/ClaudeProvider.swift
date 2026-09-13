@@ -88,6 +88,7 @@ struct ClaudeUsageProvider: UsageProvider {
                 providerID: subscription.providerID,
                 authorization: "\(credential.tokenType) \(credential.accessToken)",
                 headers: Self.usageHeaders,
+                statusPolicy: .raw,
                 transport: transport
             )
             return try Self.parseUsage(response, subscription: subscription)
