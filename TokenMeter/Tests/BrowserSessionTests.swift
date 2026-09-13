@@ -79,18 +79,18 @@ struct EmbeddedWebLoginControllerTests {
     }
 
     @Test
-    func loginControllerConfigurationsKeepProviderDomains() {
-        #expect(EmbeddedWebLoginController.Configuration.kimi.sessionDomains == ["kimi.com"])
-        #expect(EmbeddedWebLoginController.Configuration.ccbus.sessionDomains == ["ccbus.top"])
-        #expect(EmbeddedWebLoginController.Configuration.apiKeyFun.sessionDomains == ["apikey.fun"])
-        #expect(EmbeddedWebLoginController.Configuration.nowCoding.sessionDomains == ["nowcoding.ai"])
+    func loginRecipesKeepProviderDomains() {
+        #expect(BrowserLoginRecipe.kimi.sessionDomains == ["kimi.com"])
+        #expect(BrowserLoginRecipe.ccbus.sessionDomains == ["ccbus.top"])
+        #expect(BrowserLoginRecipe.apiKeyFun.sessionDomains == ["apikey.fun"])
+        #expect(BrowserLoginRecipe.nowCoding.sessionDomains == ["nowcoding.ai"])
     }
 
     @Test
     @MainActor
     func loginControllerExposesSessionDomainsForSiteDataClearing() {
-        // 切换账号时靠这个属性清除对应域的站点数据，必须与配置一致。
-        let controller = EmbeddedWebLoginController(configuration: .ccbus)
+        // 切换账号时靠这个属性清除对应域的站点数据，必须与配方一致。
+        let controller = EmbeddedWebLoginController(configuration: .browserLogin(.ccbus))
         #expect(controller.sessionDomains == ["ccbus.top"])
     }
 }

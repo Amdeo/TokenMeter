@@ -22,8 +22,8 @@ struct KimiProviderDefinition: ProviderDefinition {
     var authMethods: [AuthMethodDefinition] {
         [
             AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台"),
-            AuthMethodDefinition(id: .kimiDeviceOAuth, flowID: .deviceOAuth, title: "Kimi Code OAuth", systemImage: "lock.shield.fill", tintRGB: 0x5E5CE6, detail: "实验性设备授权"),
-            AuthMethodDefinition(id: .kimiBrowserSession, flowID: .browserSession, title: "网页登录态", systemImage: "globe", tintRGB: 0x32D74B, detail: "登录 Kimi 账号（内置）"),
+            AuthMethodDefinition(id: .kimiDeviceOAuth, flowID: .deviceOAuth, title: "Kimi Code OAuth", systemImage: "lock.shield.fill", tintRGB: 0x5E5CE6, detail: "实验性设备授权", deviceAuthorization: .kimiCode),
+            AuthMethodDefinition(id: .kimiBrowserSession, flowID: .browserSession, title: "网页登录态", systemImage: "globe", tintRGB: 0x32D74B, detail: "登录 Kimi 账号（内置）", loginRecipe: .kimi),
         ]
     }
 

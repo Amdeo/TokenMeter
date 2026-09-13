@@ -17,7 +17,7 @@ struct CodexProviderDefinition: ProviderDefinition {
     }
 
     var authMethods: [AuthMethodDefinition] {
-        [AuthMethodDefinition(id: .codexDeviceOAuth, flowID: .deviceOAuth, title: "OpenAI Codex OAuth", systemImage: "lock.shield.fill", tintRGB: 0x10A37F, detail: "实验性，接口可能变动")]
+        [AuthMethodDefinition(id: .codexDeviceOAuth, flowID: .deviceOAuth, title: "OpenAI Codex OAuth", systemImage: "lock.shield.fill", tintRGB: 0x10A37F, detail: "实验性，接口可能变动", deviceAuthorization: .codexCode)]
     }
 
     @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }

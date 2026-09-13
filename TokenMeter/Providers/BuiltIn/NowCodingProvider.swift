@@ -25,7 +25,8 @@ struct NowCodingProviderDefinition: ProviderDefinition {
             title: "网页登录态",
             systemImage: "globe",
             tintRGB: 0x6E6CF0,
-            detail: "登录 NowCoding 账号（内置）"
+            detail: "登录 NowCoding 账号（内置）",
+            loginRecipe: .nowCoding
         )]
     }
 

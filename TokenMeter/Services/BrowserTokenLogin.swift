@@ -46,8 +46,11 @@ enum BrowserLoginError: LocalizedError, Sendable, Equatable {
 
 // MARK: - 站点定义
 
-/// token 型网页登录态的站点差异：localStorage 键名、登录窗口与提取规则。
-/// 内嵌登录窗口与凭证提取共用这一处定义，不再每个供应商一份实现。
+/// token 型网页登录态的站点差异：localStorage 键名与续期用的短名。
+///
+/// 登录窗口与凭证提取规则统一由 `BrowserLoginRecipe` 承担，本类型只提供
+/// 「站点身份（错误文案短名）+ 续期所需信息」这一运行时视图，提取逻辑因此
+/// 只有一份实现。
 struct BrowserTokenSite: Sendable {
     /// 错误文案里的供应商名（如 "CCBus"、"Siyu API"）。
     let displayName: String
@@ -55,49 +58,33 @@ struct BrowserTokenSite: Sendable {
     let loginWindowTitle: String
     /// localStorage 中 access token 的键名。
     let accessTokenKey: String
+    /// localStorage 中 refresh token 的键名。
+    var refreshTokenKey = "refresh_token"
     /// 是否要求 refresh token 本身也是带 exp 的 JWT（Kimi）。
     var validatesRefreshTokenExpiry = false
     /// 登录页所在域（含子域）。
     let sessionDomains: [String]
     let loginPageURL: URL
 
-    /// 读取 localStorage 登录态的 JS，返回形如
-    /// {"accessToken": ..., "refreshToken": ...} 的 JSON 字符串。
-    var extractionJavaScript: String {
-        #"(() => JSON.stringify({accessToken: localStorage.getItem("\#(accessTokenKey)"), refreshToken: localStorage.getItem("refresh_token")}))()"#
-    }
-
-    /// 校验 JWT 并构造凭证：格式错、缺字段、已过期分别抛对应错误。
-    func credential(from rawValue: String) throws -> KimiBrowserCredential {
-        guard let data = rawValue.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(TokenPayload.self, from: data) else {
-            throw BrowserLoginError.invalidCredentials(provider: displayName)
-        }
-        guard let accessToken = payload.accessToken?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let refreshToken = payload.refreshToken?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !accessToken.isEmpty, !refreshToken.isEmpty else {
-            throw BrowserLoginError.credentialsMissing(provider: displayName)
-        }
-        guard let expiresAt = JWT.expiration(of: accessToken) else {
-            throw BrowserLoginError.invalidCredentials(provider: displayName)
-        }
-        if validatesRefreshTokenExpiry, JWT.expiration(of: refreshToken) == nil {
-            throw BrowserLoginError.invalidCredentials(provider: displayName)
-        }
-        guard expiresAt > .now else {
-            throw BrowserLoginError.expired(provider: displayName)
-        }
-        return KimiBrowserCredential(
-            accessToken: accessToken,
-            refreshToken: refreshToken,
-            expiresAt: expiresAt,
-            tokenType: "Bearer"
+    /// 登录相关的唯一声明处：登录窗口配置与凭证提取都由它派生。
+    var loginRecipe: BrowserLoginRecipe {
+        BrowserLoginRecipe(
+            displayName: displayName,
+            windowTitle: loginWindowTitle,
+            sessionDomains: sessionDomains,
+            loginPageURL: loginPageURL,
+            extraction: .localStorageTokens(
+                accessTokenKey: accessTokenKey,
+                refreshTokenKey: refreshTokenKey,
+                validatesRefreshTokenExpiry: validatesRefreshTokenExpiry
+            )
         )
     }
 
-    private struct TokenPayload: Decodable {
-        let accessToken: String?
-        let refreshToken: String?
+    var extractionJavaScript: String { loginRecipe.extractionJavaScript }
+
+    func credential(from rawValue: String) throws -> KimiBrowserCredential {
+        try loginRecipe.tokenCredential(from: rawValue)
     }
 }
 
@@ -137,6 +124,27 @@ extension BrowserTokenSite {
         accessTokenKey: "auth_token",
         sessionDomains: ["siyu.site"],
         loginPageURL: URL(string: "https://siyu.site/login")!
+    )
+}
+
+// MARK: - 登录配方
+
+/// 各站点的登录配方：供应商的认证方式定义引用这里，共享代码据此构造登录窗口。
+extension BrowserLoginRecipe {
+    /// token 型站点的配方直接由站点定义派生，域名与键名不必写两遍。
+    static let kimi = BrowserTokenSite.kimi.loginRecipe
+    static let ccbus = BrowserTokenSite.ccbus.loginRecipe
+    static let apiKeyFun = BrowserTokenSite.apiKeyFun.loginRecipe
+    static let siyu = BrowserTokenSite.siyu.loginRecipe
+
+    /// NowCoding：new-api 新版认证，localStorage 无 token，
+    /// 登录态是 WKWebsiteDataStore 里的 HttpOnly session cookie + localStorage 用户 ID。
+    static let nowCoding = BrowserLoginRecipe(
+        displayName: "NowCoding",
+        windowTitle: "登录 NowCoding 账号",
+        sessionDomains: ["nowcoding.ai"],
+        loginPageURL: NowCodingSite.loginPageURL,
+        extraction: .sessionCookie(name: NowCodingSite.sessionCookieName, userIDLocalStorageKey: "user")
     )
 }
 

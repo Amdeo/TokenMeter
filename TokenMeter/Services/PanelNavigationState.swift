@@ -207,11 +207,8 @@ final class SubscriptionEditorDraft {
         originalAuthMethodID = .apiKey
         initialProviderID = providerID
         self.providerID = providerID
-        authMethodID = switch providerID {
-        case .codex: .codexDeviceOAuth
-        case .claude: .claudeOAuth
-        default: .apiKey
-        }
+        // 默认认证方式取供应商声明的第一个认证方式；新增供应商无需在此登记。
+        authMethodID = ProviderRegistry.defaultAuthMethod(for: providerID) ?? .apiKey
         name = ""
         quotaColors = [:]
     }

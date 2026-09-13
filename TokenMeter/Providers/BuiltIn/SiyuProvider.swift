@@ -25,7 +25,8 @@ struct SiyuProviderDefinition: ProviderDefinition {
             title: "网页登录态",
             systemImage: "globe",
             tintRGB: 0x6366F1,
-            detail: "登录 Siyu API 账号（内置）"
+            detail: "登录 Siyu API 账号（内置）",
+            loginRecipe: .siyu
         )]
     }
 

@@ -54,7 +54,8 @@ extension RelayBalanceProviderDefinition {
             title: "网页登录态",
             systemImage: "globe",
             tintRGB: 0x2DD4BF,
-            detail: "登录 CCBus 账号（内置）"
+            detail: "登录 CCBus 账号（内置）",
+            loginRecipe: .ccbus
         )
     )
 
@@ -72,7 +73,8 @@ extension RelayBalanceProviderDefinition {
             title: "网页登录态",
             systemImage: "globe",
             tintRGB: 0x6E6CF0,
-            detail: "登录 APIKEY.FUN 账号（内置）"
+            detail: "登录 APIKEY.FUN 账号（内置）",
+            loginRecipe: .apiKeyFun
         )
     )
 }

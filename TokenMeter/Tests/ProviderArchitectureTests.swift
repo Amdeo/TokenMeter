@@ -41,6 +41,26 @@ struct ProviderRegistryTests {
         #expect(ProviderRegistry.authFlow(for: .claude, authMethodID: .claudeOAuth) == .oauthCode)
     }
 
+    /// 编辑页不再按供应商分派：每种认证流程所需的行为必须由认证方式自己声明，
+    /// 否则新增供应商时会静默拿到错误的登录配置或无法启动授权。
+    @Test
+    func everyAuthMethodDeclaresTheBehaviourItsFlowNeeds() {
+        for definition in ProviderRegistry.all {
+            for method in definition.authMethods {
+                switch method.flowID {
+                case .apiKey:
+                    break
+                case .browserSession:
+                    #expect(method.loginRecipe != nil, "\(definition.id.rawValue) 的 \(method.id.rawValue) 缺少登录配方")
+                case .deviceOAuth:
+                    #expect(method.deviceAuthorization != nil, "\(definition.id.rawValue) 的 \(method.id.rawValue) 缺少设备授权实现")
+                case .oauthCode:
+                    #expect(method.authorizationCode != nil, "\(definition.id.rawValue) 的 \(method.id.rawValue) 缺少授权码实现")
+                }
+            }
+        }
+    }
+
     @Test
     func unknownProviderResolvesToNilAndUnsupportedDefinitionRenders() async {
         let unknown = ProviderID(rawValue: "nonexistent")
@@ -469,41 +489,47 @@ struct NowCodingTests {
     }
 
     @Test
-    func nowcodingExtractorBuildsCookieCredential() throws {
+    func cookieExtractorBuildsCredentialFromDeclaredSite() throws {
         let cookie = HTTPCookie(properties: [
             .name: "session",
             .value: "abc123",
             .domain: "nowcoding.ai",
             .path: "/",
         ])!
-        let credential = try NowCodingBrowserCredentialExtractor.credential(cookie: cookie, userID: "21")
+        let credential = try BrowserCookieCredential.credential(
+            cookie: cookie, name: "session", userID: "21", displayName: "NowCoding"
+        )
         #expect(credential.sessionCookie == "session=abc123")
         #expect(credential.userID == "21")
     }
 
     @Test
-    func nowcodingExtractorRejectsMissingCookieOrUserID() {
+    func cookieExtractorRejectsMissingCookie() {
         let cookie = HTTPCookie(properties: [
             .name: "other",
             .value: "x",
             .domain: "nowcoding.ai",
             .path: "/",
         ])!
-        #expect(throws: NowCodingBrowserCredentialError.credentialsMissing) {
-            _ = try NowCodingBrowserCredentialExtractor.credential(cookie: cookie, userID: "21")
+        #expect(throws: BrowserCookieCredentialError.credentialsMissing(provider: "NowCoding")) {
+            _ = try BrowserCookieCredential.credential(
+                cookie: cookie, name: "session", userID: "21", displayName: "NowCoding"
+            )
         }
     }
 
     @Test
-    func nowcodingExtractorRejectsMissingUserID() throws {
+    func cookieExtractorRejectsMissingUserID() throws {
         let cookie = HTTPCookie(properties: [
             .name: "session",
             .value: "abc123",
             .domain: "nowcoding.ai",
             .path: "/",
         ])!
-        #expect(throws: NowCodingBrowserCredentialError.invalidCredentials) {
-            _ = try NowCodingBrowserCredentialExtractor.credential(cookie: cookie, userID: " ")
+        #expect(throws: BrowserCookieCredentialError.invalidCredentials(provider: "NowCoding")) {
+            _ = try BrowserCookieCredential.credential(
+                cookie: cookie, name: "session", userID: " ", displayName: "NowCoding"
+            )
         }
     }
 

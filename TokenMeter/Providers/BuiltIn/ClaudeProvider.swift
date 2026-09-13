@@ -23,7 +23,8 @@ struct ClaudeProviderDefinition: ProviderDefinition {
             title: "Claude OAuth",
             systemImage: "lock.shield.fill",
             tintRGB: 0xD97757,
-            detail: "浏览器完成 claude.ai 授权后粘贴授权码"
+            detail: "浏览器完成 claude.ai 授权后粘贴授权码",
+            authorizationCode: .claudePKCE
         )]
     }
 

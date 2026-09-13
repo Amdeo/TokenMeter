@@ -24,9 +24,15 @@ struct SubscriptionEditorSheet: View {
         ProviderRegistry.definition(for: draft.providerID) ?? UnsupportedProviderDefinition(providerID: draft.providerID)
     }
 
+    /// 当前选中的认证方式定义；缺失时退回 API Key 形态。
+    @MainActor
+    private var selectedAuthMethod: AuthMethodDefinition? {
+        providerDefinition.authMethods.first { $0.id == draft.authMethodID }
+    }
+
     @MainActor
     private var authFlowID: AuthFlowID {
-        providerDefinition.authMethods.first { $0.id == draft.authMethodID }?.flowID ?? .apiKey
+        selectedAuthMethod?.flowID ?? .apiKey
     }
 
     private var quotaColorTargets: [QuotaColorTarget] {
@@ -225,13 +231,14 @@ struct SubscriptionEditorSheet: View {
 
     private func startOAuth() {
         if authFlowID == .oauthCode { startCodeOAuth(); return }
+        guard let kind = selectedAuthMethod?.deviceAuthorization else {
+            draft.message = "该认证方式未声明设备授权实现。"
+            return
+        }
         resetOAuthState(); let sessionID = draft.oauthSessionID; draft.oauthStatus = "正在请求设备授权…"; draft.message = nil
         draft.oauthTask = Task { @MainActor in
             do {
-                let credential = try await Self.deviceOAuthCredential(
-                    providerID: draft.providerID,
-                    authMethodID: draft.authMethodID
-                ) { device in
+                let credential = try await DeviceAuthorizationServices.authorize(kind: kind) { device in
                     await MainActor.run {
                         guard sessionID == draft.oauthSessionID else { return }
                         draft.oauthDevice = device
@@ -253,14 +260,17 @@ struct SubscriptionEditorSheet: View {
             openURL(url)
             return
         }
-        let pkce = ClaudeOAuthService.makePKCE()
-        let url = ClaudeOAuthService.authorizationURL(pkce: pkce)
-        draft.oauthCodeVerifier = pkce.verifier
-        draft.oauthCodeState = pkce.state
-        draft.oauthCodeAuthorizeURL = url
+        guard let kind = selectedAuthMethod?.authorizationCode else {
+            draft.message = "该认证方式未声明授权码实现。"
+            return
+        }
+        let request = AuthorizationCodeServices.begin(kind: kind)
+        draft.oauthCodeVerifier = request.verifier
+        draft.oauthCodeState = request.state
+        draft.oauthCodeAuthorizeURL = request.url
         draft.oauthCredential = nil
         draft.oauthStatus = Self.codeOAuthPendingStatus
-        openURL(url)
+        openURL(request.url)
     }
 
     /// 把用户粘贴的授权码/回调地址兑换成令牌。
@@ -272,14 +282,20 @@ struct SubscriptionEditorSheet: View {
             draft.message = "请先点「打开授权页面」开始授权。"
             return
         }
+        guard let kind = selectedAuthMethod?.authorizationCode else {
+            draft.message = "该认证方式未声明授权码实现。"
+            return
+        }
         let input = draft.oauthCodeInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return }
         let sessionID = draft.oauthSessionID
+        let providerName = providerDefinition.metadata.displayName
         draft.message = nil
         draft.oauthStatus = "正在用授权码换取令牌…"
         draft.oauthTask = Task { @MainActor in
             do {
-                let credential = try await ClaudeOAuthService().completeAuthorization(
+                let credential = try await AuthorizationCodeServices.complete(
+                    kind: kind,
                     pastedText: input,
                     verifier: verifier,
                     state: state
@@ -287,7 +303,7 @@ struct SubscriptionEditorSheet: View {
                 guard sessionID == draft.oauthSessionID else { return }
                 draft.oauthCredential = credential
                 draft.oauthCodeInput = ""
-                draft.oauthStatus = "已完成 claude.ai 授权"
+                draft.oauthStatus = "已完成 \(providerName) 授权"
             } catch is CancellationError {
             } catch {
                 guard sessionID == draft.oauthSessionID else { return }
@@ -302,10 +318,15 @@ struct SubscriptionEditorSheet: View {
     private static let codeOAuthPendingStatus = "已在浏览器打开授权页面；完成后把地址栏整段地址粘贴到下方。"
 
     private func startEmbeddedLogin(switchingAccount: Bool = false) {
+        // 登录配置由认证方式自己声明。缺失时明确报错，不再静默退回 Kimi 的配置。
+        guard let recipe = selectedAuthMethod?.loginRecipe else {
+            draft.message = "该认证方式未声明网页登录配置，无法使用内置登录。"
+            return
+        }
         draft.clearOAuthAuthentication(); draft.leaveBrowserAuthentication(); let sessionID = draft.browserImportSessionID; draft.message = nil
         draft.browserImportTask = Task { @MainActor in
             do {
-                let controller = Self.makeBrowserLoginController(for: draft.providerID)
+                let controller = EmbeddedWebLoginController(configuration: .browserLogin(recipe))
                 // 切换账号：先清除该供应商域名的内置浏览器会话，登录页回到未登录态。
                 if switchingAccount {
                     await BrowserSessionSiteData.clear(domains: controller.sessionDomains)
@@ -322,34 +343,6 @@ struct SubscriptionEditorSheet: View {
                 draft.oauthStatus = "已通过内置登录导入网页登录态"
             } catch is CancellationError {} catch { guard sessionID == draft.browserImportSessionID else { return }; draft.message = error.localizedDescription }
             guard sessionID == draft.browserImportSessionID else { return }; draft.browserImportTask = nil
-        }
-    }
-
-    @MainActor
-    private static func makeBrowserLoginController(for providerID: ProviderID) -> any BrowserSessionLogining {
-        switch providerID {
-        case .ccbus: EmbeddedWebLoginController(configuration: .ccbus)
-        case .apikeyFun: EmbeddedWebLoginController(configuration: .apiKeyFun)
-        case .nowCoding: EmbeddedWebLoginController(configuration: .nowCoding)
-        case .siyu: EmbeddedWebLoginController(configuration: .siyu)
-        default: EmbeddedWebLoginController(configuration: .kimi)
-        }
-    }
-
-    /// 设备授权按 (供应商, 认证方式) 配对分发；其余组合视为未配置。
-    @MainActor
-    private static func deviceOAuthCredential(
-        providerID: ProviderID,
-        authMethodID: AuthMethodID,
-        onDeviceAuthorization: @escaping @Sendable (DeviceOAuthAuthorization) async -> Void
-    ) async throws -> OAuthCredential {
-        switch (providerID, authMethodID) {
-        case (.kimi, .kimiDeviceOAuth):
-            return try await KimiOAuthService().authorize(onDeviceAuthorization: onDeviceAuthorization)
-        case (.codex, .codexDeviceOAuth):
-            return try await CodexOAuthService().authorize(onDeviceAuthorization: onDeviceAuthorization)
-        default:
-            throw UsageProviderError.notConfigured(providerID)
         }
     }
 
