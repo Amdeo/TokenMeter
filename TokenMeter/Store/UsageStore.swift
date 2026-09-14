@@ -195,6 +195,12 @@ final class UsageStore {
         saveSubscriptions()
     }
 
+    func updateCardStyle(_ cardStyle: SubscriptionCardStyle, for subscription: Subscription) {
+        guard canMutateSubscriptions, let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return }
+        subscriptions[index].cardStyle = cardStyle
+        saveSubscriptions()
+    }
+
     /// 刷新单个订阅。串行执行：若已有刷新在进行则忽略（与旧行为一致）。
     func refresh(_ subscription: Subscription, source: RefreshSource = .manual) {
         launchRefresh { store, refreshID in

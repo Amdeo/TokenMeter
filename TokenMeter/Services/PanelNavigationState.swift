@@ -182,6 +182,7 @@ final class SubscriptionEditorDraft {
     var authMethodID: AuthMethodID
     var name: String
     var quotaColors: [String: UInt32]
+    var cardStyle: SubscriptionCardStyle
     var apiKey = ""
     var oauthCredential: OAuthCredential?
     var browserCredential: BrowserTokenCredential?
@@ -211,6 +212,7 @@ final class SubscriptionEditorDraft {
         authMethodID = ProviderRegistry.defaultAuthMethod(for: providerID) ?? .apiKey
         name = ""
         quotaColors = [:]
+        cardStyle = .standard
     }
 
     init(subscription: Subscription) {
@@ -222,6 +224,7 @@ final class SubscriptionEditorDraft {
         authMethodID = subscription.authMethodID
         name = subscription.name
         quotaColors = subscription.quotaColors
+        cardStyle = subscription.cardStyle
     }
 
     var isEditing: Bool { original != nil }
@@ -241,12 +244,14 @@ final class SubscriptionEditorDraft {
                 || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 || !quotaColors.isEmpty
+                || cardStyle != .standard
         }
         return providerID != initialProviderID
             || authMethodID != originalAuthMethodID
             || name != originalName
             || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             || quotaColors != original?.quotaColors
+            || cardStyle != (original?.cardStyle ?? .standard)
     }
 
     func cancelTasks() {

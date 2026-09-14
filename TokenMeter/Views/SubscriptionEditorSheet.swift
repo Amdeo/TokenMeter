@@ -57,6 +57,13 @@ struct SubscriptionEditorSheet: View {
                     SheetSection(title: "订阅信息", subtitle: "名称仅用于本地识别，可稍后修改。") {
                         FormField("名称（可选）", text: $draft.name)
                     }
+                    SheetSection(title: "卡片样式", subtitle: "左右滑动预览，点按卡片或圆点选择。") {
+                        CardStyleCarouselPicker(
+                            selection: $draft.cardStyle,
+                            providerID: draft.providerID,
+                            displayName: cardStylePreviewName
+                        )
+                    }
                     SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
                         AuthMethodSelection(
                             authMethods: providerDefinition.authMethods,
@@ -147,6 +154,11 @@ struct SubscriptionEditorSheet: View {
         }
     }
 
+    private var cardStylePreviewName: String {
+        let trimmed = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? providerDefinition.metadata.displayName : trimmed
+    }
+
     private var canSave: Bool {
         AuthFlowRegistry.canSave(
             originalAuthMethodID: subscription?.authMethodID,
@@ -165,7 +177,8 @@ struct SubscriptionEditorSheet: View {
             providerID: draft.providerID,
             name: trimmedName.isEmpty ? providerDefinition.metadata.displayName : trimmedName,
             authMethodID: draft.authMethodID,
-            quotaColors: draft.quotaColors
+            quotaColors: draft.quotaColors,
+            cardStyle: draft.cardStyle
         )
         do {
             try saveCredential(for: subscription.id)
@@ -215,6 +228,14 @@ struct SubscriptionEditorSheet: View {
                 return
             }
             updated.quotaColors = draft.quotaColors
+        }
+        if draft.cardStyle != subscription.cardStyle {
+            store.updateCardStyle(draft.cardStyle, for: subscription)
+            if let persistenceError = store.lastPersistenceError {
+                draft.message = persistenceError
+                return
+            }
+            updated.cardStyle = draft.cardStyle
         }
 
         onClose()
@@ -342,6 +363,99 @@ struct SubscriptionEditorSheet: View {
     }
 
     private func copy(_ value: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(value, forType: .string) }
+}
+
+// MARK: - 卡片样式轮播选择器
+
+/// 横向分页轮播：每页渲染一张真实 `SubscriptionMenuCard` 预览（示例额度数据），
+/// 滑动/点按切换草稿的卡片样式。预览不读写任何真实订阅数据。
+private struct CardStyleCarouselPicker: View {
+    @Binding var selection: SubscriptionCardStyle
+    let providerID: ProviderID
+    let displayName: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var visibleID: String?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(SubscriptionCardStyle.allCases) { style in
+                        previewCard(for: style)
+                            .padding(.horizontal, 10)
+                            .containerRelativeFrame(.horizontal)
+                            .id(style.rawValue)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $visibleID)
+            .scrollIndicators(.hidden)
+            .frame(height: 190)
+            .background(TM.fieldFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(TM.border, lineWidth: 1)
+            )
+
+            Text(selection.title)
+                .font(.system(size: 11, weight: .semibold))
+            Text(selection.subtitle)
+                .font(.system(size: 10))
+                .foregroundStyle(TM.textSecondary)
+
+            HStack(spacing: 6) {
+                ForEach(SubscriptionCardStyle.allCases) { style in
+                    Circle()
+                        .fill(style == selection ? TM.textPrimary : TM.border)
+                        .frame(width: 6, height: 6)
+                        .contentShape(Rectangle().size(width: 16, height: 16))
+                        .onTapGesture { select(style) }
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("卡片样式")
+            .accessibilityValue(selection.title)
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear { visibleID = selection.rawValue }
+        .onChange(of: visibleID) { _, new in
+            guard let new, let style = SubscriptionCardStyle(rawValue: new), style != selection else { return }
+            selection = style
+        }
+        .onChange(of: selection) { _, new in
+            guard visibleID != new.rawValue else { return }
+            withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) { visibleID = new.rawValue }
+        }
+    }
+
+    private func select(_ style: SubscriptionCardStyle) {
+        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) { visibleID = style.rawValue }
+        selection = style
+    }
+
+    private func previewCard(for style: SubscriptionCardStyle) -> some View {
+        let subscription = Subscription(providerID: providerID, name: displayName, cardStyle: style)
+        return SubscriptionMenuCard(subscription: subscription, snapshot: Self.sampleSnapshot(for: subscription)) {
+            select(style)
+        }
+        .allowsHitTesting(true)
+    }
+
+    /// 覆盖三种 renderer 形态的示例额度：窗口型（Kimi 系）、列表型、余额型。
+    private static func sampleSnapshot(for subscription: Subscription) -> UsageSnapshot {
+        .realtime(
+            subscription: subscription,
+            quotas: [
+                Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: .now.addingTimeInterval(7200), kind: .fiveHour),
+                Quota(name: "每周额度", used: 34, limit: 100, resetAt: .now.addingTimeInterval(86400 * 2), kind: .weekly),
+                Quota(name: "API 余额", used: 81.58, limit: 100, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
+            ],
+            overallUsageRatio: 0.52
+        )
+    }
 }
 
 private struct PageHeader: View {

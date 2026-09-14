@@ -2,6 +2,33 @@ import Foundation
 import AppKit
 import SwiftUI
 
+// MARK: - 卡片样式
+
+/// 菜单栏订阅卡片的展示样式。持久化在订阅上，缺失时回退标准样式。
+enum SubscriptionCardStyle: String, Codable, CaseIterable, Identifiable, Sendable {
+    case standard
+    case compact
+    case hero
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .standard: "标准"
+        case .compact: "紧凑"
+        case .hero: "醒目"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .standard: "名称 + 摘要 + 完整额度行"
+        case .compact: "只保留名称与一条总览进度"
+        case .hero: "突出显示关键数值"
+        }
+    }
+}
+
 struct Subscription: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     let providerID: ProviderID
@@ -10,6 +37,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
     let createdAt: Date
     var isEnabled: Bool
     var quotaColors: [String: UInt32]
+    var cardStyle: SubscriptionCardStyle
 
     init(
         id: UUID = UUID(),
@@ -18,7 +46,8 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         authMethodID: AuthMethodID = .apiKey,
         createdAt: Date = .now,
         isEnabled: Bool = true,
-        quotaColors: [String: UInt32] = [:]
+        quotaColors: [String: UInt32] = [:],
+        cardStyle: SubscriptionCardStyle = .standard
     ) {
         self.id = id
         self.providerID = providerID
@@ -27,11 +56,12 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         self.createdAt = createdAt
         self.isEnabled = isEnabled
         self.quotaColors = quotaColors
+        self.cardStyle = cardStyle
     }
 
     /// 兼容旧数据的解码：优先读新字段 providerID/authMethodID，缺失时回退旧 platform/authMethod。
     enum CodingKeys: String, CodingKey {
-        case id, name, createdAt, isEnabled, quotaColors
+        case id, name, createdAt, isEnabled, quotaColors, cardStyle
         case providerID
         case authMethodID
         case platform
@@ -57,6 +87,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
         quotaColors = try container.decodeIfPresent([String: UInt32].self, forKey: .quotaColors) ?? [:]
+        cardStyle = try container.decodeIfPresent(SubscriptionCardStyle.self, forKey: .cardStyle) ?? .standard
     }
 
     func encode(to encoder: Encoder) throws {
@@ -68,6 +99,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(isEnabled, forKey: .isEnabled)
         try container.encode(quotaColors, forKey: .quotaColors)
+        try container.encode(cardStyle, forKey: .cardStyle)
     }
 }
 

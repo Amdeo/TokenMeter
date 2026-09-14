@@ -7,6 +7,32 @@ import UserNotifications
 @MainActor
 struct QuotaAndKimiTests {
     @Test
+    func subscriptionDecodingDefaultsCardStyleToStandard() throws {
+        let id = UUID()
+        let data = try JSONSerialization.data(withJSONObject: [
+            "id": id.uuidString,
+            "providerID": "deepSeek",
+            "name": "DeepSeek",
+            "authMethodID": "apiKey",
+            "createdAt": 0.0,
+            "isEnabled": true
+        ])
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let subscription = try decoder.decode(Subscription.self, from: data)
+
+        #expect(subscription.cardStyle == .standard)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        let roundTripped = try decoder.decode(
+            Subscription.self,
+            from: encoder.encode(Subscription(id: id, providerID: .deepSeek, name: "DeepSeek", cardStyle: .compact))
+        )
+        #expect(roundTripped.cardStyle == .compact)
+    }
+
+    @Test
     func credentialStoreSavesReadsAndRemovesAPIKey() throws {
         let fileURL = temporaryCredentialFileURL()
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
