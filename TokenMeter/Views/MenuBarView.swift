@@ -22,7 +22,7 @@ enum TM {
     static let meterTrack = adaptive(light: NSColor.black.withAlphaComponent(0.08), dark: NSColor.white.withAlphaComponent(0.09))
 
     /// 面板内容区统一水平内边距（root 容器供给，所有页面共享）。
-    static let panelHorizontal: CGFloat = 18
+    static let panelHorizontal: CGFloat = 8
     /// 卡片/设置行/表单行内部的统一水平内边距（对齐主页订阅卡片的 11pt）。
     static let cardContentHorizontal: CGFloat = 11
     /// macOS `List` 会在每行两侧内建 8pt 内缩；概览页反向抵消后才能与其他页面同宽同位。
@@ -559,7 +559,7 @@ private struct DashboardHeader: View {
     }
 }
 
-/// 34pt 见方的幽灵图标按钮，悬停轻微提亮；rotation 用于刷新旋转反馈。
+/// 20pt 见方的图标按钮，悬停仅改变图标颜色；rotation 用于刷新旋转反馈。
 struct HeaderIconButton: View {
     let systemName: String
     let label: String
@@ -574,10 +574,8 @@ struct HeaderIconButton: View {
                 .font(.system(size: 13, weight: .medium))
                 .rotationEffect(.degrees(rotation))
                 .foregroundStyle(isActive ? TM.accent : (hovering ? TM.textPrimary : TM.textSecondary))
-                .frame(width: 32, height: 32)
-                .background(isActive || hovering ? TM.hoverFill : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(hovering ? TM.border : .clear, lineWidth: 1))
-                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
