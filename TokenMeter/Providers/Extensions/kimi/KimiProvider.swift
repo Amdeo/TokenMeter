@@ -295,6 +295,16 @@ struct KimiUsageProvider: UsageProvider {
             }
         }
         let overallUsageRatio = normalizedRatio(response.subscriptionBalance?.amountUsedRatio?.value)
+        // 订阅月额度：额度页的「月额度」窗口，`expireTime` 即其重置时间。
+        if let overallUsageRatio {
+            quotas.append(Quota(
+                name: "月额度",
+                used: overallUsageRatio,
+                limit: 1,
+                resetAt: date(from: response.subscriptionBalance?.expireTime),
+                kind: .monthly
+            ))
+        }
         guard !quotas.isEmpty || overallUsageRatio != nil else {
             throw UsageProviderError.invalidResponse(subscription.providerID, "Kimi 网页订阅接口返回中没有可用数据")
         }
@@ -363,6 +373,7 @@ struct KimiUsageProvider: UsageProvider {
 
     private static func quotaRank(_ quota: Quota) -> Int {
         switch quota.kind {
+        case .monthly: return -1
         case .fiveHour: return 0
         case .weekly: return 1
         case .generic where quota.unit.isCurrency: return 4

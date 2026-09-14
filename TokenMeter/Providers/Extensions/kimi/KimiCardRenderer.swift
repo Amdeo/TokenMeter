@@ -1,29 +1,24 @@
 import SwiftUI
 
-/// Kimi 订阅卡：5 小时/每周额度行布局。总用量百分比由顶部摘要锚点呈现，
-/// 正文不再独占一行（避免与锚点重复）。
+/// Kimi 订阅卡：月额度 / 5 小时 / 每周三行窗口。月额度行与顶部「总使用量」
+/// 锚点同源（订阅月额度），锚点给出大字数值，正文行补进度条与重置时间。
 struct KimiCardRenderer: ProviderCardRenderer {
+    /// 订阅制的三个窗口额度；其余（如加油包余额、月消费）不进入正文。
+    private static let windowKinds: Set<Quota.Kind> = [.monthly, .fiveHour, .weekly]
+
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
-        let coreKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
-        let coreQuotas = snapshot.quotas.filter { coreKinds.contains($0.kind) }
-        if !coreQuotas.isEmpty {
-            // 订阅制：渲染 5 小时 + 每周两行。
+        let windowQuotas = snapshot.quotas.filter { Self.windowKinds.contains($0.kind) }
+        if !windowQuotas.isEmpty {
+            // 顺序由解析层的 quotaRank 决定：月额度 → 5 小时 → 每周。
             return AnyView(
                 VStack(alignment: .leading, spacing: 8) {
-                    QuotaProgressRow(
-                        title: "5 小时额度",
-                        quota: snapshot.quotas.first { $0.kind == .fiveHour },
-                        tint: SubscriptionQuotaColors.resolve(
-                            subscription.quotaColors, name: "5 小时额度", kind: .fiveHour
+                    ForEach(windowQuotas) { quota in
+                        QuotaProgressRow(
+                            title: quota.name,
+                            quota: quota,
+                            tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
                         )
-                    )
-                    QuotaProgressRow(
-                        title: "每周额度",
-                        quota: snapshot.quotas.first { $0.kind == .weekly },
-                        tint: SubscriptionQuotaColors.resolve(
-                            subscription.quotaColors, name: "每周额度", kind: .weekly
-                        )
-                    )
+                    }
                 }
             )
         }
@@ -62,9 +57,10 @@ struct KimiCardRenderer: ProviderCardRenderer {
     }
 
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus {
-        let coreKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
-        return snapshot.quotas.contains { coreKinds.contains($0.kind) }
-            ? snapshot.status(for: coreKinds)
+        // 月额度也计入状态：月额度见底时不应再显示「正常」。
+        let kinds = Self.windowKinds
+        return snapshot.quotas.contains { kinds.contains($0.kind) }
+            ? snapshot.status(for: kinds)
             : snapshot.status(for: [.balance])
     }
 }

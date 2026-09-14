@@ -107,15 +107,16 @@ enum SubscriptionQuotaColors: Sendable {
         switch kind {
         case .fiveHour: fiveHourKey
         case .weekly: weeklyKey
-        case .generic, .balance: nil
+        case .monthly, .generic, .balance: nil
         }
     }
 
-    /// 内置默认色：5 小时蓝、每周绿，其余额度使用协调的青色。
+    /// 内置默认色：5 小时蓝、每周绿、每月紫，其余额度使用协调的青色。
     static func defaultColor(forKind kind: Quota.Kind) -> Color {
         switch kind {
         case .fiveHour: .blue
         case .weekly: .green
+        case .monthly: .purple
         case .generic, .balance: .teal
         }
     }
@@ -335,6 +336,8 @@ struct Quota: Identifiable, Codable, Sendable {
         case balance
         case fiveHour
         case weekly
+        /// 月度总额度（如 Kimi 订阅的月额度），排序时排在窗口额度之前。
+        case monthly
     }
 
     /// 额度行的分组元数据：同一分组（如一个订阅套餐的每日/每周/每月窗口）在卡片中归入同一段落。
