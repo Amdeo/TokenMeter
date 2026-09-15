@@ -57,13 +57,6 @@ struct ClaudeOAuthService: Sendable {
         "org:create_api_key", "user:profile", "user:inference",
         "user:sessions:claude_code", "user:mcp_servers", "user:file_upload"
     ]
-    /// 额度端点按 Claude Code CLI 指纹校验，UA 与 beta 头需与 CLI 保持一致。
-    static let cliVersion = ClaudeCodeFingerprint.version
-    static let sdkVersion = ClaudeCodeFingerprint.sdkVersion
-    static let cliUserAgent = ClaudeCodeFingerprint.cliUserAgent
-    static let oauthUserAgent = ClaudeCodeFingerprint.oauthUserAgent
-    static let oauthBeta = ClaudeCodeFingerprint.oauthBeta
-
     private static let authorizeEndpoint = URL(string: "https://claude.ai/oauth/authorize")!
     private static let tokenEndpoint = URL(string: "https://api.anthropic.com/v1/oauth/token")!
 
@@ -145,8 +138,8 @@ struct ClaudeOAuthService: Sendable {
             "client_id": Self.clientID,
             "refresh_token": credential.refreshToken
         ], headers: [
-            "anthropic-beta": Self.oauthBeta,
-            "User-Agent": Self.oauthUserAgent
+            "anthropic-beta": ClaudeCodeFingerprint.oauthBeta,
+            "User-Agent": ClaudeCodeFingerprint.oauthUserAgent
         ])
         return try Self.credential(
             from: data,

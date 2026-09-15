@@ -157,7 +157,7 @@ struct SettingsAndNotificationTests {
         let evaluator = AlertEvaluator(defaults: defaults)
         let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [Quota(name: "余额", used: 0, limit: 400, resetAt: nil, unit: .currency(code: "CNY", scale: 100), kind: .balance)])
-        #expect(evaluator.evaluate(previous: nil, current: snapshot, subscription: subscription, source: .manual, settings: AlertSettings()).count == 1)
+        #expect(evaluator.evaluate(current: snapshot, subscription: subscription, source: .manual, settings: AlertSettings()).count == 1)
     }
     @Test
     func panelVisibilityGateResetsWhenMovingToNewVisibleWindow() {
@@ -232,7 +232,6 @@ struct SettingsAndNotificationTests {
         let subscription = Subscription(providerID: .deepSeek, name: "私人工作账号", authMethodID: .apiKey)
         let alert = try #require(
             evaluator.evaluate(
-                previous: nil,
                 current: balanceSnapshot(subscription, remaining: 4.25, currency: "CNY"),
                 subscription: subscription,
                 providerName: "DeepSeek",
@@ -426,12 +425,12 @@ struct AlertEvaluationTests {
         let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let lowCNY = balanceSnapshot(subscription, remaining: 4, currency: "CNY")
         let lowUSD = balanceSnapshot(subscription, remaining: 0.5, currency: "USD")
-        #expect(evaluator.evaluate(previous: nil, current: lowCNY, subscription: subscription, source: .manual, settings: settings).count == 1)
-        #expect(evaluator.evaluate(previous: lowCNY, current: lowCNY, subscription: subscription, source: .manual, settings: settings).isEmpty)
-        #expect(evaluator.evaluate(previous: lowCNY, current: lowUSD, subscription: subscription, source: .manual, settings: settings).count == 1)
+        #expect(evaluator.evaluate(current: lowCNY, subscription: subscription, source: .manual, settings: settings).count == 1)
+        #expect(evaluator.evaluate(current: lowCNY, subscription: subscription, source: .manual, settings: settings).isEmpty)
+        #expect(evaluator.evaluate(current: lowUSD, subscription: subscription, source: .manual, settings: settings).count == 1)
         let recovered = balanceSnapshot(subscription, remaining: 10, currency: "CNY")
-        _ = evaluator.evaluate(previous: lowCNY, current: recovered, subscription: subscription, source: .manual, settings: settings)
-        #expect(evaluator.evaluate(previous: recovered, current: lowCNY, subscription: subscription, source: .manual, settings: settings).count == 1)
+        _ = evaluator.evaluate(current: recovered, subscription: subscription, source: .manual, settings: settings)
+        #expect(evaluator.evaluate(current: lowCNY, subscription: subscription, source: .manual, settings: settings).count == 1)
     }
 
     @Test
@@ -442,7 +441,7 @@ struct AlertEvaluationTests {
         let evaluator = AlertEvaluator(defaults: defaults)
         let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let snapshot = balanceSnapshot(subscription, remaining: 0, currency: "EUR")
-        #expect(evaluator.evaluate(previous: nil, current: snapshot, subscription: subscription, source: .manual, settings: AlertSettings()).isEmpty)
+        #expect(evaluator.evaluate(current: snapshot, subscription: subscription, source: .manual, settings: AlertSettings()).isEmpty)
     }
 
     @Test
@@ -454,9 +453,9 @@ struct AlertEvaluationTests {
         let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
         let low = balanceSnapshot(subscription, remaining: 1, currency: "CNY")
         var disabled = AlertSettings(); disabled.lowBalanceAlerts = false
-        #expect(evaluator.evaluate(previous: nil, current: low, subscription: subscription, source: .manual, settings: disabled).isEmpty)
-        _ = evaluator.evaluate(previous: nil, current: balanceSnapshot(subscription, remaining: 8, currency: "CNY"), subscription: subscription, source: .manual, settings: disabled)
-        #expect(evaluator.evaluate(previous: nil, current: low, subscription: subscription, source: .manual, settings: AlertSettings()).count == 1)
+        #expect(evaluator.evaluate(current: low, subscription: subscription, source: .manual, settings: disabled).isEmpty)
+        _ = evaluator.evaluate(current: balanceSnapshot(subscription, remaining: 8, currency: "CNY"), subscription: subscription, source: .manual, settings: disabled)
+        #expect(evaluator.evaluate(current: low, subscription: subscription, source: .manual, settings: AlertSettings()).count == 1)
     }
 
     @Test
@@ -468,10 +467,10 @@ struct AlertEvaluationTests {
         let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiDeviceOAuth)
         let expired = UsageSnapshot(subscriptionID: subscription.id, providerID: .kimi, quotas: [], updatedAt: .now, errorMessage: "expired", state: .authenticationRequired)
         let realtime = UsageSnapshot.realtime(subscription: subscription, quotas: [])
-        #expect(evaluator.evaluate(previous: nil, current: expired, subscription: subscription, source: .background, settings: AlertSettings()).count == 1)
-        #expect(evaluator.evaluate(previous: expired, current: expired, subscription: subscription, source: .background, settings: AlertSettings()).isEmpty)
-        _ = evaluator.evaluate(previous: expired, current: realtime, subscription: subscription, source: .background, settings: AlertSettings())
-        #expect(evaluator.evaluate(previous: realtime, current: expired, subscription: subscription, source: .background, settings: AlertSettings()).count == 1)
+        #expect(evaluator.evaluate(current: expired, subscription: subscription, source: .background, settings: AlertSettings()).count == 1)
+        #expect(evaluator.evaluate(current: expired, subscription: subscription, source: .background, settings: AlertSettings()).isEmpty)
+        _ = evaluator.evaluate(current: realtime, subscription: subscription, source: .background, settings: AlertSettings())
+        #expect(evaluator.evaluate(current: expired, subscription: subscription, source: .background, settings: AlertSettings()).count == 1)
     }
 
     @Test
@@ -484,17 +483,17 @@ struct AlertEvaluationTests {
         var settings = AlertSettings(); settings.serviceErrorAlerts = true
         let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         let error = UsageSnapshot.failure(subscription: subscription, message: "network details")
-        #expect(evaluator.evaluate(previous: nil, current: error, subscription: subscription, source: .manual, settings: settings).isEmpty)
-        #expect(evaluator.evaluate(previous: error, current: error, subscription: subscription, source: .panelOpen, settings: settings).isEmpty)
-        #expect(evaluator.evaluate(previous: error, current: error, subscription: subscription, source: .background, settings: settings).isEmpty)
-        #expect(evaluator.evaluate(previous: error, current: error, subscription: subscription, source: .background, settings: settings).count == 1)
-        #expect(evaluator.evaluate(previous: error, current: error, subscription: subscription, source: .background, settings: settings).isEmpty)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .manual, settings: settings).isEmpty)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .panelOpen, settings: settings).isEmpty)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .background, settings: settings).isEmpty)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .background, settings: settings).count == 1)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .background, settings: settings).isEmpty)
         clock.addTimeInterval(3600)
-        #expect(evaluator.evaluate(previous: error, current: error, subscription: subscription, source: .background, settings: settings).count == 1)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .background, settings: settings).count == 1)
         let realtime = UsageSnapshot.realtime(subscription: subscription, quotas: [])
-        _ = evaluator.evaluate(previous: error, current: realtime, subscription: subscription, source: .background, settings: settings)
-        #expect(evaluator.evaluate(previous: realtime, current: error, subscription: subscription, source: .background, settings: settings).isEmpty)
-        #expect(evaluator.evaluate(previous: error, current: error, subscription: subscription, source: .background, settings: settings).count == 1)
+        _ = evaluator.evaluate(current: realtime, subscription: subscription, source: .background, settings: settings)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .background, settings: settings).isEmpty)
+        #expect(evaluator.evaluate(current: error, subscription: subscription, source: .background, settings: settings).count == 1)
     }
 
     @Test
@@ -520,12 +519,12 @@ struct AlertEvaluationTests {
         ])
         // 只有低余额的「可用余额」触发提醒；同一快照重复评估不得重复提醒。
         let firstRound = evaluator.evaluate(
-            previous: nil, current: mixed, subscription: subscription,
+            current: mixed, subscription: subscription,
             source: .manual, settings: settings
         )
         #expect(firstRound.count == 1)
         let secondRound = evaluator.evaluate(
-            previous: mixed, current: mixed, subscription: subscription,
+            current: mixed, subscription: subscription,
             source: .manual, settings: settings
         )
         #expect(secondRound.isEmpty)
@@ -541,7 +540,7 @@ struct AlertEvaluationTests {
             )
         ])
         let swappedRound = evaluator.evaluate(
-            previous: mixed, current: swapped, subscription: subscription,
+            current: swapped, subscription: subscription,
             source: .manual, settings: settings
         )
         #expect(swappedRound.count == 1)
@@ -557,10 +556,10 @@ struct AlertEvaluationTests {
         let second = Subscription(providerID: .deepSeek, name: "Two", authMethodID: .apiKey)
         let lowFirst = balanceSnapshot(first, remaining: 1, currency: "CNY")
         let lowSecond = balanceSnapshot(second, remaining: 1, currency: "CNY")
-        #expect(evaluator.evaluate(previous: nil, current: lowFirst, subscription: first, source: .manual, settings: AlertSettings()).count == 1)
-        #expect(evaluator.evaluate(previous: nil, current: lowSecond, subscription: second, source: .manual, settings: AlertSettings()).count == 1)
+        #expect(evaluator.evaluate(current: lowFirst, subscription: first, source: .manual, settings: AlertSettings()).count == 1)
+        #expect(evaluator.evaluate(current: lowSecond, subscription: second, source: .manual, settings: AlertSettings()).count == 1)
         evaluator.clear(subscriptionID: first.id)
-        #expect(evaluator.evaluate(previous: nil, current: lowFirst, subscription: first, source: .manual, settings: AlertSettings()).count == 1)
+        #expect(evaluator.evaluate(current: lowFirst, subscription: first, source: .manual, settings: AlertSettings()).count == 1)
     }
 
 }

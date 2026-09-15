@@ -55,9 +55,7 @@ enum StoredCredential: Sendable, Equatable {
         switch flowID {
         case .apiKey:
             return entry.apiKey.map { .apiKey($0) }
-        case .deviceOAuth:
-            return entry.oauthCredential.map { .oauth($0) }
-        case .oauthCode:
+        case .deviceOAuth, .oauthCode:
             return entry.oauthCredential.map { .oauth($0) }
         case .browserSession:
             return entry.browserCredential.map { .browserSession($0) } ?? entry.cookieCredential.map { .cookieSession($0) }

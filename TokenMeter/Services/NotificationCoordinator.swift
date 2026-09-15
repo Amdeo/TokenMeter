@@ -30,9 +30,9 @@ struct AlertSettings: Sendable {
     var serviceErrorAlerts = false
     var cnyThreshold = 5.0
     var usdThreshold = 1.0
+}
 
-    init() {}
-
+extension AlertSettings {
     @MainActor
     init(settings: SettingsStore) {
         lowBalanceAlerts = settings.lowBalanceAlerts
@@ -64,7 +64,7 @@ final class AlertEvaluator {
         }
     }
 
-    func evaluate(previous: UsageSnapshot?, current: UsageSnapshot, subscription: Subscription, providerName: String? = nil, source: RefreshSource, settings: AlertSettings) -> [AlertEvaluation] {
+    func evaluate(current: UsageSnapshot, subscription: Subscription, providerName: String? = nil, source: RefreshSource, settings: AlertSettings) -> [AlertEvaluation] {
         var alerts: [AlertEvaluation] = []
         let realtime = current.state == .realtime
         let resolvedProviderName = providerName ?? subscription.providerID.rawValue
@@ -143,7 +143,7 @@ final class AlertEvaluator {
 
 @MainActor
 protocol AlertCoordinating: AnyObject {
-    func process(previous: UsageSnapshot?, current: UsageSnapshot, subscription: Subscription, source: RefreshSource)
+    func process(current: UsageSnapshot, subscription: Subscription, source: RefreshSource)
     func remove(subscriptionID: UUID)
 }
 
@@ -159,10 +159,10 @@ final class NotificationCoordinator: AlertCoordinating {
         self.delivery = delivery
     }
 
-    func process(previous: UsageSnapshot?, current: UsageSnapshot, subscription: Subscription, source: RefreshSource) {
+    func process(current: UsageSnapshot, subscription: Subscription, source: RefreshSource) {
         let providerName = ProviderRegistry.definition(for: subscription.providerID)?.metadata.displayName
             ?? subscription.providerID.rawValue
-        let alerts = evaluator.evaluate(previous: previous, current: current, subscription: subscription, providerName: providerName, source: source, settings: AlertSettings(settings: settings))
+        let alerts = evaluator.evaluate(current: current, subscription: subscription, providerName: providerName, source: source, settings: AlertSettings(settings: settings))
         alerts.forEach(delivery.deliver)
     }
 

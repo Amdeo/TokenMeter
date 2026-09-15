@@ -356,9 +356,8 @@ extension UsageStore {
                 clearStaleCredentialsIfRemoved(subscription)
                 return
             }
-            let previous = snapshots[subscription.id]
             snapshots[subscription.id] = snapshot
-            alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
+            alerts.process(current: snapshot, subscription: subscription, source: source)
             lastSuccessfulRefreshAt = .now
         } catch is CancellationError {
             UsageStoreLogger.logger.debug("fetch cancelled provider=\(subscription.providerID.rawValue, privacy: .public)")
@@ -368,9 +367,8 @@ extension UsageStore {
                 return
             }
             let (snapshot, state) = Self.failureSnapshot(subscription: subscription, error: error)
-            let previous = snapshots[subscription.id]
             snapshots[subscription.id] = snapshot
-            alerts.process(previous: previous, current: snapshot, subscription: subscription, source: source)
+            alerts.process(current: snapshot, subscription: subscription, source: source)
             UsageStoreLogger.logger.log(
                 level: state == "error" ? .error : .info,
                 """

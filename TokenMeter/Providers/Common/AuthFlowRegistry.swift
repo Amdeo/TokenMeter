@@ -17,9 +17,7 @@ enum AuthFlowRegistry {
         return switch flowID {
         case .apiKey:
             !draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .deviceOAuth:
-            draft.oauthCredential != nil
-        case .oauthCode:
+        case .deviceOAuth, .oauthCode:
             draft.oauthCredential != nil
         case .browserSession:
             draft.browserCredential != nil || draft.cookieCredential != nil
@@ -33,10 +31,7 @@ enum AuthFlowRegistry {
             let key = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !key.isEmpty else { return }
             try CredentialStore().save(.apiKey(key), for: subscriptionID)
-        case .deviceOAuth:
-            guard let credential = draft.oauthCredential else { return }
-            try CredentialStore().save(.oauth(credential), for: subscriptionID)
-        case .oauthCode:
+        case .deviceOAuth, .oauthCode:
             guard let credential = draft.oauthCredential else { return }
             try CredentialStore().save(.oauth(credential), for: subscriptionID)
         case .browserSession:
