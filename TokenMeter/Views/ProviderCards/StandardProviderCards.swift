@@ -196,13 +196,11 @@ struct QuotaListCardRenderer: ProviderCardRenderer {
 
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary? {
         guard !snapshot.quotas.isEmpty else { return nil }
-        let quota: Quota
         if let anchorHint, let matched = snapshot.quotas.first(where: { $0.name.contains(anchorHint) }) {
-            quota = matched
-        } else {
-            quota = snapshot.quotas[0]
+            // 该额度行已从正文排除，重置时间只能由锚点体现；无 anchorHint 时行内自带提示，避免重复。
+            return .usage(matched, subscription: subscription, showsResetHint: true)
         }
-        return .usage(quota, subscription: subscription)
+        return .usage(snapshot.quotas[0], subscription: subscription)
     }
 
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus {

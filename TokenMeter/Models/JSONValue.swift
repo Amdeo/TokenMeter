@@ -95,13 +95,21 @@ enum JSONValue: Decodable, Encodable, Sendable, Equatable {
     /// 从多种时间字段形态解析重置时间（ISO8601 / 秒级 / 毫秒级时间戳）。
     var resetDate: Date? {
         if let string = string(for: ["reset_at", "resetAt", "resets_at", "resetsAt", "reset", "reset_time"]) {
-            if let date = ISO8601DateFormatter().date(from: string) { return date }
+            if let date = Self.iso8601(string) { return date }
             if let timestamp = Double(string) { return Self.date(from: timestamp) }
         }
         if let timestamp = number(for: ["reset_at", "resetAt", "resets_at", "resetsAt", "reset", "reset_time"]) {
             return Self.date(from: timestamp)
         }
         return nil
+    }
+
+    /// ISO8601 解析：先按带小数秒（如 OpenCode Go 的 `2026-09-15T12:05:59.014Z`）再退回标准形态。
+    private static func iso8601(_ string: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: string) { return date }
+        return ISO8601DateFormatter().date(from: string)
     }
 
     static func date(from timestamp: Double) -> Date {
