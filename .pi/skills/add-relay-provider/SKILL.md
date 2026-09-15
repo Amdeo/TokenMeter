@@ -1,6 +1,6 @@
 ---
 name: add-relay-provider
-description: 为 TokenMeter 新增 API 中转站（relay/gateway，如 CCBus、new-api/one-api 系）供应商。当用户只提供一个中转站域名，要求“接入 / 添加 / 支持 xx站余额 / 这个站能加吗”时使用。先用自带脚本起 Chrome 9222 CDP + playwright-cli 探测站点，匹配框架指纹自动识别类型（CCBus 系 / new-api 系等），命中已知框架即直填参数生成模块；未命中再走问答。产物是 TokenMeter/Providers/Extensions/<id>/ 下的自有模块加 ProviderCatalog 一行登记。
+description: 为 TokenMeter 新增 API 中转站（relay/gateway，如 CCBus、new-api/one-api 系）供应商。当用户只提供一个中转站域名，要求“接入 / 添加 / 支持 xx站余额 / 这个站能加吗”时使用。先用自带脚本起 Chrome 9222 CDP + playwright-cli 探测站点，匹配框架指纹自动识别类型（CCBus 系 / new-api 系等），命中已知框架即直填参数生成模块；未命中再走问答。写 Swift 前先出卡片 HTML 预览（340pt 真面板 + 真实设计令牌，5 套常用卡片）并起本地服务让用户看图，同时用提问确认锚点/口径/时间信息/配色 4 项。产物是 TokenMeter/Providers/Extensions/<id>/ 下的自有模块加 ProviderCatalog 一行登记。
 ---
 
 # TokenMeter 中转站供应商 Skill
@@ -91,54 +91,64 @@ playwright-cli -s=relay detach
 - **没有/待定**：`iconResourceName: nil`，用 `fallbackSystemImage` 占位，并在完成报告中说明“待补图标”。
 - 若平台上明确有 logo 资源（如顶部导航栏 `<img src>`），也可探测页面的 logo URL 主动提议，仍以用户确认为准。
 
-### 卡片样式可视化（生成前先让用户看效果）
+### 卡片样式预览（生成前必做：先出图，再写 Swift）
 
-探测确认接口能力后、生成模块之前，**必须把候选卡片样式用 ASCII 预览展示给用户**，
-确认是 TA 想要的样子再生成——避免做完整套才发现卡片布局不对。
+探测确认接口能力后、写 Swift 之前，**用真实探测数据出一版 HTML 预览给用户看**，
+用户点头再动代码——避免做完整套才发现卡片布局不对。
 
-根据探测到的接口能力**先自动选型**，再展示预览：
+#### ① 必问 4 项（`ask_user_question`，每题 2-4 选项，推荐项放第一）
 
-| 接口能力 | 默认卡片 | 说明 |
+| # | 维度 | 选项 |
 | --- | --- | --- |
-| 仅有余额字段（`data.balance` / `data.quota` 无订阅接口） | **余额卡**（`BalanceCardRenderer`） | 单行可用余额，最简 |
-| 余额 + 订阅/额度窗口（有 `/subscription/self` 或额度 reset） | **混合卡**（参照 `Extensions/nowcoding/NowCodingCardRenderer.swift`） | 顶部摘要余额 + 正文多个额度行 |
-| 无余额、纯月/周额度窗口 | **额度列表卡**（`QuotaListCardRenderer`） | 多个“已用/限额”进度行 |
+| 1 | 锚点内容 | 可用余额 / 主窗口百分比 / 总使用量 / 不显示锚点 |
+| 2 | 行内时间信息 | N 天后刷新额度 / 剩 N 天到期 / 状态词「正常」/ 都不显示 |
+| 3 | 数值口径 | 百分比 / 金额 / 百分比 + 金额 |
+| 4 | 配色来源 | 平台 tint / 状态色（绿 <80%、橙 ≥80%、红 =100%）/ 按额度名自定义 |
 
-按上面的选型给出对应 ASCII 预览（替换为真实站名与探测到的数值），放在生成前的回复里，
-并用 `ask_user_question`（带 preview）让用户确认或改选。示例：
+每题的推荐项按探测结果给（例如只有余额接口 → 锚点默认「不显示」、口径默认「金额」）。
 
-```text
-余额卡：
-┌──────────────────────────────────────────┐
-│ [icon] NowCoding · 网页登录态      余额   │
-│         NowCoding                  ¥19.39 │
-│  ──────────────────────────────────────  │
-│  可用余额                    ¥19.39       │
-└──────────────────────────────────────────┘
+#### ② 填数据段
 
-混合卡（余额 + 订阅）：
-┌──────────────────────────────────────────┐
-│ [icon] NowCoding · 网页登录态      余额   │
-│         NowCoding                  ¥19.39 │
-│  ──────────────────────────────────────  │
-│  Codex 月卡 1500$     ¥10.58 / ¥50.00    │
-│  [██████████░░░░░░░░]                    │
-│  正常 · 剩 26 天到期                     │
-└──────────────────────────────────────────┘
-
-额度列表卡：
-┌──────────────────────────────────────────┐
-│ [icon] 某站 · 网页登录态          每月   │
-│        某站                      72.1%   │
-│  ──────────────────────────────────────  │
-│  每月窗口              72.1%             │
-│  [███████████░░░░░░]                    │
-│  正常 · 3 天后刷新额度                    │
-└──────────────────────────────────────────┘
+```bash
+mkdir -p /tmp/tokenmeter-card-preview-<id>
+cp .pi/skills/add-relay-provider/scripts/card-preview.html /tmp/tokenmeter-card-preview-<id>/index.html
 ```
 
-确认/改选后按选择生成对应的 `cardRenderer`。
-混合卡需额外：探测订阅接口（如 `/api/subscription/self`）的字段
+**只改文件里的 `window.CARD_DATA = {...}` 数据段，CSS 与渲染逻辑不要动**——
+它按 `TM` 令牌与真实 SwiftUI 尺寸写死：340pt 面板 / 卡片圆角 14 / 内边距 11 / 条高 4 / 字号 13·11·10·9。
+
+- `site`：`name` / `subtitle`（`显示名 · 认证方式标题`）/ `icon` / `tint` / `status`（余额偏低 `warning`、用尽 `danger`）
+- `variants`：默认 5 套（① 余额 ② 额度列表 ③ 混合 ④ 订阅分段 ⑤ 总用量锚点）；探测做不到的套直接删，别留着占位
+- 数值一律填**真实探测到的数据**，不要占位符；行类型只有三种：
+  `balance{title,value}` / `progress{title,value,percent,state,hints}` / `group{title,hint}`
+- `tint` 写 `#RRGGBB`，或用 `ok` / `warn` / `danger` 引用状态色
+- 有官方图标时把 PNG 复制到同目录，`icon` 写文件名（如 `icon.png`），预览里就能看到真图标
+
+#### ③ 起服务看图
+
+```bash
+bash .pi/skills/add-relay-provider/scripts/preview.sh /tmp/tokenmeter-card-preview-<id>
+```
+
+用系统自带 `python3 -m http.server`（只绑 `127.0.0.1`，不暴露局域网）+ 自动挑空闲端口 + `open` 浏览器。
+改完 HTML 让用户**刷新**即可看到新版；收工 `preview.sh --stop`。
+服务起不来时脚本会打印日志路径——把日志贴出来，别自己乱改端口乱重试。
+
+#### ④ 迭代与定稿
+
+用户说「要第③套，但不要状态词」→ 只改数据段（删 `state` 字段）→ 让用户刷新再看，改到点头为止。
+定稿后按下表落到 renderer，**不要新造视觉**：
+
+| 选定形态 | Swift 落地 |
+| --- | --- |
+| ① 余额卡 | `cardRenderer: BalanceCardRenderer()` |
+| ② 额度列表卡 | `cardRenderer: QuotaListCardRenderer(anchorHint: "每月窗口")` |
+| ③ 混合卡 | 照抄 `Extensions/nowcoding/NowCodingCardRenderer.swift` |
+| ④ 订阅分段卡 | 照抄 `Extensions/siyu/SiyuCardRenderer.swift` |
+| ⑤ 总用量锚点卡 | 照抄 `Extensions/kimi/KimiCardRenderer.swift` |
+
+自定义卡片一律复用 `BalanceMenuRow` / `QuotaProgressRow` 行组件，不要自己画像素；
+混合卡/分段卡需额外探测订阅接口（如 `/api/subscription/self`）的字段
 （`amount_total`/`amount_used`/`end_time`/`next_reset_time`/`plan_title`），
 并把订阅映射为 `Quota` 行（`kind: .generic`，`resetAt` 填日重置、`expiresAt` 填到期日）。
 

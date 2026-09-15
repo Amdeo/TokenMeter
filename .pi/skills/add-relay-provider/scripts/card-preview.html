@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>TokenMeter 卡片预览</title>
+<style>
+  /* ===== 设计令牌：与 TokenMeter/Views/MenuBarView.swift 的 TM 一一对应（深/浅两套） ===== */
+  :root {
+    --panel-top:#222324; --panel-mid:#1A1B1C; --panel-bottom:#181919;
+    --card-fill:rgba(255,255,255,.028); --border:rgba(255,255,255,.07);
+    --meter-track:rgba(255,255,255,.09);
+    --text-primary:#F4F4F1; --text-secondary:#8F9391; --text-tertiary:#737875;
+    --ok:#67C89D; --warn:#D59B5C; --danger:#D97B6C;
+  }
+  :root[data-theme="light"] {
+    --panel-top:#F5F5F4; --panel-mid:#F5F5F4; --panel-bottom:#F5F5F4;
+    --card-fill:rgba(0,0,0,.05); --border:rgba(0,0,0,.08);
+    --meter-track:rgba(0,0,0,.08);
+    --text-primary:#1A1B1C; --text-secondary:#5E6461; --text-tertiary:#8B908D;
+    --ok:#2E9E6B; --warn:#B8772A; --danger:#C24B3C;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:52px 24px 40px; min-height:100vh;
+    background:#0E0F10; color:#E7E7E4;
+    font:13px/1.45 -apple-system,"SF Pro Text",system-ui,sans-serif;
+  }
+  h1 { font-size:13px; font-weight:600; margin:0 0 2px; }
+  .lede { font-size:11px; color:#9A9E9C; margin:0 0 22px; }
+
+  /* ===== 顶部工具栏：预览脚手架，不是设计的一部分 ===== */
+  .hud {
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:10px 16px; background:rgba(20,21,22,.92);
+    border-bottom:1px solid rgba(255,255,255,.08); backdrop-filter:blur(12px);
+    font-size:11px; color:#B9BDBA;
+  }
+  .hud b { color:#E7E7E4; font-weight:600; }
+  .hud label { display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap; }
+  .hud .sep { width:1px; height:14px; background:rgba(255,255,255,.14); }
+  .hud button {
+    font:inherit; font-size:11px; padding:3px 9px; cursor:pointer;
+    color:#E7E7E4; background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.14); border-radius:6px;
+  }
+  .hud button[aria-pressed="true"] { background:rgba(255,255,255,.22); }
+
+  /* ===== 舞台：每套卡片一个 340pt 真面板 ===== */
+  .stages { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; }
+  .stage { display:flex; flex-direction:column; gap:7px; }
+  .caption { font-size:10px; color:#9A9E9C; padding-left:2px; }
+  .caption b { color:#E7E7E4; font-weight:600; }
+  .panel {
+    width:340px; padding:8px;
+    background:linear-gradient(135deg,var(--panel-top),var(--panel-mid),var(--panel-bottom));
+    border-radius:14px; border:1px solid rgba(255,255,255,.06);
+  }
+  :root[data-theme="light"] .panel { border-color:rgba(0,0,0,.10); }
+
+  /* ===== 卡片本体：tmCard（radius 14 / fill / border）+ 卡内 11pt 内边距 ===== */
+  .card {
+    display:flex; flex-direction:column; gap:8px; padding:11px;
+    background:var(--card-fill); border:1px solid var(--border); border-radius:14px;
+    color:var(--text-primary);
+  }
+  .head { display:flex; align-items:flex-start; gap:9px; }
+  .logo {
+    width:30px; height:30px; flex:none; border-radius:7.2px;
+    display:grid; place-items:center; overflow:hidden;
+    background:color-mix(in srgb, var(--tint) 9%, transparent);
+    border:1px solid color-mix(in srgb, var(--tint) 28%, transparent);
+    color:var(--tint); font-size:13px; font-weight:600;
+  }
+  .logo img { width:100%; height:100%; object-fit:contain; padding:18%; }
+  .titles { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .name-line { display:flex; align-items:center; gap:6px; }
+  .name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dot { width:6px; height:6px; border-radius:50%; flex:none; }
+  .sub { font-size:9px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .anchor { margin-left:auto; text-align:right; display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .anchor span:first-child { font-size:9px; font-weight:500; color:var(--text-tertiary); }
+  .anchor span:last-child { font-size:13px; font-weight:600; font-family:ui-rounded,-apple-system,sans-serif; font-variant-numeric:tabular-nums; }
+
+  .body { display:flex; flex-direction:column; gap:8px; }
+  /* 余额行：BalanceMenuRow */
+  .balance { display:flex; align-items:baseline; gap:8px; }
+  .balance .label { font-size:10px; font-weight:500; color:var(--text-secondary); }
+  .balance .value { margin-left:auto; font-size:13px; font-weight:600; font-family:ui-rounded,-apple-system,sans-serif; font-variant-numeric:tabular-nums; }
+  /* 进度行：QuotaProgressRow（标题 10 / 数值 11 bold / 条 4 / 提示 9） */
+  .row { display:flex; flex-direction:column; gap:4px; }
+  .row-top { display:flex; align-items:baseline; gap:6px; }
+  .row-top .label { font-size:10px; font-weight:500; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-top .value { margin-left:auto; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--tint); white-space:nowrap; }
+  .meter { height:4px; border-radius:999px; background:var(--meter-track); overflow:hidden; }
+  .meter i { display:block; height:100%; border-radius:999px; min-width:4px; background:var(--tint); }
+  .hints { display:flex; align-items:baseline; gap:8px; font-size:9px; color:var(--text-tertiary); }
+  .hints .right { margin-left:auto; display:flex; gap:8px; }
+  /* 订阅分段头：SiyuCardRenderer */
+  .group { display:flex; align-items:baseline; gap:6px; }
+  .group .title { font-size:11px; font-weight:600; color:var(--text-primary); }
+  .group .hint { margin-left:auto; font-size:9px; color:var(--text-tertiary); }
+</style>
+</head>
+<body>
+
+<!-- ===== 工具栏（脚手架） ===== -->
+<div class="hud">
+  <b>TokenMeter 卡片预览</b>
+  <span class="sep"></span>
+  <span>主题</span>
+  <button id="theme-dark" aria-pressed="true">深色</button>
+  <button id="theme-light" aria-pressed="false">浅色</button>
+  <span class="sep"></span>
+  <span id="variant-toggles"></span>
+</div>
+
+<h1>340pt 真面板 · 真实设计令牌 · 卡片按 SwiftUI 实际尺寸还原</h1>
+<p class="lede">每列一套候选卡片，看中哪套或要改哪里的细节，回到对话里说即可（例如「要第三套，但不要状态词」）。</p>
+<div class="stages" id="stages"></div>
+
+<script>
+/* ==========================================================================================
+   数据段：AI 只需改这一块。其余 CSS/渲染逻辑不要动。
+   字段说明：
+     site     站点信息 → 头部（名称 / 副标题 / 图标 / 状态点颜色）
+     variants 要预览的候选卡片；5 套常用形态见下方默认示例，按探测到的接口能力增删
+     row.type balance  余额行      { title, value, color? }
+              progress 进度行      { title, value, percent(0-1), tint?, state?, hints?:[] }
+              group    分段头      { title, hint? }（后面紧跟该分段的 progress 行）
+     anchor   顶部锚点 { label, value, color? }；不需要锚点就写 null
+     tint     行/条颜色：写平台色（#RRGGBB）或用 'ok' / 'warn' / 'danger' 引用状态色
+   ========================================================================================== */
+window.CARD_DATA = {
+  site: {
+    name: "NowCoding",
+    subtitle: "NowCoding · 网页登录态",
+    icon: null,               // 有官方图标时写文件名（与 index.html 同目录），如 "icon.png"
+    tint: "#2DD4BF",
+    status: "normal"          // normal | warning | danger
+  },
+  variants: [
+    {
+      key: "balance", title: "① 余额卡", note: "仅余额接口 → BalanceCardRenderer",
+      anchor: null,
+      body: [ { type: "balance", title: "可用余额", value: "¥19.39" } ]
+    },
+    {
+      key: "list", title: "② 额度列表卡", note: "纯窗口额度 → QuotaListCardRenderer",
+      anchor: { label: "每月窗口", value: "72.1%" },
+      body: [
+        { type: "progress", title: "每月窗口", percent: 0.721, value: "72.1%", tint: "warn",
+          state: "正常", hints: ["3 天后刷新额度"] },
+        { type: "progress", title: "每周窗口", percent: 0.34, value: "34.0%", tint: "#2DD4BF",
+          state: "正常", hints: ["2 天后刷新额度"] }
+      ]
+    },
+    {
+      key: "mixed", title: "③ 混合卡（余额 + 订阅）", note: "NowCoding 式：金额口径",
+      anchor: { label: "余额", value: "¥19.39" },
+      body: [
+        { type: "progress", title: "Codex 月卡 1500$", percent: 0.212, value: "¥10.58 / ¥50.00",
+          tint: "#2DD4BF", state: "正常", hints: ["剩 26 天到期"] }
+      ]
+    },
+    {
+      key: "grouped", title: "④ 订阅分段卡", note: "Siyu 式：多订阅分组 + 到期日",
+      anchor: { label: "余额", value: "¥19.39" },
+      body: [
+        { type: "group", title: "DeepSeek 大月卡", hint: "剩 12 天到期" },
+        { type: "progress", title: "每日", percent: 0.42, value: "¥4.20 / ¥10.00", tint: "#2DD4BF",
+          state: "正常", hints: ["1 小时后刷新额度"] },
+        { type: "progress", title: "每月", percent: 0.288, value: "¥86.50 / ¥300.00", tint: "ok",
+          state: "正常", hints: ["9 天后刷新额度"] }
+      ]
+    },
+    {
+      key: "overall", title: "⑤ 总用量锚点卡", note: "Kimi 式：锚点带重置时间",
+      anchor: { label: "总使用量 · 5 天后重置", value: "52.0%" },
+      body: [
+        { type: "progress", title: "5 小时额度", percent: 0.62, value: "62.0%", tint: "#2DD4BF",
+          state: "正常", hints: ["2 小时后刷新额度"] },
+        { type: "progress", title: "每周额度", percent: 0.34, value: "34.0%", tint: "#2DD4BF",
+          state: "正常", hints: ["2 天后刷新额度"] }
+      ]
+    }
+  ]
+};
+
+/* ================================ 以下是渲染逻辑，不要修改 ================================ */
+
+const PALETTE = { ok: "var(--ok)", warn: "var(--warn)", danger: "var(--danger)" };
+const STATUS = { normal: "var(--ok)", warning: "var(--warn)", danger: "var(--danger)" };
+const color = (value, fallback) => (value ? PALETTE[value] || value : fallback);
+
+/** 用 DOM API 构节点：所有数据都走 textContent / setAttribute，不拼 HTML 字符串。 */
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (value === null || value === undefined || value === false) continue;
+    if (key === "text") node.textContent = value;
+    else if (key === "style")
+      for (const [k, v] of Object.entries(value))
+        k.startsWith("--") ? node.style.setProperty(k, v) : (node.style[k] = v);
+    else node.setAttribute(key, value);
+  }
+  for (const child of children.flat()) if (child) node.append(child);
+  return node;
+}
+
+function renderRow(row) {
+  const tint = color(row.tint, "var(--ok)");
+
+  if (row.type === "balance")
+    return el("div", { class: "balance", style: { "--tint": tint } },
+      el("span", { class: "label", text: row.title ?? "" }),
+      el("span", { class: "value", style: { color: color(row.color, "var(--text-primary)") }, text: row.value ?? "" }));
+
+  if (row.type === "group")
+    return el("div", { class: "group" },
+      el("span", { class: "title", text: row.title ?? "" }),
+      row.hint ? el("span", { class: "hint", text: row.hint }) : null);
+
+  if (row.type !== "progress") return null;
+
+  const percent = Math.min(Math.max(Number(row.percent) || 0, 0), 1) * 100;
+  const hints = row.hints ?? [];
+  const rowNode = el("div", { class: "row", style: { "--tint": tint } },
+    el("div", { class: "row-top" },
+      el("span", { class: "label", text: row.title ?? "" }),
+      el("span", { class: "value", text: row.value ?? "" })),
+    el("div", { class: "meter" }, el("i", { style: { width: `${percent}%` } })));
+  if (row.state || hints.length)
+    rowNode.append(el("div", { class: "hints" },
+      row.state ? el("span", { text: row.state }) : null,
+      el("span", { class: "right" }, hints.map((hint) => el("span", { text: hint })))));
+  return rowNode;
+}
+
+function renderVariant(variant, site) {
+  const logo = site.icon
+    ? el("div", { class: "logo" }, el("img", { src: site.icon, alt: "" }))
+    : el("div", { class: "logo", text: (site.name || "?").slice(0, 1) });
+  const anchor = variant.anchor
+    ? el("div", { class: "anchor" },
+        el("span", { text: variant.anchor.label ?? "" }),
+        el("span", {
+          style: { color: color(variant.anchor.color, "var(--text-primary)") },
+          text: variant.anchor.value ?? ""
+        }))
+    : null;
+  const groups = variant.body.some((row) => row.type === "group");
+  const card = el("div", { class: "card", style: { "--tint": site.tint || "#2DD4BF" } },
+    el("div", { class: "head" }, logo,
+      el("div", { class: "titles" },
+        el("div", { class: "name-line" },
+          el("span", { class: "name", text: site.name ?? "" }),
+          el("span", { class: "dot", style: { background: STATUS[site.status] || STATUS.normal } })),
+        el("div", { class: "sub", text: site.subtitle ?? "" })),
+      anchor),
+    el("div", { class: "body", style: { gap: groups ? "12px" : "8px" } }, variant.body.map(renderRow)));
+  return el("div", { class: "stage", "data-variant": variant.key },
+    el("div", { class: "caption" },
+      el("b", { text: variant.title ?? "" }),
+      variant.note ? el("span", { text: ` · ${variant.note}` }) : null),
+    el("div", { class: "panel" }, card));
+}
+
+const hiddenVariants = new Set();
+
+function render() {
+  document.getElementById("stages").replaceChildren(
+    ...window.CARD_DATA.variants
+      .filter((variant) => !hiddenVariants.has(variant.key))
+      .map((variant) => renderVariant(variant, window.CARD_DATA.site)));
+}
+
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  for (const name of ["dark", "light"])
+    document.getElementById(`theme-${name}`).setAttribute("aria-pressed", String(name === theme));
+  render();
+}
+
+document.getElementById("variant-toggles").append(...window.CARD_DATA.variants.map((variant) => {
+  const box = el("input", { type: "checkbox", "data-key": variant.key });
+  box.checked = true;
+  box.addEventListener("change", () => {
+    box.checked ? hiddenVariants.delete(variant.key) : hiddenVariants.add(variant.key);
+    render();
+  });
+  return el("label", {}, box, el("span", { text: variant.title ?? "" }));
+}));
+document.getElementById("theme-dark").addEventListener("click", () => setTheme("dark"));
+document.getElementById("theme-light").addEventListener("click", () => setTheme("light"));
+setTheme("dark");
+</script>
+</body>
+</html>

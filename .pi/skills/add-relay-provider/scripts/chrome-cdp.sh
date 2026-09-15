@@ -41,7 +41,10 @@ else
   if [[ "${CDP_SKIP_QUIT:-0}" != "1" ]] && chrome_running; then
     echo "正在退出运行中的 Google Chrome（标签页靠会话恢复）..."
     osascript -e 'quit app "Google Chrome"' >/dev/null 2>&1 || true
-    for _ in $(seq 1 8); do chrome_running || break; sleep 1; done
+    for _ in $(seq 1 8); do
+      chrome_running || break
+      sleep 1
+    done
     chrome_running && echo "warn: Chrome 仍在运行，继续尝试启动调试实例"
   fi
 
@@ -52,7 +55,10 @@ else
     --user-data-dir="${PROFILE_DIR}" \
     --no-first-run --no-default-browser-check >"${LOG_FILE}" 2>&1 &
 
-  for _ in $(seq 1 "${WAIT_SECONDS}"); do cdp_ready && break; sleep 1; done
+  for _ in $(seq 1 "${WAIT_SECONDS}"); do
+    cdp_ready && break
+    sleep 1
+  done
   if ! cdp_ready; then
     echo "ERROR: ${BROWSER_URL} 在 ${WAIT_SECONDS}s 内未就绪（日志: ${LOG_FILE}）" >&2
     manual_hint
