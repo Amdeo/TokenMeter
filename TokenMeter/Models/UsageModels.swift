@@ -29,6 +29,70 @@ enum SubscriptionCardStyle: String, Codable, CaseIterable, Identifiable, Sendabl
     }
 }
 
+extension SubscriptionCardStyle {
+    /// 该样式在卡片里渲染的进度条能力。三种现有样式都会画进度条（紧凑样式画一条汇总条）；
+    /// 未来新增「不含进度条」的样式时在这里返回空集合，颜色设置入口会自动消失。
+    var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
+}
+
+/// 订阅卡片的渲染能力声明。
+///
+/// 能力由两处共同声明，共享 UI（如进度条颜色设置）据此决定是否提供对应配置：
+/// - `SubscriptionCardStyle.capabilities`：该样式画不画进度条；
+/// - `ProviderCardRenderer.capabilities`：该供应商卡片的数据有没有进度条
+///   （如余额型卡片只有一行余额）。
+///
+/// 新增不含进度条的卡片样式或供应商卡片时只需一处不声明 `.progressMeters`，
+/// 不需要在共享视图里按供应商写分支。
+struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
+    let rawValue: Int
+
+    /// 卡片渲染进度条（含紧凑样式的汇总进度条）。
+    static let progressMeters = SubscriptionCardCapabilities(rawValue: 1 << 0)
+
+    /// 卡片真正渲染出进度条：样式与供应商 renderer 都必须声明该能力。
+    /// 颜色设置入口与紧凑样式的汇总条共用这一判定，两者不会各自脱节。
+    static func renderProgressMeters(
+        style: SubscriptionCardCapabilities,
+        renderer: SubscriptionCardCapabilities
+    ) -> Bool {
+        style.contains(.progressMeters) && renderer.contains(.progressMeters)
+    }
+}
+
+/// 订阅的进度条配色：按卡片样式隔离。
+///
+/// 同一订阅可以为「标准 / 紧凑 / 醒目」各配一套颜色，切换样式后各自的配色保留、互不覆盖；
+/// 卡片渲染、摘要锚点与颜色编辑页都只读当前样式的那一份。
+struct SubscriptionQuotaPalette: Codable, Hashable, Sendable {
+    /// 外层键为样式 rawValue；用字符串存键，未来新增样式的配色也能原样往返。
+    private var byStyle: [String: [String: UInt32]]
+
+    init() { byStyle = [:] }
+
+    /// 单一颜色字典 → 标准样式的配色：旧数据迁移（旧版本只有一份配色，没有样式隔离）的入口。
+    init(standard: [String: UInt32]) {
+        byStyle = standard.isEmpty ? [:] : [SubscriptionCardStyle.standard.rawValue: standard]
+    }
+
+    /// 单个样式的配色；未配置的样式返回空表。写入空表等于清除该项，避免落下空对象。
+    subscript(style: SubscriptionCardStyle) -> [String: UInt32] {
+        get { byStyle[style.rawValue] ?? [:] }
+        set { byStyle[style.rawValue] = newValue.isEmpty ? nil : newValue }
+    }
+
+    var isEmpty: Bool { byStyle.isEmpty }
+
+    init(from decoder: Decoder) throws {
+        byStyle = try decoder.singleValueContainer().decode([String: [String: UInt32]].self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(byStyle)
+    }
+}
+
 struct Subscription: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     let providerID: ProviderID
@@ -36,7 +100,9 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
     var authMethodID: AuthMethodID
     let createdAt: Date
     var isEnabled: Bool
-    var quotaColors: [String: UInt32]
+    /// 进度条配色，按卡片样式隔离、按额度标识寻址（名称 / 语义类型 / 默认项）。
+    /// 只有声明了进度条能力的卡片会读取与展示它。
+    var quotaColors: SubscriptionQuotaPalette
     var cardStyle: SubscriptionCardStyle
 
     init(
@@ -46,7 +112,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         authMethodID: AuthMethodID = .apiKey,
         createdAt: Date = .now,
         isEnabled: Bool = true,
-        quotaColors: [String: UInt32] = [:],
+        quotaColors: SubscriptionQuotaPalette = SubscriptionQuotaPalette(),
         cardStyle: SubscriptionCardStyle = .standard
     ) {
         self.id = id
@@ -86,7 +152,14 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         }
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
-        quotaColors = try container.decodeIfPresent([String: UInt32].self, forKey: .quotaColors) ?? [:]
+        // 新格式是按样式隔离的配色表；旧的单一颜色字典解码时迁移到标准样式，不丢数据。
+        if let palette = try? container.decode(SubscriptionQuotaPalette.self, forKey: .quotaColors) {
+            quotaColors = palette
+        } else {
+            quotaColors = SubscriptionQuotaPalette(
+                standard: try container.decodeIfPresent([String: UInt32].self, forKey: .quotaColors) ?? [:]
+            )
+        }
         cardStyle = try container.decodeIfPresent(SubscriptionCardStyle.self, forKey: .cardStyle) ?? .standard
     }
 
@@ -100,6 +173,14 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         try container.encode(isEnabled, forKey: .isEnabled)
         try container.encode(quotaColors, forKey: .quotaColors)
         try container.encode(cardStyle, forKey: .cardStyle)
+    }
+}
+
+extension Subscription {
+    /// 当前卡片样式对应的配色：卡片渲染、摘要锚点与编辑流程都读写这一份。
+    var currentQuotaColors: [String: UInt32] {
+        get { quotaColors[cardStyle] }
+        set { quotaColors[cardStyle] = newValue }
     }
 }
 

@@ -162,6 +162,13 @@ struct MenuBarView: View {
         }
     }
 
+    /// 从颜色二级页回到它来自的配置页，草稿（含未保存的颜色）原样保留。
+    private func navigateBackToEditor() {
+        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) {
+            navigation.returnToEditor()
+        }
+    }
+
     private var pushTransition: AnyTransition {
         reduceMotion
             ? .opacity
@@ -193,10 +200,18 @@ struct MenuBarView: View {
                 }
                 .transition(pushTransition)
             case .addConfiguration(let draft):
-                SubscriptionEditorSheet(draft: draft, onClose: navigateBack)
+                SubscriptionEditorSheet(draft: draft, onClose: navigateBack, onQuotaColors: openQuotaColors)
                     .transition(pushTransition)
             case .editConfiguration(let draft, let subscription):
-                SubscriptionEditorSheet(draft: draft, subscription: subscription, onClose: navigateBack)
+                SubscriptionEditorSheet(
+                    draft: draft,
+                    subscription: subscription,
+                    onClose: navigateBack,
+                    onQuotaColors: openQuotaColors
+                )
+                .transition(pushTransition)
+            case .quotaColors(let draft):
+                QuotaColorsPage(draft: draft, onBack: navigateBackToEditor)
                     .transition(pushTransition)
             case .recovery:
                 NavigationRecoveryView(onReturn: navigateBack).transition(pushTransition)
@@ -422,6 +437,11 @@ private extension MenuBarView {
         navigateForward { navigation.beginAdding() }
     }
 
+    /// 进入颜色二级页；草稿仍是当前编辑会话，颜色在保存订阅时一并落盘。
+    func openQuotaColors() {
+        navigateForward { navigation.showQuotaColorSettings() }
+    }
+
     func openEditor(for subscription: Subscription) {
         navigateForward { navigation.beginEditingConfiguration(subscription) }
     }
@@ -559,7 +579,7 @@ private struct DashboardHeader: View {
     }
 }
 
-/// 20pt 见方的图标按钮，悬停仅改变图标颜色；rotation 用于刷新旋转反馈。
+/// 20pt 见方的图标按钮：悬停加一层 accent 半透明填充与边框（点击范围不变），rotation 用于刷新旋转反馈。
 struct HeaderIconButton: View {
     let systemName: String
     let label: String
@@ -567,18 +587,39 @@ struct HeaderIconButton: View {
     var isActive: Bool = false
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    /// hover 背景的显示条件：悬停且可用；禁用时不显示悬停反馈。
+    static func showsHoverFeedback(hovering: Bool, isEnabled: Bool) -> Bool { hovering && isEnabled }
+
+    private var showsHoverBackground: Bool {
+        Self.showsHoverFeedback(hovering: hovering, isEnabled: isEnabled)
+    }
+
+    /// 悬停填充与描边用 accent 的低透明度派生色，比普通卡片填充更显眼又能透出底下的玻璃。
+    private var hoverFill: Color { TM.accent.opacity(0.18) }
+    private var hoverBorder: Color { TM.accent.opacity(0.45) }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .medium))
                 .rotationEffect(.degrees(rotation))
-                .foregroundStyle(isActive ? TM.accent : (hovering ? TM.textPrimary : TM.textSecondary))
+                .foregroundStyle(isActive ? TM.accent : (showsHoverBackground ? TM.textPrimary : TM.textSecondary))
                 .frame(width: 20, height: 20)
+                .background(
+                    showsHoverBackground ? hoverFill : .clear,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(showsHoverBackground ? hoverBorder : .clear, lineWidth: 1)
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
         .help(label)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isActive ? .isSelected : [])

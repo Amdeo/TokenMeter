@@ -42,6 +42,8 @@ final class PanelNavigationState {
         case addProvider
         case addConfiguration
         case editConfiguration(UUID)
+        /// 进度条颜色二级页；从新建/编辑配置页进入，返回仍在原配置页。
+        case quotaColors
     }
 
     enum Content {
@@ -51,6 +53,7 @@ final class PanelNavigationState {
         case addProvider
         case addConfiguration(SubscriptionEditorDraft)
         case editConfiguration(draft: SubscriptionEditorDraft, subscription: Subscription)
+        case quotaColors(SubscriptionEditorDraft)
         case recovery
     }
 
@@ -148,7 +151,22 @@ final class PanelNavigationState {
                   let subscription = subscriptions.first(where: { $0.id == id })
             else { return .recovery }
             return .editConfiguration(draft: draft, subscription: subscription)
+        case .quotaColors:
+            guard let draft else { return .recovery }
+            return .quotaColors(draft)
         }
+    }
+
+    /// 进入颜色二级页：草稿由配置页延续，颜色改动仍属于同一次编辑。
+    func showQuotaColorSettings() {
+        guard draft != nil else { return }
+        route = .quotaColors
+    }
+
+    /// 从颜色页返回它来自的配置页（新建或编辑），不丢草稿。
+    func returnToEditor() {
+        guard let draft else { returnToOverview(); return }
+        route = draft.original.map { .editConfiguration($0.id) } ?? .addConfiguration
     }
 
     func returnToSettings() {
@@ -181,7 +199,8 @@ final class SubscriptionEditorDraft {
     var providerID: ProviderID
     var authMethodID: AuthMethodID
     var name: String
-    var quotaColors: [String: UInt32]
+    /// 按卡片样式隔离的进度条配色；编辑页读写的是 `currentQuotaColors`。
+    var quotaColors: SubscriptionQuotaPalette
     var cardStyle: SubscriptionCardStyle
     var apiKey = ""
     var oauthCredential: OAuthCredential?
@@ -211,7 +230,7 @@ final class SubscriptionEditorDraft {
         // 默认认证方式取供应商声明的第一个认证方式；新增供应商无需在此登记。
         authMethodID = ProviderRegistry.defaultAuthMethod(for: providerID) ?? .apiKey
         name = ""
-        quotaColors = [:]
+        quotaColors = SubscriptionQuotaPalette()
         cardStyle = .standard
     }
 
@@ -228,6 +247,12 @@ final class SubscriptionEditorDraft {
     }
 
     var isEditing: Bool { original != nil }
+
+    /// 当前卡片样式的配色：颜色页与编辑页都读写它，切换样式后各样式配色各自保留。
+    var currentQuotaColors: [String: UInt32] {
+        get { quotaColors[cardStyle] }
+        set { quotaColors[cardStyle] = newValue }
+    }
     var isImportingBrowser: Bool { browserImportTask != nil }
     var isAuthenticating: Bool { oauthTask != nil || browserImportTask != nil }
 

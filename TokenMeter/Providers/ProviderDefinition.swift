@@ -103,4 +103,11 @@ protocol ProviderCardRenderer {
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary?
     /// 卡片状态点/无障碍状态的额度状态派生（realtime 分支）。
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus
+    /// 卡片渲染能力；默认支持进度条，没有进度条的卡片（如余额型）在自己的 renderer 里声明空集合。
+    var capabilities: SubscriptionCardCapabilities { get }
+}
+
+@MainActor
+extension ProviderCardRenderer {
+    var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
 }

@@ -37,7 +37,7 @@ struct SiyuCardRenderer: ProviderCardRenderer {
                                         QuotaProgressRow(
                                             title: Self.rowTitle(quota),
                                             quota: quota,
-                                            tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota),
+                                            tint: SubscriptionQuotaColors.resolve(subscription.currentQuotaColors, quota: quota),
                                             valueOverride: Self.amountText(quota),
                                             hideResetHint: false,
                                             // 段落头已展示到期日；没有段落头时留在行内。

@@ -1,8 +1,162 @@
 import SwiftUI
 
 // MARK: - 进度条颜色配置
-// 从 SubscriptionEditorSheet.swift 拆出：颜色目标推导与配置行自成一个内聚单元，
+// 从 SubscriptionEditorSheet.swift 拆出：颜色目标推导、入口行、二级页面与配置行自成一个内聚单元，
 // 也让编辑器文件回到仓库的 1000 行限制以内。
+
+/// 进度条颜色设置的可用性：颜色只属于「会画进度条」的卡片。
+/// 能力由卡片样式与供应商卡片 renderer 各自声明（见 `SubscriptionCardCapabilities`），
+/// 因此没有进度条的卡片（如余额型）不会展示设置，也不需要在这里写供应商分支。
+enum QuotaColorSettings {
+    /// 卡片是否会画出进度条：卡片样式与供应商卡片 renderer 都必须声明能力。
+    /// 颜色设置入口与紧凑样式的汇总条都用它判定，因此没有进度条的卡片既不提供设置也不画汇总条。
+    @MainActor
+    static func isAvailable(style: SubscriptionCardStyle, providerID: ProviderID) -> Bool {
+        SubscriptionCardCapabilities.renderProgressMeters(
+            style: style.capabilities,
+            renderer: ProviderRegistry.definition(for: providerID)?.cardRenderer.capabilities ?? []
+        )
+    }
+
+    /// 当前可配置的颜色目标；卡片不支持进度条时为空（页面不展示任何颜色行）。
+    @MainActor
+    static func targets(style: SubscriptionCardStyle, providerID: ProviderID, quotas: [Quota]) -> [QuotaColorTarget] {
+        guard isAvailable(style: style, providerID: providerID) else { return [] }
+        return QuotaColorTarget.targets(providerID: providerID, quotas: quotas)
+    }
+
+    /// 入口行的一句话摘要：已自定义项数或默认配色。
+    static func summary(for colors: [String: UInt32]) -> String {
+        colors.isEmpty ? "使用默认配色" : "已自定义 \(colors.count) 项"
+    }
+}
+
+/// 编辑页里的颜色设置入口：只在卡片支持进度条时出现，点按进入颜色二级页面。
+struct QuotaColorEntryRow: View {
+    let summary: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: "paintpalette")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(hovering ? TM.accent : TM.textSecondary)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("进度条颜色")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(TM.textPrimary)
+                    Text(summary)
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.textSecondary)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(TM.textTertiary)
+            }
+            .padding(.horizontal, TM.cardContentHorizontal)
+            .padding(.vertical, 9)
+            .background(hovering ? TM.cardFillHover : TM.fieldFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(hovering ? TM.borderStrong : TM.border, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("配置进度条颜色")
+        .accessibilityValue(summary)
+    }
+}
+
+// MARK: - 进度条颜色二级页面
+
+/// 从订阅编辑流程进入的颜色页面：编辑的是同一份 `SubscriptionEditorDraft`，
+/// 顶部按当前卡片样式实时预览改动，返回后仍在编辑页，保存订阅时才落盘。
+struct QuotaColorsPage: View {
+    @Environment(UsageStore.self) private var store
+    @Bindable var draft: SubscriptionEditorDraft
+    let onBack: () -> Void
+
+    private var providerDefinition: any ProviderDefinition {
+        ProviderRegistry.definition(for: draft.providerID) ?? UnsupportedProviderDefinition(providerID: draft.providerID)
+    }
+
+    private var snapshot: UsageSnapshot? {
+        draft.original.flatMap { store.snapshots[$0.id] }
+    }
+
+    private var targets: [QuotaColorTarget] {
+        QuotaColorSettings.targets(style: draft.cardStyle, providerID: draft.providerID, quotas: snapshot?.quotas ?? [])
+    }
+
+    /// 当前样式的配色绑定：颜色改动只落在当前样式上，切换样式后各自保留。
+    private var currentColors: Binding<[String: UInt32]> {
+        Binding(get: { draft.currentQuotaColors }, set: { draft.currentQuotaColors = $0 })
+    }
+
+    /// 预览用订阅：沿用草稿的卡片样式与颜色，颜色改动即时反映到预览卡片上。
+    private var previewSubscription: Subscription {
+        var subscription = draft.original
+            ?? Subscription(providerID: draft.providerID, name: previewName, authMethodID: draft.authMethodID)
+        subscription.cardStyle = draft.cardStyle
+        subscription.quotaColors = draft.quotaColors
+        return subscription
+    }
+
+    private var previewName: String {
+        let trimmed = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? providerDefinition.metadata.displayName : trimmed
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(
+                definition: providerDefinition,
+                title: "进度条颜色",
+                subtitle: "「\(draft.cardStyle.title)」样式 · 保存订阅后生效",
+                onBack: onBack
+            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let snapshot, snapshot.state == .realtime {
+                        stylePreview(snapshot)
+                    }
+                    QuotaColorEditor(colors: currentColors, targets: targets)
+                }
+                .padding(.vertical, 18)
+                .reportsIntrinsicPanelHeight(route: .quotaColors, chrome: PanelLayoutMetrics.pageChrome)
+            }
+            .scrollIndicators(.hidden)
+            HStack(spacing: 10) {
+                Spacer()
+                Button("完成", action: onBack)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .font(.system(size: 12)).padding(.top, 10).padding(.bottom, 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 当前样式的实时预览：颜色改动直接落在真实卡片上，不用想象效果。
+    private func stylePreview(_ snapshot: UsageSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("样式预览")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(TM.textTertiary)
+            SubscriptionMenuCard(subscription: previewSubscription, snapshot: snapshot, onEdit: {})
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
 
 
 /// 颜色目标：编辑页里每个可配置额度的稳定键、展示名与内置默认色。

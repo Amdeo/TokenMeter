@@ -121,7 +121,10 @@ struct QuotaProgressRow: View {
 // MARK: - 标准卡片渲染器
 
 /// 余额型供应商：正文显示单行余额，无顶部摘要，状态只看余额。
+/// 余额没有进度条，因此不声明 `.progressMeters`：编辑流程不会提供进度条颜色设置。
 struct BalanceCardRenderer: ProviderCardRenderer {
+    var capabilities: SubscriptionCardCapabilities { [] }
+
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
         AnyView(BalanceMenuRow(quota: snapshot.quotas.first { $0.kind == .balance }))
     }
@@ -162,7 +165,7 @@ struct QuotaListCardRenderer: ProviderCardRenderer {
                     QuotaProgressRow(
                         title: quota.name,
                         quota: quota,
-                        tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
+                        tint: SubscriptionQuotaColors.resolve(subscription.currentQuotaColors, quota: quota)
                     )
                 }
             }
@@ -187,6 +190,8 @@ struct QuotaListCardRenderer: ProviderCardRenderer {
 
 /// 未知/失效供应商的降级卡片。
 struct UnsupportedCardRenderer: ProviderCardRenderer {
+    var capabilities: SubscriptionCardCapabilities { [] }
+
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
         AnyView(
             HStack(spacing: 6) {

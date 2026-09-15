@@ -16,7 +16,7 @@ struct KimiCardRenderer: ProviderCardRenderer {
                         QuotaProgressRow(
                             title: quota.name,
                             quota: quota,
-                            tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
+                            tint: SubscriptionQuotaColors.resolve(subscription.currentQuotaColors, quota: quota)
                         )
                     }
                 }
@@ -40,8 +40,8 @@ struct KimiCardRenderer: ProviderCardRenderer {
         if let ratio = snapshot.overallUsageRatio {
             let percent = ratio.formatted(.percent.precision(.fractionLength(1)))
             let status = SubscriptionCardPresentation.ratioStatus(for: ratio)
-            let color = SubscriptionQuotaColors.hasOverallConfiguration(subscription.quotaColors)
-                ? SubscriptionQuotaColors.resolveOverall(subscription.quotaColors)
+            let color = SubscriptionQuotaColors.hasOverallConfiguration(subscription.currentQuotaColors)
+                ? SubscriptionQuotaColors.resolveOverall(subscription.currentQuotaColors)
                 : status.tint
             return CardSummary(
                 label: "总使用量",

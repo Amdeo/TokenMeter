@@ -185,7 +185,14 @@ struct SubscriptionMenuCard: View {
     }
 
     /// 紧凑样式的汇总进度：取月总比例或第一个额度，颜色与锚点一致。
+    /// 没有进度条的卡片（如余额型）不画这条汇总条：样式与 renderer 的能力声明
+    /// 同时成立才渲染，颜色设置入口用的是同一条判定，两者不会脱节。
+    @MainActor
     private var compactMeter: (fraction: Double, tint: Color)? {
+        guard QuotaColorSettings.isAvailable(
+            style: subscription.cardStyle,
+            providerID: subscription.providerID
+        ) else { return nil }
         guard let snapshot,
               let fraction = snapshot.overallUsageRatio ?? snapshot.quotas.first?.fraction
         else { return nil }

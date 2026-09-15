@@ -469,7 +469,7 @@ extension QuotaAndKimiTests {
         #expect(anchor.value == 0.41.formatted(.percent.precision(.fractionLength(1))))
         #expect(anchor.accessibilityLabel == "总使用量 \(anchor.value)")
         // 未配置：overall 锚点回退到 ratioStatus 对应的状态色（normal → TM.ok），而非内置默认 indigo。
-        #expect(!SubscriptionQuotaColors.hasOverallConfiguration(subscription.quotaColors))
+        #expect(!SubscriptionQuotaColors.hasOverallConfiguration(subscription.currentQuotaColors))
         #expect(anchor.colorRGB == SubscriptionCardPresentation.ratioStatus(for: 0.41).tint.tokenMeterRGB)
         #expect(anchor.colorRGB != SubscriptionQuotaColors.overallDefault.tokenMeterRGB)
     }
@@ -634,7 +634,7 @@ extension QuotaAndKimiTests {
     @Test
     func subscriptionCodableRoundTripsQuotaColors() throws {
         var subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
-        subscription.quotaColors = [
+        subscription.currentQuotaColors = [
             SubscriptionQuotaColors.overallKey: 0x3366AA,
             SubscriptionQuotaColors.nameKey("每周额度"): 0x11BB22
         ]
@@ -744,13 +744,13 @@ extension QuotaAndKimiTests {
 
         // 未配置：锚点回退到 status.tint（精确等于 warning 状态色，而非内置默认 teal）。
         let unconfigured = SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
-        #expect(!SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: quota.name, kind: quota.kind))
+        #expect(!SubscriptionQuotaColors.hasConfiguration(subscription.currentQuotaColors, name: quota.name, kind: quota.kind))
         #expect(unconfigured?.colorRGB == QuotaStatus.warning.tint.tokenMeterRGB)
         #expect(unconfigured?.colorRGB != SubscriptionQuotaColors.defaultColor(forKind: .generic).tokenMeterRGB)
 
         // 配置后：百分比使用解析色。
         let custom: UInt32 = 0x123456
-        subscription.quotaColors = [SubscriptionQuotaColors.nameKey(quota.name): custom]
+        subscription.currentQuotaColors = [SubscriptionQuotaColors.nameKey(quota.name): custom]
         let configured = SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
         #expect(configured?.colorRGB == custom)
     }
@@ -758,11 +758,11 @@ extension QuotaAndKimiTests {
     @Test @MainActor
     func editorDraftTracksQuotaColorDirtyState() {
         var subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
-        subscription.quotaColors = [SubscriptionQuotaColors.overallKey: 0x112233]
+        subscription.currentQuotaColors = [SubscriptionQuotaColors.overallKey: 0x112233]
         let draft = SubscriptionEditorDraft(subscription: subscription)
         #expect(!draft.isDirty)
 
-        draft.quotaColors[SubscriptionQuotaColors.fiveHourKey] = 0x445566
+        draft.currentQuotaColors[SubscriptionQuotaColors.fiveHourKey] = 0x445566
         #expect(draft.isDirty)
 
         draft.quotaColors = subscription.quotaColors
@@ -774,10 +774,10 @@ extension QuotaAndKimiTests {
         let draft = SubscriptionEditorDraft(providerID: .kimi)
         #expect(!draft.isDirty)
 
-        draft.quotaColors[SubscriptionQuotaColors.overallKey] = 0x112233
+        draft.currentQuotaColors[SubscriptionQuotaColors.overallKey] = 0x112233
         #expect(draft.isDirty)
 
-        draft.quotaColors = [:]
+        draft.currentQuotaColors = [:]
         #expect(!draft.isDirty)
     }
 
@@ -799,12 +799,12 @@ extension QuotaAndKimiTests {
         let store = UsageStore(settings: settings, metadataURL: fileURL)
         let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
         store.add(subscription)
-        store.updateQuotaColors([SubscriptionQuotaColors.overallKey: 0x3366AA], for: subscription)
+        store.updateQuotaColors(SubscriptionQuotaPalette(standard: [SubscriptionQuotaColors.overallKey: 0x3366AA]), for: subscription)
 
-        #expect(store.subscriptions.first?.quotaColors[SubscriptionQuotaColors.overallKey] == 0x3366AA)
+        #expect(store.subscriptions.first?.currentQuotaColors[SubscriptionQuotaColors.overallKey] == 0x3366AA)
 
         let reloaded = UsageStore(settings: settings, metadataURL: fileURL)
-        #expect(reloaded.subscriptions.first?.quotaColors[SubscriptionQuotaColors.overallKey] == 0x3366AA)
+        #expect(reloaded.subscriptions.first?.currentQuotaColors[SubscriptionQuotaColors.overallKey] == 0x3366AA)
     }
 
     @Test @MainActor

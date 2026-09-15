@@ -189,7 +189,11 @@ final class UsageStore {
         cancelActiveRefresh()
     }
 
-    func updateQuotaColors(_ quotaColors: [String: UInt32], for subscription: Subscription) {
+    /// 写入进度条配色。配色按订阅、按卡片样式隔离存储，按额度标识（名称 / 语义类型 / 默认项）寻址：
+    /// 切换卡片样式后各样式已有的颜色仍然生效。
+    /// 旧数据里为「没有进度条的卡片」（如余额型）配置过的颜色会原样保留，
+    /// 只不再被消费与展示，不在此处清理（避免静默销毁用户数据）。
+    func updateQuotaColors(_ quotaColors: SubscriptionQuotaPalette, for subscription: Subscription) {
         guard canMutateSubscriptions, let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return }
         subscriptions[index].quotaColors = quotaColors
         saveSubscriptions()

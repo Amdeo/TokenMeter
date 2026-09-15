@@ -7,13 +7,20 @@ struct SubscriptionEditorSheet: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let subscription: Subscription?
     let onClose: () -> Void
+    let onQuotaColors: () -> Void
     @Bindable var draft: SubscriptionEditorDraft
     @State private var showDeleteConfirmation = false
     @State private var showDiscardConfirmation = false
 
-    init(draft: SubscriptionEditorDraft, subscription: Subscription? = nil, onClose: @escaping () -> Void = {}) {
+    init(
+        draft: SubscriptionEditorDraft,
+        subscription: Subscription? = nil,
+        onClose: @escaping () -> Void = {},
+        onQuotaColors: @escaping () -> Void = {}
+    ) {
         self.subscription = subscription
         self.onClose = onClose
+        self.onQuotaColors = onQuotaColors
         self.draft = draft
     }
 
@@ -35,9 +42,9 @@ struct SubscriptionEditorSheet: View {
         selectedAuthMethod?.flowID ?? .apiKey
     }
 
-    private var quotaColorTargets: [QuotaColorTarget] {
-        let snapshot = subscription.flatMap { store.snapshots[$0.id] }
-        return QuotaColorTarget.targets(providerID: draft.providerID, quotas: snapshot?.quotas ?? [])
+    /// 颜色设置只在卡片支持进度条时出现；目标推导在颜色页面自己做（那里拿得到快照）。
+    private var supportsQuotaColors: Bool {
+        QuotaColorSettings.isAvailable(style: draft.cardStyle, providerID: draft.providerID)
     }
 
     var body: some View {
@@ -63,6 +70,12 @@ struct SubscriptionEditorSheet: View {
                             providerID: draft.providerID,
                             displayName: cardStylePreviewName
                         )
+                        if supportsQuotaColors {
+                            QuotaColorEntryRow(
+                                summary: QuotaColorSettings.summary(for: draft.currentQuotaColors),
+                                action: onQuotaColors
+                            )
+                        }
                     }
                     SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
                         AuthMethodSelection(
@@ -86,9 +99,6 @@ struct SubscriptionEditorSheet: View {
                             onOpenURL: { openURL($0) },
                             onCopy: copy
                         )
-                    }
-                    SheetSection(title: "进度条颜色", subtitle: "每个额度窗口可单独设置；未配置的额度使用默认颜色。") {
-                        QuotaColorEditor(colors: $draft.quotaColors, targets: quotaColorTargets)
                     }
                     if let message = draft.message {
                         Label(message, systemImage: "exclamationmark.triangle.fill")
@@ -458,7 +468,8 @@ private struct CardStyleCarouselPicker: View {
     }
 }
 
-private struct PageHeader: View {
+/// 二级页面通用页头：返回按钮 + 平台图标 + 标题/副标题（编辑页与颜色页共用）。
+struct PageHeader: View {
     let definition: any ProviderDefinition
     let title: String
     let subtitle: String

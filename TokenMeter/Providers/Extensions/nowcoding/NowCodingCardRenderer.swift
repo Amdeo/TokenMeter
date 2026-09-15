@@ -18,7 +18,7 @@ struct NowCodingCardRenderer: ProviderCardRenderer {
                             QuotaProgressRow(
                                 title: quota.name,
                                 quota: quota,
-                                tint: SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota),
+                                tint: SubscriptionQuotaColors.resolve(subscription.currentQuotaColors, quota: quota),
                                 valueOverride: Self.amountText(quota),
                                 hideResetHint: true
                             )

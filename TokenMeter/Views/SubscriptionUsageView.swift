@@ -146,8 +146,8 @@ extension CardSummary {
     /// 有用户配置时用配置色，否则回退额度状态色。
     @MainActor
     private static func anchorColor(for quota: Quota, subscription: Subscription) -> UInt32 {
-        let color = SubscriptionQuotaColors.hasConfiguration(subscription.quotaColors, name: quota.name, kind: quota.kind)
-            ? SubscriptionQuotaColors.resolve(subscription.quotaColors, quota: quota)
+        let color = SubscriptionQuotaColors.hasConfiguration(subscription.currentQuotaColors, name: quota.name, kind: quota.kind)
+            ? SubscriptionQuotaColors.resolve(subscription.currentQuotaColors, quota: quota)
             : quota.status.tint
         return color.tokenMeterRGB
     }
