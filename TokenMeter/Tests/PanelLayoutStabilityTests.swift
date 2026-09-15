@@ -4,7 +4,7 @@ import Testing
 import SwiftUI
 @testable import TokenMeter
 
-/// 菜单面板布局稳定性回归：路由切换时的尺寸同步、屏幕限高、容器圆角遮罩与宿主尺寸跟随。
+/// 菜单面板布局稳定性回归：路由切换时的尺寸同步、屏幕限高、真实根视图布局与容器圆角生命周期。
 @MainActor
 struct PanelLayoutStabilityTests {
 
@@ -46,35 +46,34 @@ struct PanelLayoutStabilityTests {
 
     // MARK: - 屏幕边界
 
-    /// 面板高过屏幕可视区且不做限高时，顶边会落到屏幕上沿之外：
-    /// 返回按钮跑到菜单栏后面，既看不见也点不到。
+    /// 显示高度按屏幕可视区收缩后，面板在任意屏幕（含负原点、非主屏）上都留在可视区内；
+    /// 顶边贴着锚点、底边不压屏幕下沿，头部返回按钮始终点得到。
     @Test
-    func oversizePanelWouldLeaveTheVisibleFrameWithoutALimit() {
-        let screen = NSRect(x: 0, y: 0, width: 1200, height: 700)
-        let frame = PanelFramePositioner.frame(
-            contentSize: NSSize(width: 340, height: 900),
-            screenFrame: screen,
-            anchorX: 600,
-            anchorTop: 690
-        )
-        #expect(frame.maxY > screen.maxY)
-    }
-
-    /// 按屏幕上限收缩后，面板顶边不再越过屏幕上沿、底边也不压到屏幕下沿。
-    @Test
-    func fittedPanelStaysInsideTheVisibleFrame() {
-        let screen = NSRect(x: 0, y: 0, width: 1200, height: 700)
-        let limit = PanelFramePositioner.maximumVisibleHeight(in: screen)
-        #expect(limit == 684)
-        let frame = PanelFramePositioner.frame(
-            contentSize: NSSize(width: 340, height: limit),
-            screenFrame: screen,
-            anchorX: 600,
-            anchorTop: 690
-        )
-        #expect(frame.height == limit)
-        #expect(frame.maxY <= screen.maxY - PanelFramePositioner.screenMargin)
-        #expect(frame.minY >= screen.minY + PanelFramePositioner.screenMargin)
+    func fittedPanelAlwaysStaysInsideTheVisibleFrame() {
+        let screens = [
+            NSRect(x: 0, y: 0, width: 1728, height: 1117),
+            NSRect(x: 0, y: 0, width: 1200, height: 700),
+            NSRect(x: -1280, y: -200, width: 1280, height: 800),
+            NSRect(x: 0, y: 0, width: 800, height: 500),
+        ]
+        for screen in screens {
+            let limit = PanelFramePositioner.maximumVisibleHeight(in: screen)
+            #expect(limit == screen.height - PanelFramePositioner.screenMargin * 2)
+            for requestedHeight in [320.0, 584.0, 900.0] as [CGFloat] {
+                let size = NSSize(width: PanelSize.compact.width, height: min(requestedHeight, limit))
+                let frame = PanelFramePositioner.frame(
+                    contentSize: size,
+                    screenFrame: screen,
+                    anchorX: screen.midX,
+                    anchorTop: screen.maxY - 10
+                )
+                #expect(frame.height == size.height)
+                #expect(frame.maxY <= screen.maxY - PanelFramePositioner.screenMargin + 0.001)
+                #expect(frame.minY >= screen.minY + PanelFramePositioner.screenMargin - 0.001)
+                #expect(frame.maxX <= screen.maxX - PanelFramePositioner.screenMargin + 0.001)
+                #expect(frame.minX >= screen.minX + PanelFramePositioner.screenMargin - 0.001)
+            }
+        }
     }
 
     /// 限高只改显示高度：用户保存的手动高度不动，屏幕恢复后回到用户的高度。
@@ -128,9 +127,74 @@ struct PanelLayoutStabilityTests {
         #expect(navigation.panelSize.height == 520)
     }
 
+    // MARK: - 真实根视图布局（隔离 Store）
+
+    /// 用真实 MenuBarView 根视图 + 真实测量链路跑一遍矮屏流程：
+    /// 窗口被限高、内容被压缩时，期望高度不能被压缩出来的测量改成窗口高度，
+    /// 否则屏幕恢复后高度回不来。
+    @Test
+    func realRootLayoutKeepsDesiredHeightWhenTheWindowIsShort() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TokenMeterPanelRoot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let metadataURL = directory.appendingPathComponent("subscriptions.json")
+        let subscriptions = (0..<6).map { index in
+            Subscription(providerID: .kimi, name: "Subscription \(index)", authMethodID: .apiKey)
+        }
+        try JSONEncoder().encode(subscriptions).write(to: metadataURL)
+
+        let defaultSuite = "TokenMeterTests.PanelRoot.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: defaultSuite))
+        defer { defaults.removePersistentDomain(forName: defaultSuite) }
+        let store = UsageStore(
+            settings: SettingsStore(defaults: defaults),
+            metadataURL: metadataURL,
+            credentialStore: CredentialStore(fileURL: directory.appendingPathComponent("credentials.json"))
+        )
+        #expect(store.subscriptions.count == subscriptions.count)
+
+        let navigation = freshNavigationState()
+        let harness = makePanelHost(root: MenuBarView().environment(store).environment(navigation))
+        let window = harness.window
+        let container = harness.container
+
+        // 模拟控制器的联动：每轮布局后把窗口对齐到 displayedSize，再让 SwiftUI 按新尺寸重排。
+        func layoutPasses(_ count: Int) {
+            for _ in 0..<count {
+                container.layoutSubtreeIfNeeded()
+                let displayed = navigation.displayedSize
+                window.setContentSize(NSSize(width: displayed.width, height: displayed.height))
+                container.layoutSubtreeIfNeeded()
+            }
+        }
+
+        layoutPasses(4)
+        let contentDrivenHeight = navigation.panelSize.height
+        #expect(contentDrivenHeight < PanelSize.compact.height)
+        #expect(contentDrivenHeight >= PanelSize.minimumAdaptiveHeight)
+        // 真实根视图不跟容器抢尺寸：宿主同高，窗口尺寸就是内容布局的提案。
+        #expect(harness.hosting.frame.height == container.bounds.height)
+        #expect(harness.hosting.frame.width == container.bounds.width)
+
+        // 矮屏：窗口被限高，内容比窗口高。
+        navigation.setMaximumVisibleHeight(320)
+        layoutPasses(4)
+        #expect(navigation.displayedSize.height == 320)
+        #expect(navigation.panelSize.height == contentDrivenHeight)
+
+        // 屏幕恢复：期望高度必须回到内容高度，而不是停在限高值。
+        navigation.setMaximumVisibleHeight(nil)
+        layoutPasses(4)
+        #expect(navigation.panelSize.height == contentDrivenHeight)
+        #expect(navigation.displayedSize.height > 320)
+        #expect(harness.hosting.frame.height == container.bounds.height)
+    }
+
     // MARK: - 图层生命周期
 
-    /// 容器在布局时应用圆角遮罩：内容显示前遮罩已就位（生产代码里控制器不再自己写图层）。
+    /// 容器在布局时应用圆角遮罩：内容显示前遮罩已就位。
     @Test
     func containerAppliesRoundedMaskDuringLayout() throws {
         let container = PanelContainerView(frame: NSRect(x: 0, y: 0, width: 340, height: 584))
@@ -142,8 +206,8 @@ struct PanelLayoutStabilityTests {
         #expect(layer.masksToBounds)
     }
 
-    /// 图层重建（wantsLayer 关→开）会把一次性赋值的圆角清回 0，
-    /// 容器必须在下一次布局里把遮罩补回来。
+    /// 图层重建（wantsLayer 关→开）会清掉一次性赋值的圆角，
+    /// 容器必须在下一次布局里把遮罩补回来，面板才不会掉回直角。
     @Test
     func containerKeepsRoundedMaskWhenTheBackingLayerIsRebuilt() throws {
         let container = PanelContainerView(frame: NSRect(x: 0, y: 0, width: 340, height: 584))
@@ -157,6 +221,7 @@ struct PanelLayoutStabilityTests {
         #expect(layer.masksToBounds)
     }
 
+    /// 面板高度随屏幕/内容变化后圆角仍在：尺寸变化不会把遮罩丢掉。
     @Test
     func containerKeepsRoundedMaskWhenResized() throws {
         let container = PanelContainerView(frame: NSRect(x: 0, y: 0, width: 340, height: 584))
@@ -170,40 +235,14 @@ struct PanelLayoutStabilityTests {
         }
     }
 
-    /// 一次性赋值的圆角挡不住图层重建：这正是容器需要在每次布局里重申遮罩的原因。
-    /// （对照：不重建图层时一次性赋值能挺过入窗与 resize，见 logs/layer-lifecycle-probes.txt）
-    @Test
-    func oneShotCornerRadiusDoesNotSurviveLayerRebuild() {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 584))
-        view.wantsLayer = true
-        view.layer?.cornerRadius = PanelLayoutMetrics.cornerRadius
-        view.layer?.masksToBounds = true
-
-        view.wantsLayer = false
-        view.wantsLayer = true
-
-        #expect(view.layer?.cornerRadius != PanelLayoutMetrics.cornerRadius)
-    }
-
     /// 宿主视图靠自动尺寸跟随容器：面板窗口变高变矮后宿主必须同尺寸，否则内容会被裁。
-    /// 同时确认 AppKit 不会把宿主视图挤成内容固有尺寸（无需额外限制 sizingOptions）。
     @Test
     func hostingViewTracksContainerSizeThroughWindowResize() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 584))
-        container.wantsLayer = true
-        let hosting = NSHostingView(rootView: AnyView(Color.clear))
-        hosting.translatesAutoresizingMaskIntoConstraints = true
-        hosting.autoresizingMask = [.width, .height]
-        hosting.frame = container.bounds
-        container.addSubview(hosting)
+        let harness = makePanelHost(root: Color.clear)
+        let window = harness.window
+        let container = harness.container
+        let hosting = harness.hosting
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 340, height: 584),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.contentView = container
         container.layoutSubtreeIfNeeded()
         #expect(hosting.frame.height == container.bounds.height)
 
@@ -216,6 +255,29 @@ struct PanelLayoutStabilityTests {
         window.setContentSize(NSSize(width: 340, height: 700))
         container.layoutSubtreeIfNeeded()
         #expect(hosting.frame.height == container.bounds.height)
+    }
+
+    /// 组装与生产一致的链路：面板容器 → NSHostingView → 无边框窗口。
+    /// 宿主靠自动尺寸跟随容器，测试里不创建真实状态栏与菜单。
+    private func makePanelHost(
+        root: some View,
+        height: CGFloat = 584
+    ) -> (window: NSWindow, container: PanelContainerView, hosting: NSHostingView<AnyView>) {
+        let container = PanelContainerView(frame: NSRect(x: 0, y: 0, width: 340, height: height))
+        container.wantsLayer = true
+        let hosting = NSHostingView(rootView: AnyView(root))
+        hosting.translatesAutoresizingMaskIntoConstraints = true
+        hosting.autoresizingMask = [.width, .height]
+        hosting.frame = container.bounds
+        container.addSubview(hosting)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 340, height: height),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = container
+        return (window, container, hosting)
     }
 
     private func freshNavigationState() -> PanelNavigationState {
