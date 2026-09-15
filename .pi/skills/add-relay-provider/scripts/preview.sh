@@ -77,7 +77,10 @@ else
   echo "$!" >"${PID_FILE}"
   echo "${PORT}" >"${PORT_FILE}"
 
-  for _ in $(seq 1 10); do curl -sf --max-time 1 "${URL}" >/dev/null 2>&1 && break; sleep 0.5; done
+  for _ in $(seq 1 10); do
+    curl -sf --max-time 1 "${URL}" >/dev/null 2>&1 && break
+    sleep 0.5
+  done
   if ! curl -sf --max-time 1 "${URL}" >/dev/null 2>&1; then
     echo "ERROR: 预览服务没起来，日志：${LOG_FILE}" >&2
     exit 1

@@ -1,6 +1,6 @@
 ---
 name: add-relay-provider
-description: 为 TokenMeter 新增 API 中转站（relay/gateway，如 CCBus、new-api/one-api 系）供应商。当用户只提供一个中转站域名，要求“接入 / 添加 / 支持 xx站余额 / 这个站能加吗”时使用。先用自带脚本起 Chrome 9222 CDP + playwright-cli 探测站点，匹配框架指纹自动识别类型（CCBus 系 / new-api 系等），命中已知框架即直填参数生成模块；未命中再走问答。写 Swift 前先出卡片 HTML 预览（340pt 真面板 + 真实设计令牌，5 套常用卡片）并起本地服务让用户看图，同时用提问确认锚点/口径/时间信息/配色 4 项。产物是 TokenMeter/Providers/Extensions/<id>/ 下的自有模块加 ProviderCatalog 一行登记。
+description: 为 TokenMeter 新增 API 中转站（relay/gateway，如 CCBus、new-api/one-api 系）供应商。当用户只提供一个中转站域名，要求“接入 / 添加 / 支持 xx站余额 / 这个站能加吗”时使用。先用自带脚本起 Chrome 9222 CDP + playwright-cli 探测站点，匹配框架指纹自动识别类型（CCBus 系 / new-api 系等），命中已知框架即直填参数生成模块；未命中再走问答。写 Swift 前先出卡片 HTML 预览（340pt 真面板 + 真实设计令牌，有条/无条共 10 套）并起本地服务让用户看图，同时用提问确认锚点/口径/时间信息/配色/进度表现 5 项。产物是 TokenMeter/Providers/Extensions/<id>/ 下的自有模块加 ProviderCatalog 一行登记。
 ---
 
 # TokenMeter 中转站供应商 Skill
@@ -104,6 +104,7 @@ playwright-cli -s=relay detach
 | 2 | 行内时间信息 | N 天后刷新额度 / 剩 N 天到期 / 状态词「正常」/ 都不显示 |
 | 3 | 数值口径 | 百分比 / 金额 / 百分比 + 金额 |
 | 4 | 配色来源 | 平台 tint / 状态色（绿 <80%、橙 ≥80%、红 =100%）/ 按额度名自定义 |
+| 5 | 进度表现 | 进度条 / 圆点比例 / 纯数值（不要条） |
 
 每题的推荐项按探测结果给（例如只有余额接口 → 锚点默认「不显示」、口径默认「金额」）。
 
@@ -118,9 +119,14 @@ cp .pi/skills/add-relay-provider/scripts/card-preview.html /tmp/tokenmeter-card-
 它按 `TM` 令牌与真实 SwiftUI 尺寸写死：340pt 面板 / 卡片圆角 14 / 内边距 11 / 条高 4 / 字号 13·11·10·9。
 
 - `site`：`name` / `subtitle`（`显示名 · 认证方式标题`）/ `icon` / `tint` / `status`（余额偏低 `warning`、用尽 `danger`）
-- `variants`：默认 5 套（① 余额 ② 额度列表 ③ 混合 ④ 订阅分段 ⑤ 总用量锚点）；探测做不到的套直接删，别留着占位
+- `variants`：模板自带 10 套——**有条**（① 余额 ② 额度列表 ③ 混合 ④ 订阅分段 ⑤ 总用量锚点）与
+  **无条**（⑥ 纯数值行 ⑦ 数值 + 时间提示 ⑧ 单行紧凑表 ⑨ 圆点比例 ⑩ 数值 + 状态徽标）；
+  探测做不到的直接删——最终留 3-6 套给用户挑，别把 10 套全堆上去
 - 数值一律填**真实探测到的数据**，不要占位符；行类型只有三种：
   `balance{title,value}` / `progress{title,value,percent,state,hints}` / `group{title,hint}`
+- `progress` 行的表现力全靠这几个可选字段，用户想要哪种就选哪个：
+  `bar: "meter"`（默认进度条）/ `"dots"`（圆点比例，配 `dots: 10`）/ `"none"`（只有数字）
+  `inlineHints: true`（时间提示并到同一行，信息密度最高）/ `pill: "正常"` + `pillTint`（状态徽标）
 - `tint` 写 `#RRGGBB`，或用 `ok` / `warn` / `danger` 引用状态色
 - 有官方图标时把 PNG 复制到同目录，`icon` 写文件名（如 `icon.png`），预览里就能看到真图标
 
@@ -146,8 +152,17 @@ bash .pi/skills/add-relay-provider/scripts/preview.sh /tmp/tokenmeter-card-previ
 | ③ 混合卡 | 照抄 `Extensions/nowcoding/NowCodingCardRenderer.swift` |
 | ④ 订阅分段卡 | 照抄 `Extensions/siyu/SiyuCardRenderer.swift` |
 | ⑤ 总用量锚点卡 | 照抄 `Extensions/kimi/KimiCardRenderer.swift` |
+| ⑥⑦⑧⑩ 无条数值行 | `BalanceMenuRow`（无提示行时够用）或在 provider 目录里写一个只输出数值的行视图 |
+| ⑨ 圆点比例 | provider 目录里自带行视图，把 `MeterBar` 换成一排 6pt 圆点 |
 
-自定义卡片一律复用 `BalanceMenuRow` / `QuotaProgressRow` 行组件，不要自己画像素；
+**无进度条形态的硬规矩**：卡片不画条时，renderer 就不要声明 `.progressMeters`
+（只声明 `.balanceValues`，或不声明）——编辑页的进度条配色入口与汇总条会自动消失，
+因为能力判定要求卡片样式与 renderer **双方**都声明（`ProgressColorSettingsTests` 守着这条）。
+想靠“新增一个无条的 `SubscriptionCardStyle`”实现是错的：`everyCardStyleDeclaresProgressMeters` 会直接挂测试。
+
+行组件规矩：`QuotaProgressRow` 自带 `MeterBar`，所以无条形态应当在 **provider 自己的目录**里写行视图，
+只允许用 `TM` 令牌、且字号/颜色/间距与标准行保持一致（13·11·10·9 / `textPrimary`·`textSecondary`·`textTertiary`）；
+共享组件（`StandardProviderCards.swift`）不改。有进度条的形态一律复用 `BalanceMenuRow` / `QuotaProgressRow`，不要自己重画。
 混合卡/分段卡需额外探测订阅接口（如 `/api/subscription/self`）的字段
 （`amount_total`/`amount_used`/`end_time`/`next_reset_time`/`plan_title`），
 并把订阅映射为 `Quota` 行（`kind: .generic`，`resetAt` 填日重置、`expiresAt` 填到期日）。
