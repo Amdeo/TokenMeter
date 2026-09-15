@@ -32,6 +32,8 @@ xcuserdata/
 # 调试会话导出（可能包含敏感信息，勿提交）
 kimi-export-session*.md
 .local/agent-work/
+# playwright-cli 的页面快照 / 控制台日志（可能含登录页数据）
+.playwright-cli/
 
 # xcode-build-server（SourceKit 编译数据库，含本机绝对路径，每台机器自行生成）
 buildServer.json

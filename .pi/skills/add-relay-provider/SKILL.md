@@ -1,6 +1,6 @@
 ---
 name: add-relay-provider
-description: 为 TokenMeter 新增 API 中转站（relay/gateway，如 CCBus、new-api/one-api 系）供应商。当用户只提供一个中转站域名，要求“接入 / 添加 / 支持 xx站余额 / 这个站能加吗”时使用。先用 chrome-devtools 探测站点，匹配框架指纹自动识别类型（CCBus 系 / new-api 系等），命中已知框架即直填参数生成模块；未命中再走问答。产物是 TokenMeter/Providers/Extensions/<id>/ 下的自有模块加 ProviderCatalog 一行登记。
+description: 为 TokenMeter 新增 API 中转站（relay/gateway，如 CCBus、new-api/one-api 系）供应商。当用户只提供一个中转站域名，要求“接入 / 添加 / 支持 xx站余额 / 这个站能加吗”时使用。先用自带脚本起 Chrome 9222 CDP + playwright-cli 探测站点，匹配框架指纹自动识别类型（CCBus 系 / new-api 系等），命中已知框架即直填参数生成模块；未命中再走问答。产物是 TokenMeter/Providers/Extensions/<id>/ 下的自有模块加 ProviderCatalog 一行登记。
 ---
 
 # TokenMeter 中转站供应商 Skill
@@ -10,7 +10,7 @@ description: 为 TokenMeter 新增 API 中转站（relay/gateway，如 CCBus、n
 **网页登录 → localStorage 存 JWT → 余额接口返回 balance → refresh_token 续期**。
 
 本 Skill 的默认路径是**先探测、再识别、后生成**：用户通常只给一个域名，
-AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站点类型；
+AI 用自带脚本起 Chrome 9222 + `playwright-cli attach` 打开站点，匹配下方**框架指纹库**判断站点类型；
 命中已知框架就直接用对应模板直填参数生成，无需逐项问答；
 未命中才回退到问答收集参数。
 
@@ -18,18 +18,50 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 以及 `Providers/Extensions/ProviderCatalog.swift` 里的一行。
 `Providers/` 是 Xcode 文件系统同步组，**新增文件不需要改 `project.pbxproj`**。
 
-## 0.5 框架指纹识别（给域名就够）
+## 0. 起浏览器 + playwright-cli（探测前置，必做）
 
-收到域名后，先探测并判断站点属于哪个已知框架。
+探测全部走 CDP，**不依赖 chrome-devtools MCP**。先跑自带脚本：
 
-### 探测步骤（chrome-devtools）
+```bash
+bash .pi/skills/add-relay-provider/scripts/chrome-cdp.sh   # 也可用 <skill-dir>/scripts/chrome-cdp.sh
+```
+
+脚本行为：
+
+1. `http://127.0.0.1:9222/json/version` 已就绪 → 直接复用，**不改动任何 Chrome 进程**；
+2. 否则**先退出正在运行的 Google Chrome**（不退出的话 `open --args` 会被现有进程吞掉、端口永远起不来），
+   再以独立 profile 启动调试实例；
+3. 20s 内端口不来 → exit 1 并打印 **ACTION REQUIRED** 手动启动命令；
+4. 顺带检查 `playwright-cli`，缺失同样 exit 1 并打印安装命令。
+
+**脚本失败时**：把输出里的 ACTION REQUIRED 命令原样转述给用户，让 TA 手动执行，再重跑脚本；
+不要自己编 `open -a` 之类别的启动方式（Chrome 136+ 默认 profile 已禁止远程调试，必须带 `--user-data-dir`）。
+
+**playwright-cli 缺失时**：不要静默安装。把 `npm install -g @playwright/cli@latest` 贴给用户，
+问一次“要我现在装吗”，得到同意才装；用户不愿意时可退回 chrome-devtools MCP（以 `--browserUrl http://127.0.0.1:9222` 形态连同一端口）。
+
+调试实例是**独立 profile**（`~/Library/Application Support/chrome-cdp-profile`），与用户日常 Chrome 的登录态不共享：
+脚本跑通后**先让用户在弹出的调试 Chrome 里登录站点余额页**，再继续探测。
+用户不想被打断浏览器时用 `CDP_SKIP_QUIT=1` 跳过退出那一步。
+探测结束务必 `playwright-cli -s=relay detach`（只断开，不关用户的浏览器）。
+
+### 探测命令速查（session 统一叫 `relay`）
 
 ```text
-1. 打开站点已登录页（navigate_page 或 new_page）
-2. list_network_requests 找用户信息/余额接口，看响应体（balance / quota）
-3. evaluate_script: () => Object.keys(localStorage)    ← 看 token 键名
-4. evaluate_script: 取 auth_token / user 等键值前 20 字符，判断是否 JWT
+playwright-cli -s=relay attach --cdp=http://127.0.0.1:9222   # 输出会列出全部标签页与索引
+playwright-cli -s=relay tab-select <站点标签页索引>
+playwright-cli -s=relay reload                               # 必须重载：requests 只记录 attach 之后的请求
+playwright-cli -s=relay requests --filter "/api/"            # 找余额/用户接口的编号
+playwright-cli -s=relay response-body <编号>                 # 看响应体（balance / quota）
+playwright-cli -s=relay localstorage-list                    # token 键名与值（auth_token / user）
+playwright-cli -s=relay cookie-list                          # HttpOnly session cookie 型站点看这里
+playwright-cli -s=relay eval "() => Object.keys(localStorage)"
+playwright-cli -s=relay detach
 ```
+
+## 0.5 框架指纹识别（给域名就够）
+
+收到域名后，先按上面的命令探测并判断站点属于哪个已知框架。
 
 ### 框架指纹库
 
@@ -126,11 +158,11 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 | 5 | 余额接口路径 | 常见 `{api}/auth/me` 或 `{api}/v1/auth/me`；new-api 系通常 `/api/user/self`。需用户确认或探测 |
 | 6 | API 前缀 | `https://ccbus.top/api/v1`（登录/刷新/余额同前缀）；若不同请提供 |
 
-### 探测项（可用 chrome-devtools 自动确认）
+### 探测项（用第 0 节的 playwright-cli 命令自动确认）
 
 | # | 问题 | 说明 |
 | --- | --- | --- |
-| 7 | localStorage token 键名 | 常见 `auth_token` + `refresh_token`；new-api 系为 `user`（JSON 内 token）或 HttpOnly cookie。用 `evaluate_script` 读 `Object.keys(localStorage)` 确认 |
+| 7 | localStorage token 键名 | 常见 `auth_token` + `refresh_token`；new-api 系为 `user`（JSON 内 token）或 HttpOnly cookie。用 `localstorage-list`（或 `eval "() => Object.keys(localStorage)"`）确认 |
 | 8 | 余额字段路径 | 常见 `data.balance`（`GET /auth/me` 响应 `{code:0,data:{balance}}`）；new-api 系为 `data.quota`（整数，单位需换算） |
 | 9 | 余额单位与币种 | 美元 `USD`（默认）或人民币 `CNY`；若为分/厘需 scale（如 new-api quota 单位 500000 ≈ $1） |
 | 10 | refresh 端点与请求体 | 常见 `POST {api}/auth/refresh`，body `{"refresh_token": ...}`；无 refresh 时过期直接提示重登 |
@@ -147,16 +179,19 @@ AI 用 chrome-devtools 打开站点，匹配下方**框架指纹库**判断站�
 
 ## 2. 探测确认（推荐）
 
-若用户无法回答 7/8/10 项，用 chrome-devtools 打开站点（已登录）确认：
+若用户无法回答 7/8/10 项，按下面流程在已登录的调试 Chrome 里确认：
 
 ```text
-1. chrome_devtools_new_page / navigate_page 打开站点余额页
-2. chrome_devtools_list_network_requests 找余额/用户信息接口，看响应体
-3. chrome_devtools_evaluate_script: () => Object.keys(localStorage)
-4. chrome_devtools_evaluate_script: () => JSON.stringify(localStorage.getItem("auth_token")?.slice(0,20))
+0. bash .pi/skills/add-relay-provider/scripts/chrome-cdp.sh      # 失败就照它的 ACTION REQUIRED 手动执行
+1. playwright-cli -s=relay attach --cdp=http://127.0.0.1:9222
+2. playwright-cli -s=relay tab-select <站点标签页索引> ; playwright-cli -s=relay reload
+3. playwright-cli -s=relay requests --filter "/api/"             # 找到余额/用户接口编号
+4. playwright-cli -s=relay response-body <编号>                  # 看响应体字段（balance / quota）
+5. playwright-cli -s=relay localstorage-list                     # token 键名；cookie 型站点用 cookie-list
+6. playwright-cli -s=relay detach
 ```
 
-确认后回填参数表。
+确认后回填参数表。探测只读页面数据，不要 `localstorage-set` / `cookie-set` 写入任何值。
 
 ## 3. 生成模块
 
@@ -355,6 +390,9 @@ xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
 - 浏览器会话型的 `APIClient` 调用必须传 `statusPolicy: .raw`，
   否则 401/403 会被折叠成「需要重新登录」，刷新重试永远不会发生。
 - 登录态提取只读页面 localStorage / cookie；不注入脚本、不上传任何数据。
+- 不静默安装 `playwright-cli`（先问用户，同意了才 `npm install -g @playwright/cli@latest`）。
+- 浏览器侧只做：跑 `chrome-cdp.sh`、`attach`/`detach`、只读探测。
+  不 `localstorage-set` / `cookie-set`，不 `close-all` / `kill-all`，不 `tab-close` 用户的标签页。
 - 不记录、打印、提交任何 token / 会话 / 用户数据。
 - 不伪造接口响应；余额接口路径与字段未确认时先探测或问用户，不要猜。
 - 不跳过失败响应测试。
