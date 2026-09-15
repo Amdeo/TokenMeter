@@ -4,15 +4,16 @@ import SwiftUI
 // 从 SubscriptionEditorSheet.swift 拆出：卡片样式轮播、颜色目标推导、入口行、二级页面与配置行
 // 自成一个内聚单元，也让编辑器文件回到仓库的 1000 行限制以内。
 
-/// 颜色设置的可用性：卡片要么会画进度条，要么渲染余额数值（两者都可配颜色）。
+/// 颜色设置的可用性：卡片要么会画进度条或文字型额度数值，要么渲染余额数值（两者都可配颜色）。
 /// 能力由卡片样式与供应商卡片 renderer 各自声明（见 `SubscriptionCardCapabilities`），
 /// 因此两者都不具备的卡片才不展示设置，也不需要在这里写供应商分支。
 enum QuotaColorSettings {
-    /// 卡片是否会画出可配颜色的数值：样式与 renderer 的进度条能力，或 renderer 的余额数值能力。
+    /// 卡片是否会画出可配颜色的数值：样式与 renderer 的额度数值能力（条或文字型），
+    /// 或 renderer 的余额数值能力。
     @MainActor
     static func isAvailable(style: SubscriptionCardStyle, providerID: ProviderID) -> Bool {
         let renderer = cardCapabilities(for: providerID)
-        return SubscriptionCardCapabilities.renderProgressMeters(style: style.capabilities, renderer: renderer)
+        return SubscriptionCardCapabilities.offersQuotaColorTargets(style: style.capabilities, renderer: renderer)
             || renderer.contains(.balanceValues)
     }
 
@@ -21,7 +22,7 @@ enum QuotaColorSettings {
     static func targets(style: SubscriptionCardStyle, providerID: ProviderID, quotas: [Quota]) -> [QuotaColorTarget] {
         let renderer = cardCapabilities(for: providerID)
         var result: [QuotaColorTarget] = []
-        if SubscriptionCardCapabilities.renderProgressMeters(style: style.capabilities, renderer: renderer) {
+        if SubscriptionCardCapabilities.offersQuotaColorTargets(style: style.capabilities, renderer: renderer) {
             result += QuotaColorTarget.progressTargets(providerID: providerID, quotas: quotas)
         }
         if renderer.contains(.balanceValues) {

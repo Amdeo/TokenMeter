@@ -42,6 +42,9 @@ extension SubscriptionCardStyle {
 /// - `ProviderCardRenderer.capabilities`：该供应商卡片的数据有没有进度条
 ///   （如余额型卡片只有一行余额，但它声明 `.balanceValues`，余额数值仍可配颜色）。
 ///
+/// 文字型数值（不画条、但仍按订阅配色渲染额度数值）声明 `.quotaValues`：
+/// 颜色目标照旧提供，但不假装画了条。
+///
 /// 新增不含进度条的卡片样式或供应商卡片时只需一处不声明 `.progressMeters`，
 /// 不需要在共享视图里按供应商写分支。
 struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
@@ -53,6 +56,10 @@ struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
     /// 卡片渲染余额数值（正文余额行或头部余额锚点）；颜色设置据此提供余额颜色目标。
     static let balanceValues = SubscriptionCardCapabilities(rawValue: 1 << 1)
 
+    /// 卡片按订阅配色渲染额度数值，但不画进度条（文字型数值，如紧凑卡的一行数字）。
+    /// 它只影响颜色目标是否存在；`renderProgressMeters` 仍为 false，不会画出任何条。
+    static let quotaValues = SubscriptionCardCapabilities(rawValue: 1 << 2)
+
     /// 卡片真正渲染出进度条：样式与供应商 renderer 都必须声明该能力。
     /// 颜色设置入口走更宽的判定（`QuotaColorSettings.isAvailable`），两者故意不同——
     /// 余额卡可配颜色但不画进度条。
@@ -61,6 +68,15 @@ struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
         renderer: SubscriptionCardCapabilities
     ) -> Bool {
         style.contains(.progressMeters) && renderer.contains(.progressMeters)
+    }
+
+    /// 卡片提供可配色的额度数值目标：样式会画这类数值，且 renderer 画条或画文字型数值。
+    @MainActor
+    static func offersQuotaColorTargets(
+        style: SubscriptionCardCapabilities,
+        renderer: SubscriptionCardCapabilities
+    ) -> Bool {
+        style.contains(.progressMeters) && (renderer.contains(.progressMeters) || renderer.contains(.quotaValues))
     }
 }
 

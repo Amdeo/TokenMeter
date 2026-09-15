@@ -19,12 +19,27 @@ struct ProgressColorSettingsTests {
     @Test
     func cardRenderersDeclareProgressMetersOnlyWhenTheCardDrawsThem() {
         #expect(QuotaListCardRenderer().capabilities.contains(.progressMeters))
-        #expect(KimiCardRenderer().capabilities.contains(.progressMeters))
         #expect(SiyuCardRenderer().capabilities.contains(.progressMeters))
         #expect(NowCodingCardRenderer().capabilities.contains(.progressMeters))
         // 余额型与降级卡片只有一行文本，没有进度条。
         #expect(!BalanceCardRenderer().capabilities.contains(.progressMeters))
         #expect(!UnsupportedCardRenderer().capabilities.contains(.progressMeters))
+        // Kimi 的紧凑双行卡只有数字，同样不画进度条。
+        #expect(!KimiCardRenderer().capabilities.contains(.progressMeters))
+    }
+
+    @Test
+    func textOnlyCardDeclaresQuotaValuesSoItsColorTargetsSurvive() {
+        // 紧凑卡不画条，但数值仍按订阅配色渲染：声明 .quotaValues 让颜色目标不丢，
+        // 同时不假装画了进度条。
+        let renderer = KimiCardRenderer().capabilities
+        #expect(renderer.contains(.quotaValues))
+        #expect(!renderer.contains(.progressMeters))
+
+        let style = SubscriptionCardStyle.standard.capabilities
+        #expect(!SubscriptionCardCapabilities.renderProgressMeters(style: style, renderer: renderer))
+        #expect(SubscriptionCardCapabilities.offersQuotaColorTargets(style: style, renderer: renderer))
+        #expect(QuotaColorSettings.isAvailable(style: .standard, providerID: .kimi))
     }
 
     @Test

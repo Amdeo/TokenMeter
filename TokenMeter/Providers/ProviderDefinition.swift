@@ -99,6 +99,14 @@ struct CardSummary: Equatable, Sendable {
 protocol ProviderCardRenderer {
     /// 卡片正文（realtime 状态下显示）。
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView
+    /// 整卡渲染：返回非 nil 时卡片完全由供应商渲染（含图标与名称），共享外壳只保留
+    /// 点击编辑、悬停、无障碍与排序手柄。图标与名称/数据同排这类布局靠它实现；
+    /// 默认 nil，走共享外壳的标准卡片。
+    func makeCard(
+        definition: any ProviderDefinition,
+        subscription: Subscription,
+        snapshot: UsageSnapshot
+    ) -> AnyView?
     /// 卡片顶部摘要（可为 nil）。
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary?
     /// 卡片状态点/无障碍状态的额度状态派生（realtime 分支）。
@@ -112,6 +120,13 @@ protocol ProviderCardRenderer {
 @MainActor
 extension ProviderCardRenderer {
     var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
+
+    /// 默认不接管整卡：走共享外壳的「图标 + 名称/副标题 + 正文」标准卡片。
+    func makeCard(
+        definition: any ProviderDefinition,
+        subscription: Subscription,
+        snapshot: UsageSnapshot
+    ) -> AnyView? { nil }
 
     /// 默认示例：两个窗口额度（5 小时 / 每周），不带总使用量聚合。
     /// 余额型或带聚合锚点的卡片在自己的 renderer 里覆写。

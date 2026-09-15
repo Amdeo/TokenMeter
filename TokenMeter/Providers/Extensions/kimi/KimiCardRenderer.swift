@@ -1,46 +1,33 @@
 import SwiftUI
 
-/// Kimi 订阅卡：5 小时 / 每周两行窗口。月总额度由顶部「总使用量」锚点呈现，
-/// 锚点文案直接带上月额度的重置时间，正文不重复该行。
+/// Kimi 订阅卡：紧凑双行——图标在左，右侧名称 / 数据两行，两行合计高等于图标高。
+/// 数据行把 5 小时 / 每周 / 月（总使用量）挤在同一行，不画进度条、不显示重置时间。
+/// 订阅制拿不到窗口时（API Key 形态）数据行退回平台余额。
 struct KimiCardRenderer: ProviderCardRenderer {
-    var capabilities: SubscriptionCardCapabilities { [.progressMeters, .balanceValues] }
+    /// 紧凑卡不画条，但数值仍按订阅配色渲染（5 小时 / 每周 / 总使用量 / 余额），
+    /// 因此声明 `.quotaValues`（额度颜色目标照旧）与 `.balanceValues`（余额目标），
+    /// 不声明 `.progressMeters`——卡片确实没有任何进度条。
+    var capabilities: SubscriptionCardCapabilities { [.quotaValues, .balanceValues] }
 
-    /// 订阅制的窗口额度；余额、加油包等不进入正文。
-    private static let windowKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
-
-    func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
-        let windowQuotas = snapshot.quotas.filter { Self.windowKinds.contains($0.kind) }
-        if !windowQuotas.isEmpty {
-            // 顺序由解析层的 quotaRank 决定：5 小时 → 每周。
-            return AnyView(
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(windowQuotas) { quota in
-                        QuotaProgressRow(
-                            title: quota.name,
-                            quota: quota,
-                            tint: SubscriptionQuotaColors.resolve(subscription.currentQuotaColors, quota: quota)
-                        )
-                    }
-                }
-            )
-        }
-        // API Key 回退余额：coding 接口 401/403/404 时回退到平台余额，
-        // 渲染余额行而不是“接口未返回”。
-        let balances = snapshot.quotas.filter { $0.kind == .balance }
-        return AnyView(
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(balances) { quota in
-                    BalanceMenuRow(
-                        quota: quota,
-                        title: quota.name,
-                        colors: subscription.currentQuotaColors
-                    )
-                }
-            }
-        )
+    /// 接管整卡：图标与名称/数据同排，共享外壳的头部不参与。
+    func makeCard(
+        definition: any ProviderDefinition,
+        subscription: Subscription,
+        snapshot: UsageSnapshot
+    ) -> AnyView? {
+        AnyView(KimiCompactCardView(definition: definition, subscription: subscription, snapshot: snapshot))
     }
 
-    /// 与真实 Kimi 卡一致：两个窗口行 + 顶部「总使用量」锚点（含月额度重置时间）。
+    /// 订阅制的窗口额度；余额、加油包等不进入状态派生。
+    private static let windowKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
+
+    /// 标准外壳下的正文（realtime 以外的状态走共享状态行，不经过这里）：
+    /// 正常路径由 `makeCard` 接管整卡，这里返回同一份数据行，避免两处视觉漂移。
+    func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
+        AnyView(KimiCompactDataLine(subscription: subscription, snapshot: snapshot))
+    }
+
+    /// 与真实 Kimi 卡一致：两个窗口 + 月（总使用量）聚合。
     func sampleSnapshot(subscription: Subscription) -> UsageSnapshot {
         .realtime(
             subscription: subscription,

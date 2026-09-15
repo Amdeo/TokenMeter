@@ -99,6 +99,26 @@ struct SubscriptionMenuCard: View {
     }
 
     private var cardContent: some View {
+        Group {
+            // 供应商接管整卡时（图标与名称/数据同排这类布局）跳掉标准外壳的头部，
+            // 但点击编辑、悬停、内边距与排序手柄仍由本视图负责。
+            if let snapshot, snapshot.state == .realtime, let custom = customCard(snapshot: snapshot) {
+                HStack(spacing: 8) {
+                    custom
+                    if isReordering { reorderHandle }
+                }
+            } else {
+                standardContent
+            }
+        }
+        .padding(.horizontal, TM.cardContentHorizontal)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// 标准外壳：图标 + 名称/副标题 + 摘要锚点，下面是 renderer 的正文。
+    private var standardContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 9) {
                 PlatformLogo(definition: providerDefinition, size: 30)
@@ -143,20 +163,28 @@ struct SubscriptionMenuCard: View {
                     .layoutPriority(1)
                 }
 
-                if isReordering {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(TM.textTertiary)
-                        .accessibilityHidden(true)
-                }
+                if isReordering { reorderHandle }
             }
 
             cardBody
         }
-        .padding(.horizontal, TM.cardContentHorizontal)
-        .padding(.vertical, 11)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
+    }
+
+    /// 供应商整卡渲染；nil 时走标准外壳。
+    @MainActor
+    private func customCard(snapshot: UsageSnapshot) -> AnyView? {
+        providerDefinition.cardRenderer.makeCard(
+            definition: providerDefinition,
+            subscription: subscription,
+            snapshot: snapshot
+        )
+    }
+
+    private var reorderHandle: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(TM.textTertiary)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder

@@ -1,0 +1,81 @@
+import Foundation
+import Testing
+@testable import TokenMeter
+
+/// Kimi 紧凑双行卡：整卡接管 + 数据行内容（5 小时 → 每周 → 月，无窗口时退回余额）。
+@MainActor
+struct KimiCompactCardTests {
+    private func subscription(authMethod: AuthMethodID = .kimiBrowserSession) -> Subscription {
+        Subscription(providerID: .kimi, name: "Kimi", authMethodID: authMethod)
+    }
+
+    @Test
+    func rendererTakesOverTheWholeCardForRealtimeSnapshots() {
+        // 紧凑卡要图标与名称同排，必须走整卡接管；其他 renderer 保持默认（返回 nil）。
+        let renderer = KimiCardRenderer()
+        let subscription = subscription()
+        let snapshot = renderer.sampleSnapshot(subscription: subscription)
+
+        let card = renderer.makeCard(
+            definition: KimiProviderDefinition(), subscription: subscription, snapshot: snapshot
+        )
+        #expect(card != nil)
+        #expect(QuotaListCardRenderer().makeCard(
+            definition: KimiProviderDefinition(), subscription: subscription, snapshot: snapshot
+        ) == nil)
+        #expect(BalanceCardRenderer().makeCard(
+            definition: KimiProviderDefinition(), subscription: subscription, snapshot: snapshot
+        ) == nil)
+    }
+
+    @Test
+    func dataLineShowsFiveHourWeeklyAndMonth() {
+        let subscription = subscription()
+        let snapshot = UsageSnapshot.realtime(
+            subscription: subscription,
+            quotas: [
+                Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: .now.addingTimeInterval(7200), kind: .fiveHour),
+                Quota(name: "每周额度", used: 34, limit: 100, resetAt: .now.addingTimeInterval(86400), kind: .weekly)
+            ],
+            overallUsageRatio: 0.52, overallResetAt: .now.addingTimeInterval(86400 * 5)
+        )
+
+        let stats = KimiCompactStat.stats(snapshot: snapshot)
+
+        #expect(stats.map(\.label) == ["5h", "周", "月"])
+        // 紧凑行取整（标准卡片行内是 1 位小数）。
+        #expect(stats.map(\.value) == ["62%", "34%", "52%"])
+        #expect(stats.map(\.status) == [.normal, .normal, .normal])
+    }
+
+    @Test
+    func dataLineFallsBackToBalanceWithoutWindows() {
+        // API Key 形态：coding 接口不可用时退回平台余额，没有窗口与总使用量。
+        let subscription = subscription(authMethod: .apiKey)
+        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(
+                name: "可用余额", used: 0, limit: 3.5, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            )
+        ])
+
+        let stats = KimiCompactStat.stats(snapshot: snapshot)
+
+        #expect(stats.map(\.label) == ["余额"])
+        #expect(stats.map(\.value) == ["CNY 3.50"])
+    }
+
+    @Test
+    func monthUsesTheRatioStatusThresholds() {
+        // 月数值走共享阈值：≥80% 警告、=100% 用尽。
+        let subscription = subscription()
+        func monthStatus(_ ratio: Double) -> QuotaStatus {
+            let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [], overallUsageRatio: ratio)
+            return KimiCompactStat.stats(snapshot: snapshot).first { $0.label == "月" }?.status ?? .error
+        }
+
+        #expect(monthStatus(0.79) == .normal)
+        #expect(monthStatus(0.8) == .warning)
+        #expect(monthStatus(1) == .exhausted)
+    }
+}
