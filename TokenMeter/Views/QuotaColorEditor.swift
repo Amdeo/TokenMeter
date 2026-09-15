@@ -52,6 +52,15 @@ enum QuotaColorSettings {
     }
 }
 
+/// 每页卡片自然高度的收集：预览区按最高那张锁定高度。
+struct CardPreviewHeightKey: PreferenceKey {
+    static var defaultValue: [String: CGFloat] { [:] }
+
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 /// 编辑页里的外观入口：样式与配色都在二级页里改，点按进入。
 struct AppearanceEntryRow: View {
     let summary: String
@@ -229,6 +238,18 @@ struct CardStyleCarouselPicker: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleID: String?
+    /// 每页卡片的自然高度（按样式 rawValue 存）：预览区高度取其中最高那张。
+    @State private var cardHeights: [String: CGFloat] = [:]
+
+    /// 预览区比最高卡片多出的余量：卡片在预览区里上下居中时不贴边。
+    static let previewHeightPadding: CGFloat = 14
+
+    /// 预览区高度 = 最高卡片 + 余量；还没量到（或量到 0/负数/NaN 这类不可用值）时返回 nil，
+    /// 此时不约束高度，让预览区按卡片自然高度铺开，避免首帧把卡片压扁。
+    static func previewHeight(tallestCard: CGFloat?) -> CGFloat? {
+        guard let tallestCard, tallestCard > 0, tallestCard.isFinite else { return nil }
+        return tallestCard + previewHeightPadding
+    }
 
     /// 与卡片正文同样的回退：未注册的供应商落到 `UnsupportedCardRenderer`。
     private var providerDefinition: any ProviderDefinition {
@@ -244,15 +265,20 @@ struct CardStyleCarouselPicker: View {
     var body: some View {
         VStack(spacing: 10) {
             ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 0) {
+                // 每页等高、卡片在页内居中；高度在所有卡片量完后锁定，切换样式不再跳高。
+                HStack(alignment: .center, spacing: 0) {
                     ForEach(styles) { style in
+                        // 页宽 = 视口宽（左右各留 10pt 内边距），高度 = 最高卡片 + 余量：
+                        // 卡片由 frame 的默认居中对齐落在页内，切换样式时位置不跳。
                         previewCard(for: style)
                             .padding(.horizontal, 10)
                             .containerRelativeFrame(.horizontal)
+                            .frame(height: Self.previewHeight(tallestCard: cardHeights.values.max()))
                             .id(style.rawValue)
                     }
                 }
                 .scrollTargetLayout()
+                .onPreferenceChange(CardPreviewHeightKey.self) { cardHeights = $0 }
             }
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: $visibleID)
@@ -314,6 +340,15 @@ struct CardStyleCarouselPicker: View {
             select(style)
         }
         .allowsHitTesting(true)
+        // 上报自然高度（在固定高度与内边距之前），供预览区取最高值。
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: CardPreviewHeightKey.self,
+                    value: [style.rawValue: proxy.size.height]
+                )
+            }
+        )
     }
 
     /// 预览用认证方式：优先非 API Key 形态（如 Kimi 订阅制的总使用量锚点在 API Key 形态下不显示），
