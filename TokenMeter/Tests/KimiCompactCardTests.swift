@@ -10,22 +10,25 @@ struct KimiCompactCardTests {
     }
 
     @Test
-    func rendererTakesOverTheWholeCardForRealtimeSnapshots() {
-        // 紧凑卡要图标与名称同排，必须走整卡接管；其他 renderer 保持默认（返回 nil）。
+    func rendererTakesOverTheWholeCardOnlyInCompactStyle() {
+        // 紧凑卡要图标与名称同排，走整卡接管；标准样式仍由共享外壳画头部。
         let renderer = KimiCardRenderer()
-        let subscription = subscription()
-        let snapshot = renderer.sampleSnapshot(subscription: subscription)
+        let snapshot = renderer.sampleSnapshot(subscription: subscription())
+        var compact = subscription()
+        compact.cardStyle = .compact
 
-        let card = renderer.makeCard(
-            definition: KimiProviderDefinition(), subscription: subscription, snapshot: snapshot
-        )
-        #expect(card != nil)
-        #expect(QuotaListCardRenderer().makeCard(
-            definition: KimiProviderDefinition(), subscription: subscription, snapshot: snapshot
+        #expect(renderer.makeCard(
+            definition: KimiProviderDefinition(), subscription: compact, snapshot: snapshot
+        ) != nil)
+        #expect(renderer.makeCard(
+            definition: KimiProviderDefinition(), subscription: subscription(), snapshot: snapshot
         ) == nil)
-        #expect(BalanceCardRenderer().makeCard(
-            definition: KimiProviderDefinition(), subscription: subscription, snapshot: snapshot
-        ) == nil)
+
+        // 其他 renderer 未实现紧凑布局，也不声明该样式。
+        let definition = KimiProviderDefinition()
+        #expect(QuotaListCardRenderer().makeCard(definition: definition, subscription: compact, snapshot: snapshot) == nil)
+        #expect(QuotaListCardRenderer().supportedStyles == [.standard])
+        #expect(renderer.supportedStyles == [.standard, .compact])
     }
 
     @Test

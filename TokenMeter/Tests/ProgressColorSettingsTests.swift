@@ -10,10 +10,24 @@ struct ProgressColorSettingsTests {
     // MARK: - 能力声明
 
     @Test
-    func everyCardStyleDeclaresProgressMeters() {
+    func everyCardStyleDeclaresHowItDrawsQuotaValues() {
+        // 每种样式都要说清自己怎么画可配色的数值：标准画条，紧凑只画文字。
         for style in SubscriptionCardStyle.allCases {
-            #expect(style.capabilities.contains(.progressMeters), "\(style.rawValue) 缺少进度条能力声明")
+            let capabilities = style.capabilities
+            #expect(
+                capabilities.contains(.progressMeters) || capabilities.contains(.quotaValues),
+                "\(style.rawValue) 既没声明进度条也没声明文字型数值"
+            )
         }
+    }
+
+    @Test
+    func onlyTheStandardStyleDrawsProgressMeters() {
+        #expect(SubscriptionCardStyle.standard.capabilities.contains(.progressMeters))
+        // 紧凑样式只有文字型数值：不画条，但颜色目标靠 .quotaValues 保留。
+        #expect(!SubscriptionCardStyle.compact.capabilities.contains(.progressMeters))
+        #expect(SubscriptionCardStyle.compact.capabilities.contains(.quotaValues))
+        #expect(SubscriptionCardStyle.compact.title == "紧凑")
     }
 
     @Test
@@ -21,25 +35,32 @@ struct ProgressColorSettingsTests {
         #expect(QuotaListCardRenderer().capabilities.contains(.progressMeters))
         #expect(SiyuCardRenderer().capabilities.contains(.progressMeters))
         #expect(NowCodingCardRenderer().capabilities.contains(.progressMeters))
+        // Kimi 的标准样式画进度条（紧凑样式不画，由样式那一侧声明）。
+        #expect(KimiCardRenderer().capabilities.contains(.progressMeters))
         // 余额型与降级卡片只有一行文本，没有进度条。
         #expect(!BalanceCardRenderer().capabilities.contains(.progressMeters))
         #expect(!UnsupportedCardRenderer().capabilities.contains(.progressMeters))
-        // Kimi 的紧凑双行卡只有数字，同样不画进度条。
-        #expect(!KimiCardRenderer().capabilities.contains(.progressMeters))
     }
 
     @Test
-    func textOnlyCardDeclaresQuotaValuesSoItsColorTargetsSurvive() {
-        // 紧凑卡不画条，但数值仍按订阅配色渲染：声明 .quotaValues 让颜色目标不丢，
-        // 同时不假装画了进度条。
+    func compactStyleKeepsQuotaColorTargetsForTextOnlyCards() {
+        // 紧凑样式不画条，但 Kimi 卡片仍按配色渲染数值：额度颜色目标必须还在。
         let renderer = KimiCardRenderer().capabilities
         #expect(renderer.contains(.quotaValues))
-        #expect(!renderer.contains(.progressMeters))
 
-        let style = SubscriptionCardStyle.standard.capabilities
-        #expect(!SubscriptionCardCapabilities.renderProgressMeters(style: style, renderer: renderer))
-        #expect(SubscriptionCardCapabilities.offersQuotaColorTargets(style: style, renderer: renderer))
+        let compact = SubscriptionCardStyle.compact.capabilities
+        #expect(!SubscriptionCardCapabilities.renderProgressMeters(style: compact, renderer: renderer))
+        #expect(SubscriptionCardCapabilities.offersQuotaColorTargets(style: compact, renderer: renderer))
+        #expect(QuotaColorSettings.isAvailable(style: .compact, providerID: .kimi))
         #expect(QuotaColorSettings.isAvailable(style: .standard, providerID: .kimi))
+    }
+
+    @Test
+    func onlyRenderersThatImplementAStyleAdvertiseIt() {
+        // 样式选择器只列 renderer 自己支持的样式：Kimi 两套，其他供应商暂时只有标准。
+        #expect(KimiCardRenderer().supportedStyles == [.standard, .compact])
+        #expect(QuotaListCardRenderer().supportedStyles == [.standard])
+        #expect(NowCodingCardRenderer().supportedStyles == [.standard])
     }
 
     @Test
@@ -340,22 +361,26 @@ struct ProgressColorSettingsTests {
            "quotaColors":{"name.deepseek大月卡 · 每日":15485081},"createdAt":810905858.5,
            "id":"F1481A5B-DEFB-4896-88E8-E9A8568D1E8C","cardStyle":"standard","name":"Siyu API"},
           {"isEnabled":true,"authMethodID":"manualAPIKey","providerID":"kimi","cardStyle":"compact",
-           "createdAt":810905858.5,"id":"F1481A5B-DEFB-4896-88E8-E9A8568D1E8D","name":"Kimi"}
+           "createdAt":810905858.5,"id":"F1481A5B-DEFB-4896-88E8-E9A8568D1E8D","name":"Kimi"},
+          {"isEnabled":true,"authMethodID":"manualAPIKey","providerID":"deepseek","cardStyle":"hero",
+           "createdAt":810905858.5,"id":"F1481A5B-DEFB-4896-88E8-E9A8568D1E8E","name":"DeepSeek"}
         ]
         """.utf8).write(to: fixture.directory.appendingPathComponent("subscriptions.json"))
 
         let store = fixture.makeStore()
 
-        #expect(store.subscriptions.count == 2)
+        #expect(store.subscriptions.count == 3)
         let migrated = try #require(store.subscriptions.first)
         #expect(migrated.providerID == .siyu)
         #expect(migrated.cardStyle == .standard)
         #expect(migrated.currentQuotaColors == [
             SubscriptionQuotaColors.nameKey("deepseek大月卡 · 每日"): 15485081
         ])
-        // 没有颜色字段的订阅保持空；已移除的卡片样式解码时回退标准样式，不丢订阅。
+        // 没有颜色字段的订阅保持空；紧凑样式的 rawValue 被新紧凑卡复用，旧数据重新落到紧凑样式。
         #expect(store.subscriptions[1].quotaColors.isEmpty)
-        #expect(store.subscriptions[1].cardStyle == .standard)
+        #expect(store.subscriptions[1].cardStyle == .compact)
+        // 真正已移除的样式（醒目）仍回退标准样式，不丢订阅。
+        #expect(store.subscriptions[2].cardStyle == .standard)
     }
 
     @Test

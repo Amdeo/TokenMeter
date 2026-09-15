@@ -235,11 +235,17 @@ struct CardStyleCarouselPicker: View {
         ProviderRegistry.definition(for: providerID) ?? UnsupportedProviderDefinition(providerID: providerID)
     }
 
+    /// 当前供应商实际支持的样式；当前选中项即使不支持也保留显示，避免选择器里看不到自己。
+    private var styles: [SubscriptionCardStyle] {
+        let supported = providerDefinition.cardRenderer.supportedStyles
+        return SubscriptionCardStyle.allCases.filter { supported.contains($0) || $0 == selection }
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 0) {
-                    ForEach(SubscriptionCardStyle.allCases) { style in
+                    ForEach(styles) { style in
                         previewCard(for: style)
                             .padding(.horizontal, 10)
                             .containerRelativeFrame(.horizontal)
@@ -259,7 +265,7 @@ struct CardStyleCarouselPicker: View {
                 .foregroundStyle(TM.textSecondary)
 
             HStack(spacing: 6) {
-                ForEach(SubscriptionCardStyle.allCases) { style in
+                ForEach(styles) { style in
                     Circle()
                         .fill(style == selection ? TM.textPrimary : TM.border)
                         .frame(width: 6, height: 6)

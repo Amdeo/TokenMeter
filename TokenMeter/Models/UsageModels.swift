@@ -6,19 +6,24 @@ import SwiftUI
 
 /// 菜单栏订阅卡片的展示样式。持久化在订阅上，缺失时回退标准样式。
 enum SubscriptionCardStyle: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// 标准：图标 + 名称/副标题 + 摘要锚点 + 完整额度行（含进度条）。
     case standard
+    /// 紧凑：图标 + 名称/数据两行（两行合计高等于图标高），不画进度条。
+    case compact
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .standard: "标准"
+        case .compact: "紧凑"
         }
     }
 
     var subtitle: String {
         switch self {
         case .standard: "名称 + 摘要 + 完整额度行"
+        case .compact: "名称 + 数据两行，无进度条"
         }
     }
 
@@ -29,10 +34,15 @@ enum SubscriptionCardStyle: String, Codable, CaseIterable, Identifiable, Sendabl
 }
 
 extension SubscriptionCardStyle {
-    /// 该样式在卡片里渲染的进度条能力：现有样式都会画进度条。
-    /// 未来新增「不含进度条」的样式时在这里返回空集合：该样式不再画进度条，
-    /// 但颜色设置入口由宽判定（进度条或余额数值任一可配）决定，不会因此消失。
-    var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
+    /// 该样式在卡片里渲染的力度值能力：
+    /// - 标准样式画进度条（`renderProgressMeters` 在样式与 renderer 双方声明时才成立）；
+    /// - 紧凑样式只画文字型数值，因此声明 `.quotaValues`：不画条，但颜色目标照旧提供。
+    var capabilities: SubscriptionCardCapabilities {
+        switch self {
+        case .standard: [.progressMeters]
+        case .compact: [.quotaValues]
+        }
+    }
 }
 
 /// 订阅卡片的渲染能力声明。
@@ -70,13 +80,19 @@ struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
         style.contains(.progressMeters) && renderer.contains(.progressMeters)
     }
 
-    /// 卡片提供可配色的额度数值目标：样式会画这类数值，且 renderer 画条或画文字型数值。
-    @MainActor
+    /// 卡片提供可配色的额度数值目标：样式与 renderer 都声明会渲染这类数值，
+    /// 画条（`.progressMeters`）或画文字型数值（`.quotaValues`）都算。
+    /// 非 `@MainActor`：只做集合运算，测试与视图都能直接调。
     static func offersQuotaColorTargets(
         style: SubscriptionCardCapabilities,
         renderer: SubscriptionCardCapabilities
     ) -> Bool {
-        style.contains(.progressMeters) && (renderer.contains(.progressMeters) || renderer.contains(.quotaValues))
+        drawsQuotaValues(style) && drawsQuotaValues(renderer)
+    }
+
+    /// 会渲染带配色的额度数值（不一定是进度条）。
+    private static func drawsQuotaValues(_ capabilities: SubscriptionCardCapabilities) -> Bool {
+        capabilities.contains(.progressMeters) || capabilities.contains(.quotaValues)
     }
 }
 

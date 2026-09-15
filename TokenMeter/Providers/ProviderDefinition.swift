@@ -113,6 +113,9 @@ protocol ProviderCardRenderer {
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus
     /// 卡片渲染能力；默认支持进度条，只有一行余额的卡片在自己声明 `.balanceValues`。
     var capabilities: SubscriptionCardCapabilities { get }
+    /// 该 renderer 实现了哪些卡片样式；默认只有标准样式。
+    /// 在自己目录里实现了紧凑等额外布局的 renderer 在这里声明，样式选择器只列出这些样式。
+    var supportedStyles: Set<SubscriptionCardStyle> { get }
     /// 样式预览用的示例快照：与该 renderer 的真实卡片形态一致（余额型只给余额行，窗口型只给窗口行）。
     @MainActor func sampleSnapshot(subscription: Subscription) -> UsageSnapshot
 }
@@ -120,6 +123,9 @@ protocol ProviderCardRenderer {
 @MainActor
 extension ProviderCardRenderer {
     var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
+
+    /// 默认只支持标准样式：额外样式需要 renderer 自己实现布局（如 `makeCard` 整卡接管）。
+    var supportedStyles: Set<SubscriptionCardStyle> { [.standard] }
 
     /// 默认不接管整卡：走共享外壳的「图标 + 名称/副标题 + 正文」标准卡片。
     func makeCard(
