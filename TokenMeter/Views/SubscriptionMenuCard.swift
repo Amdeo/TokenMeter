@@ -52,15 +52,21 @@ struct SubscriptionMenuCard: View {
     var isReordering: Bool = false
 
     /// 长按判定阈值：按住超过它才切到重置倒计时；短于此仍是单击跳转。
-    static let resetCountdownLongPressDuration: TimeInterval = 0.5
+    /// 计时由 `pressCountdownTask` 控制：卡片上同时挂着单击手势时，SwiftUI 的手势仲裁会把
+    /// `onLongPressGesture` 的识别推迟到 ~0.75s，调小它的阈值也没有用（实测 0.1/0.4/0.5 都是 0.75s）。
+    static let resetCountdownLongPressDuration: Duration = .milliseconds(500)
+    /// 只用来取按压起止回调的 `onLongPressGesture` 阈值：设得足够大，让它自身的识别永不触发。
+    static let resetCountdownPressTrackingDuration: TimeInterval = 60
     /// 长按允许的最大位移：超过即判为拖动（滚动/排序），取消长按。
     static let resetCountdownLongPressDistance: CGFloat = 10
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 长按态：为真时卡片正文显示额度重置倒计时。
     @State private var showsResetCountdown = false
-    /// 本次按压是否已触过长按；抬手时的单击手势据此不跳转。
+    /// 本次按压是否已触过长按；抬手时的单击动作据此不跳转。
     @State private var didLongPress = false
+    /// 本次按压的 0.5s 计时；抬手或取消时作废。
+    @State private var pressCountdownTask: Task<Void, Never>?
     @State private var hovering = false
 
     private var providerDefinition: any ProviderDefinition {
@@ -97,10 +103,16 @@ struct SubscriptionMenuCard: View {
                     .contentShape(Rectangle())
                     .onTapGesture(perform: handleTap)
                     .onLongPressGesture(
-                        minimumDuration: Self.resetCountdownLongPressDuration,
+                        minimumDuration: Self.resetCountdownPressTrackingDuration,
                         maximumDistance: Self.resetCountdownLongPressDistance,
-                        perform: beginResetCountdown,
+                        perform: {},
                         onPressingChanged: handlePressingChange
+                    )
+                    // 位移超过阈值即视为拖动（滚动/排序/轮播翻页），取消长按计时。
+                    // `onPressingChanged` 只在抬手时才报取消，因此位移要自己盯。
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: Self.resetCountdownLongPressDistance)
+                            .onChanged { _ in cancelPressCountdown() }
                     )
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
@@ -111,7 +123,10 @@ struct SubscriptionMenuCard: View {
         .tmCard(hovering: hovering)
         .onHover { hovering in
             self.hovering = hovering
-            if !hovering { endResetCountdown() }
+            if !hovering {
+                cancelPressCountdown()
+                endResetCountdown()
+            }
         }
         .animation(.easeOut(duration: 0.15), value: hovering)
         .help(isReordering ? "拖动排序" : "单击编辑配置 · 长按查看额度重置时间")
@@ -130,13 +145,25 @@ struct SubscriptionMenuCard: View {
         withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { showsResetCountdown = true }
     }
 
-    /// 按压状态回调：`true` 为新一次按下（清掉上一轮的长按标记），`false` 为抬起/取消（还原长按态）。
+    /// 按压状态回调：`true` 为新一次按下（起表并清掉上一轮的长按标记），`false` 为抬起/取消（停表并还原）。
     private func handlePressingChange(_ pressing: Bool) {
+        cancelPressCountdown()
         if pressing {
             didLongPress = false
+            pressCountdownTask = Task {
+                try? await Task.sleep(for: Self.resetCountdownLongPressDuration)
+                guard !Task.isCancelled else { return }
+                beginResetCountdown()
+            }
             return
         }
         endResetCountdown()
+    }
+
+    /// 作废未到时的长按计时（抬手、指针离开、拖动取消都走这里）。
+    private func cancelPressCountdown() {
+        pressCountdownTask?.cancel()
+        pressCountdownTask = nil
     }
 
     /// 还原长按态（抬起或指针离开卡片）。**不动 `didLongPress`**：它由下一次按下时才清除，
