@@ -138,6 +138,7 @@ struct MenuBarView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onPanelSizeChange: (PanelSize) -> Void
     let onReorderModeChange: (Bool) -> Void
+    @State private var confirmQuit = false
     @State private var isReordering = false
     @State private var subscriptionRowHeights: [UUID: CGFloat] = [:]
     #if DEBUG
@@ -252,6 +253,26 @@ struct MenuBarView: View {
         }
         #endif
         .overlay {
+            if confirmQuit {
+                ConfirmDialog(
+                    title: "退出 TokenMeter？",
+                    message: "退出后将停止后台刷新。",
+                    confirmTitle: "退出 TokenMeter",
+                    onConfirm: {
+                        confirmQuit = false
+                        store.stop()
+                        DispatchQueue.main.async {
+                            NSApplication.shared.terminate(nil)
+                        }
+                    },
+                    onCancel: {
+                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { confirmQuit = false }
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            }
+        }
+        .overlay {
             PanelWindowAppearanceBridge(appearanceMode: store.settings.appearanceMode)
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
@@ -269,6 +290,7 @@ struct MenuBarView: View {
                 status: synchronizationStatus,
                 isRefreshing: store.isRefreshing,
                 onRefresh: { store.refreshAll(source: .manual) },
+                onQuit: { confirmQuit = true },
                 isReordering: isReordering,
                 onToggleReorder: store.subscriptions.count > 1 ? { toggleReordering() } : nil
             )
@@ -529,6 +551,7 @@ private struct DashboardHeader: View {
     let status: (Date) -> (text: String, color: Color)
     let isRefreshing: Bool
     let onRefresh: () -> Void
+    let onQuit: () -> Void
     var isReordering: Bool = false
     var onToggleReorder: (() -> Void)? = nil
 
@@ -555,15 +578,6 @@ private struct DashboardHeader: View {
 
             Spacer()
 
-            if let onToggleReorder {
-                HeaderIconButton(
-                    systemName: isReordering ? "checkmark" : "line.3.horizontal",
-                    label: isReordering ? "完成排序" : "排序",
-                    isActive: isReordering,
-                    action: onToggleReorder
-                )
-            }
-
             HeaderIconButton(systemName: "arrow.clockwise", label: "刷新全部", rotation: spinning && !reduceMotion ? 360 : 0, action: onRefresh)
             .disabled(isRefreshing)
             .opacity(isRefreshing ? 0.6 : 1)
@@ -575,6 +589,17 @@ private struct DashboardHeader: View {
                     withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { spinning = false }
                 }
             }
+
+            if let onToggleReorder {
+                HeaderIconButton(
+                    systemName: isReordering ? "checkmark" : "line.3.horizontal",
+                    label: isReordering ? "完成排序" : "排序",
+                    isActive: isReordering,
+                    action: onToggleReorder
+                )
+            }
+
+            HeaderIconButton(systemName: "power", label: "退出 TokenMeter", tint: TM.danger, action: onQuit)
         }
     }
 }
@@ -585,6 +610,8 @@ struct HeaderIconButton: View {
     let label: String
     var rotation: Double = 0
     var isActive: Bool = false
+    /// 可选固定前景色（如退出按钮的红色）；为 nil 时沿用激活/悬停派生色。
+    var tint: Color? = nil
     let action: () -> Void
     @State private var hovering = false
     @Environment(\.isEnabled) private var isEnabled
@@ -605,7 +632,7 @@ struct HeaderIconButton: View {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .medium))
                 .rotationEffect(.degrees(rotation))
-                .foregroundStyle(isActive ? TM.accent : (showsHoverBackground ? TM.textPrimary : TM.textSecondary))
+                .foregroundStyle(tint ?? (isActive ? TM.accent : (showsHoverBackground ? TM.textPrimary : TM.textSecondary)))
                 .frame(width: 20, height: 20)
                 .background(
                     showsHoverBackground ? hoverFill : .clear,
