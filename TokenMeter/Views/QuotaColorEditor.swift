@@ -445,12 +445,16 @@ struct QuotaColorEditor: View {
     }
 }
 
-/// 单个颜色目标的紧凑配置行：名称、当前色样本、预设色、自定义选择器与实时预览。
+/// 单个颜色目标的折叠配置行：收起时一行（箭头、名称、当前色样本）；
+/// 展开后显示恢复默认、预设色、自定义选择器与实时预览。
 struct QuotaColorRow: View {
     let target: QuotaColorTarget
     let colors: [String: UInt32]
     let onSelect: (UInt32) -> Void
     let onReset: () -> Void
+
+    @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var rgb: UInt32? { colors[target.key] }
 
@@ -472,46 +476,62 @@ struct QuotaColorRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
-                Text(target.label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(TM.textPrimary)
-                    .lineLimit(1)
-                Circle()
-                    .fill(resolvedColor)
-                    .frame(width: 12, height: 12)
-                    .overlay(Circle().strokeBorder(TM.borderStrong, lineWidth: 1))
+                Button {
+                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { expanded.toggle() }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(TM.textTertiary)
+                            .rotationEffect(.degrees(expanded ? 90 : 0))
+                        Text(target.label)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(TM.textPrimary)
+                            .lineLimit(1)
+                        Circle()
+                            .fill(resolvedColor)
+                            .frame(width: 12, height: 12)
+                            .overlay(Circle().strokeBorder(TM.borderStrong, lineWidth: 1))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(target.label)
+                .accessibilityValue(expanded ? "已展开" : "已收起")
                 Spacer(minLength: 6)
-                if rgb != nil {
+                if expanded && rgb != nil {
                     Button("恢复默认", action: onReset)
                         .buttonStyle(.plain)
                         .font(.system(size: 10))
                         .foregroundStyle(TM.textSecondary)
                 }
             }
-            HStack(spacing: 6) {
-                ForEach(SubscriptionQuotaColors.presets, id: \.self) { preset in
-                    Button { onSelect(preset) } label: {
-                        Circle()
-                            .fill(Color(hex: preset))
-                            .frame(width: 14, height: 14)
-                            .overlay(
-                                Circle().strokeBorder(
-                                    rgb == preset ? TM.textPrimary : TM.border,
-                                    lineWidth: rgb == preset ? 2 : 1
+            if expanded {
+                HStack(spacing: 6) {
+                    ForEach(SubscriptionQuotaColors.presets, id: \.self) { preset in
+                        Button { onSelect(preset) } label: {
+                            Circle()
+                                .fill(Color(hex: preset))
+                                .frame(width: 14, height: 14)
+                                .overlay(
+                                    Circle().strokeBorder(
+                                        rgb == preset ? TM.textPrimary : TM.border,
+                                        lineWidth: rgb == preset ? 2 : 1
+                                    )
                                 )
-                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("预设颜色")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("预设颜色")
+                    ColorPicker("", selection: Binding(
+                        get: { resolvedColor },
+                        set: { onSelect($0.tokenMeterRGB) }
+                    ), supportsOpacity: false)
+                    .labelsHidden()
+                    .controlSize(.mini)
                 }
-                ColorPicker("", selection: Binding(
-                    get: { resolvedColor },
-                    set: { onSelect($0.tokenMeterRGB) }
-                ), supportsOpacity: false)
-                .labelsHidden()
-                .controlSize(.mini)
+                preview
             }
-            preview
         }
     }
 
