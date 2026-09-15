@@ -119,15 +119,18 @@ cp .pi/skills/add-relay-provider/scripts/card-preview.html /tmp/tokenmeter-card-
 它按 `TM` 令牌与真实 SwiftUI 尺寸写死：340pt 面板 / 卡片圆角 14 / 内边距 11 / 条高 4 / 字号 13·11·10·9。
 
 - `site`：`name` / `subtitle`（`显示名 · 认证方式标题`）/ `icon` / `tint` / `status`（余额偏低 `warning`、用尽 `danger`）
-- `variants`：模板自带 10 套——**有条**（① 余额 ② 额度列表 ③ 混合 ④ 订阅分段 ⑤ 总用量锚点）与
-  **无条**（⑥ 纯数值行 ⑦ 数值 + 时间提示 ⑧ 单行紧凑表 ⑨ 圆点比例 ⑩ 数值 + 状态徽标）；
-  探测做不到的直接删——最终留 3-6 套给用户挑，别把 10 套全堆上去
+- `variants`：模板自带 11 套——**有条**（① 余额 ② 额度列表 ③ 混合 ④ 订阅分段 ⑤ 总用量锚点）、
+  **无条**（⑥ 纯数值行 ⑦ 数值 + 时间提示 ⑧ 单行紧凑表 ⑨ 圆点比例 ⑩ 数值 + 状态徽标）、
+  **精简头部**（⑪ 去掉副标题行）；
+  探测做不到的直接删——最终留 3-6 套给用户挑，别把 11 套全堆上去
 - 数值一律填**真实探测到的数据**，不要占位符；行类型只有三种：
   `balance{title,value}` / `progress{title,value,percent,state,hints}` / `group{title,hint}`
 - `progress` 行的表现力全靠这几个可选字段，用户想要哪种就选哪个：
   `bar: "meter"`（默认进度条）/ `"dots"`（圆点比例，配 `dots: 10`）/ `"none"`（只有数字）
   `inlineHints: true`（时间提示并到同一行，信息密度最高）/ `pill: "正常"` + `pillTint`（状态徽标）
 - `tint` 写 `#RRGGBB`，或用 `ok` / `warn` / `danger` 引用状态色
+- 头部副标题行（`显示名 · 网页登录态`）可以用该套自己的 `hideSubtitle: true` 关掉（⑪ 就是这一款）；
+  工具栏的「副标题行」勾选框能一次关掉**全部**变体，用来判断这行到底要不要（隐藏后图标与名称垂直居中，与 SwiftUI 的 HStack 行为一致）
 - 有官方图标时把 PNG 复制到同目录，`icon` 写文件名（如 `icon.png`），预览里就能看到真图标
 
 #### ③ 起服务看图
@@ -159,6 +162,12 @@ bash .pi/skills/add-relay-provider/scripts/preview.sh /tmp/tokenmeter-card-previ
 | ⑤ 总用量锚点卡 | 照抄 `Extensions/kimi/KimiCardRenderer.swift` |
 | ⑥⑦⑧⑩ 无条数值行 | `BalanceMenuRow`（无提示行时够用）或在 provider 目录里写一个只输出数值的行视图 |
 | ⑨ 圆点比例 | provider 目录里自带行视图，把 `MeterBar` 换成一排 6pt 圆点 |
+
+**「去掉副标题行」（⑪）需要改共享文件，必须先问**：那行 `显示名 · 认证方式标题` 是共享卡片视图硬编码的——
+`Views/SubscriptionMenuCard.swift` 里的 `Text("\(providerDefinition.metadata.displayName) · \(authMethodTitle)")`，
+而 `ProviderMetadata` 里没有任何隐藏开关。用户选定 ⑪ 时：**不在共享视图里加按供应商的 `switch`**，也不偷改；
+正确路径是先向用户说明影响（所有供应商都能用这个开关），再给 `ProviderMetadata` 加一个数据字段
+（如 `hidesAuthLine: Bool = false`）并由共享视图读它。
 
 **无进度条形态的硬规矩**：卡片不画条时，renderer 就不要声明 `.progressMeters`
 （只声明 `.balanceValues`，或不声明）——编辑页的进度条配色入口与汇总条会自动消失，
@@ -420,6 +429,8 @@ xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
 - 浏览器会话型的 `APIClient` 调用必须传 `statusPolicy: .raw`，
   否则 401/403 会被折叠成「需要重新登录」，刷新重试永远不会发生。
 - 登录态提取只读页面 localStorage / cookie；不注入脚本、不上传任何数据。
+- 副标题行（`显示名 · 网页登录态`）是共享 `SubscriptionMenuCard` 硬编码渲染的：要去掉它只能走
+  `ProviderMetadata` 数据开关 + 共享视图条件渲染，并且先向用户说明再改；不往共享视图里塞按供应商的判断。
 - 不静默安装 `playwright-cli`（先问用户，同意了才 `npm install -g @playwright/cli@latest`）。
 - 浏览器侧只做：跑 `chrome-cdp.sh`、`attach`/`detach`、只读探测。
   不 `localstorage-set` / `cookie-set`，不 `close-all` / `kill-all`，不 `tab-close` 用户的标签页。

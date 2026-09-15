@@ -131,6 +131,8 @@
   <button id="theme-dark" aria-pressed="true">深色</button>
   <button id="theme-light" aria-pressed="false">浅色</button>
   <span class="sep"></span>
+  <label><input type="checkbox" id="subtitle-toggle" checked>副标题行</label>
+  <span class="sep"></span>
   <span id="variant-toggles"></span>
 </div>
 
@@ -156,6 +158,7 @@
                                      pill?: "正常", pillTint? }
               group    分段头      { title, hint? }（后面紧跟该分段的 progress 行）
      anchor   顶部锚点 { label, value, color? }；不需要锚点就写 null
+     hideSubtitle: true  → 这一套不画头部副标题行（「显示名 · 网页登录态」），名称与 30pt 图标垂直居中
      tint     行/条颜色：写平台色（#RRGGBB）或用 'ok' / 'warn' / 'danger' 引用状态色
    ========================================================================================== */
 window.CARD_DATA = {
@@ -265,6 +268,18 @@ window.CARD_DATA = {
         { type: "progress", bar: "none", inlineHints: true, title: "加油包", percent: 1,
           value: "¥0.00", tint: "danger", pill: "用尽", pillTint: "danger", hints: ["—"] }
       ]
+    },
+    {
+      key: "compact-head", title: "⑪ 精简头部（无副标题行）",
+      note: "去掉「显示名 · 网页登录态」，只留名称 + 状态点",
+      hideSubtitle: true,
+      anchor: { label: "每月窗口", value: "72.1%" },
+      body: [
+        { type: "progress", title: "每月窗口", percent: 0.721, value: "72.1%", tint: "warn",
+          state: "正常", hints: ["3 天后刷新额度"] },
+        { type: "progress", title: "每周窗口", percent: 0.34, value: "34.0%", tint: "#2DD4BF",
+          state: "正常", hints: ["2 天后刷新额度"] }
+      ]
     }
   ]
 };
@@ -348,14 +363,17 @@ function renderVariant(variant, site) {
           text: variant.anchor.value ?? ""
         }))
     : null;
+  // 副标题行（显示名 · 认证方式）：工具栏总开关 关掉，或这一套自己声明 hideSubtitle。
+  // SwiftUI 侧 HStack 默认垂直居中，所以隐藏副标题后图标与名称要居中对齐。
+  const showSubtitle = variant.hideSubtitle !== true && !hideAllSubtitles;
   const groups = variant.body.some((row) => row.type === "group");
   const card = el("div", { class: "card", style: { "--tint": site.tint || "#2DD4BF" } },
-    el("div", { class: "head" }, logo,
+    el("div", { class: "head", style: { alignItems: showSubtitle ? "flex-start" : "center" } }, logo,
       el("div", { class: "titles" },
         el("div", { class: "name-line" },
           el("span", { class: "name", text: site.name ?? "" }),
           el("span", { class: "dot", style: { background: STATUS[site.status] || STATUS.normal } })),
-        el("div", { class: "sub", text: site.subtitle ?? "" })),
+        showSubtitle ? el("div", { class: "sub", text: site.subtitle ?? "" }) : null),
       anchor),
     el("div", { class: "body", style: { gap: groups ? "12px" : "8px" } }, variant.body.map(renderRow)));
   return el("div", { class: "stage", "data-variant": variant.key },
@@ -366,6 +384,7 @@ function renderVariant(variant, site) {
 }
 
 const hiddenVariants = new Set();
+let hideAllSubtitles = false;
 
 function render() {
   document.getElementById("stages").replaceChildren(
@@ -392,6 +411,10 @@ document.getElementById("variant-toggles").append(...window.CARD_DATA.variants.m
 }));
 document.getElementById("theme-dark").addEventListener("click", () => setTheme("dark"));
 document.getElementById("theme-light").addEventListener("click", () => setTheme("light"));
+document.getElementById("subtitle-toggle").addEventListener("change", (event) => {
+  hideAllSubtitles = !event.target.checked;
+  render();
+});
 setTheme("dark");
 </script>
 </body>
