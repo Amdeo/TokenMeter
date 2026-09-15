@@ -27,6 +27,7 @@
   }
   h1 { font-size:13px; font-weight:600; margin:16px 0 2px; }
   .lede { font-size:11px; color:#9A9E9C; margin:0 0 22px; }
+  #zoom-note { font-weight:400; color:#9A9E9C; }
 
   /* ===== 顶部工具栏：预览脚手架，不是设计的一部分 ===== */
   /* sticky：占流式空间（盖不住下面的内容），滚动时又一直贴在顶部 */
@@ -126,10 +127,14 @@
   <button id="theme-dark" aria-pressed="true">深色</button>
   <button id="theme-light" aria-pressed="false">浅色</button>
   <span class="sep"></span>
+  <span>缩放</span>
+  <button id="fit-on" aria-pressed="true">适配窗口</button>
+  <button id="fit-off" aria-pressed="false">100%</button>
+  <span class="sep"></span>
   <span id="variant-toggles"></span>
 </div>
 
-<h1>340pt 真面板 · 真实设计令牌 · 卡片按 SwiftUI 实际尺寸还原</h1>
+<h1>340pt 真面板 · 真实设计令牌 · 卡片按 SwiftUI 实际尺寸还原<span id="zoom-note"></span></h1>
 <p class="lede">每列一套候选卡片，看中哪套或要改哪里的细节，回到对话里说即可（例如「要第三套，但不要状态词」）。</p>
 <div class="stages" id="stages"></div>
 
@@ -357,12 +362,56 @@ function renderVariant(variant, site) {
 }
 
 const hiddenVariants = new Set();
+let fitMode = true;
 
 function render() {
   document.getElementById("stages").replaceChildren(
     ...window.CARD_DATA.variants
       .filter((variant) => !hiddenVariants.has(variant.key))
       .map((variant) => renderVariant(variant, window.CARD_DATA.site)));
+  fitToWindow();
+}
+
+/**
+ * 把整个卡片区缩到一屏里：flex 换行后的真实尺寸可能超出窗口（窗口窄时行数变多），
+ * 直接用 zoom 等比缩放，保证任何窗口尺寸下都能一次看全（不做适配就必然要滚动）。
+ * 面板内部尺寸仍是真实 SwiftUI 值，放大/缩小对比例无影响；要看真尺寸点「100%」。
+ */
+function fitToWindow() {
+  const stages = document.getElementById("stages");
+  const note = document.getElementById("zoom-note");
+  stages.style.zoom = 1;
+  if (!fitMode) {
+    note.textContent = "（100% 真实尺寸：超出窗口时自己拖滚动条）";
+    return;
+  }
+
+  const availableWidth = document.documentElement.clientWidth - 48;
+  let scale = 1;
+  // 缩放后可能因为换行减少而多出空间，迭代两轮让比例收敛。
+  for (let pass = 0; pass < 3; pass += 1) {
+    const rect = stages.getBoundingClientRect();
+    const availableHeight = window.innerHeight - rect.top - 14;
+    const next = Math.min(
+      1,
+      availableWidth / (rect.width / scale),
+      availableHeight / (rect.height / scale)
+    );
+    if (!Number.isFinite(next) || Math.abs(next - scale) < 0.02) break;
+    scale = Math.max(0.2, next);
+    stages.style.zoom = scale;
+  }
+  stages.style.zoom = scale;
+  note.textContent = scale < 0.995
+    ? `（当前 ${Math.round(scale * 100)}% 显示以适配窗口，点「100%」看真实尺寸）`
+    : "";
+}
+
+function setFitMode(enabled) {
+  fitMode = enabled;
+  document.getElementById("fit-on").setAttribute("aria-pressed", String(enabled));
+  document.getElementById("fit-off").setAttribute("aria-pressed", String(!enabled));
+  fitToWindow();
 }
 
 function setTheme(theme) {
@@ -383,6 +432,9 @@ document.getElementById("variant-toggles").append(...window.CARD_DATA.variants.m
 }));
 document.getElementById("theme-dark").addEventListener("click", () => setTheme("dark"));
 document.getElementById("theme-light").addEventListener("click", () => setTheme("light"));
+document.getElementById("fit-on").addEventListener("click", () => setFitMode(true));
+document.getElementById("fit-off").addEventListener("click", () => setFitMode(false));
+window.addEventListener("resize", fitToWindow);
 setTheme("dark");
 </script>
 </body>
