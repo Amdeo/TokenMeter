@@ -41,17 +41,18 @@ struct SubscriptionCardPresentation {
         return .normal
     }
 
-    /// 把重置时间转成用户可读的「X 小时后刷新额度」文案；now 供测试注入。
-    static func resetHintText(for resetAt: Date, now: Date = .now) -> String {
+    /// 把重置时间转成用户可读的「X 小时后刷新额度」文案；now 供测试注入，
+    /// `suffix` 供聚合额度（如 Kimi 总使用量）换成「重置」等措辞。
+    static func resetHintText(for resetAt: Date, now: Date = .now, suffix: String = "刷新额度") -> String {
         let seconds = resetAt.timeIntervalSince(now)
-        guard seconds > 0 else { return "即将刷新额度" }
+        guard seconds > 0 else { return "即将\(suffix)" }
         if seconds < 3600 {
-            return "\(max(1, Int(seconds / 60))) 分钟后刷新额度"
+            return "\(max(1, Int(seconds / 60))) 分钟后\(suffix)"
         }
         if seconds < 86400 {
-            return "\(max(1, Int(seconds / 3600))) 小时后刷新额度"
+            return "\(max(1, Int(seconds / 3600))) 小时后\(suffix)"
         }
-        return "\(max(1, Int(seconds / 86400))) 天后刷新额度"
+        return "\(max(1, Int(seconds / 86400))) 天后\(suffix)"
     }
 
     /// 顶部摘要委托给供应商 renderer。

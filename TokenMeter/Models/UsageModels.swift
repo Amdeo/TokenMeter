@@ -220,16 +220,15 @@ enum SubscriptionQuotaColors: Sendable {
         switch kind {
         case .fiveHour: fiveHourKey
         case .weekly: weeklyKey
-        case .monthly, .generic, .balance: nil
+        case .generic, .balance: nil
         }
     }
 
-    /// 内置默认色：5 小时蓝、每周绿、每月紫，其余额度使用协调的青色。
+    /// 内置默认色：5 小时蓝、每周绿，其余额度使用协调的青色。
     static func defaultColor(forKind kind: Quota.Kind) -> Color {
         switch kind {
         case .fiveHour: .blue
         case .weekly: .green
-        case .monthly: .purple
         case .generic, .balance: .teal
         }
     }
@@ -287,6 +286,8 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
     let errorMessage: String?
     let state: UsageState
     let overallUsageRatio: Double?
+    /// 「总使用量」聚合额度的重置时间（如 Kimi 订阅月额度的重置日）。
+    let overallResetAt: Date?
     /// 供应商可选的额外数据（Codable JSON 值树），供自定义卡片 renderer 消费。
     let providerData: JSONValue?
 
@@ -299,6 +300,7 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         errorMessage: String?,
         state: UsageState,
         overallUsageRatio: Double? = nil,
+        overallResetAt: Date? = nil,
         providerData: JSONValue? = nil
     ) {
         self.id = id
@@ -309,11 +311,12 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         self.errorMessage = errorMessage
         self.state = state
         self.overallUsageRatio = overallUsageRatio
+        self.overallResetAt = overallResetAt
         self.providerData = providerData
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, subscriptionID, quotas, updatedAt, errorMessage, state, overallUsageRatio
+        case id, subscriptionID, quotas, updatedAt, errorMessage, state, overallUsageRatio, overallResetAt
         case providerID
         case providerData
         case platform
@@ -334,6 +337,7 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
         state = try container.decode(UsageState.self, forKey: .state)
         overallUsageRatio = try container.decodeIfPresent(Double.self, forKey: .overallUsageRatio)
+        overallResetAt = try container.decodeIfPresent(Date.self, forKey: .overallResetAt)
         providerData = try container.decodeIfPresent(JSONValue.self, forKey: .providerData)
     }
 
@@ -347,6 +351,7 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         try container.encode(errorMessage, forKey: .errorMessage)
         try container.encode(state, forKey: .state)
         try container.encode(overallUsageRatio, forKey: .overallUsageRatio)
+        try container.encode(overallResetAt, forKey: .overallResetAt)
         try container.encode(providerData, forKey: .providerData)
     }
 
@@ -362,7 +367,14 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
         return .normal
     }
 
-    static func realtime(subscription: Subscription, quotas: [Quota], updatedAt: Date = .now, overallUsageRatio: Double? = nil, providerData: JSONValue? = nil) -> Self {
+    static func realtime(
+        subscription: Subscription,
+        quotas: [Quota],
+        updatedAt: Date = .now,
+        overallUsageRatio: Double? = nil,
+        overallResetAt: Date? = nil,
+        providerData: JSONValue? = nil
+    ) -> Self {
         .init(
             subscriptionID: subscription.id,
             providerID: subscription.providerID,
@@ -371,6 +383,7 @@ struct UsageSnapshot: Identifiable, Codable, Sendable {
             errorMessage: nil,
             state: .realtime,
             overallUsageRatio: overallUsageRatio,
+            overallResetAt: overallResetAt,
             providerData: providerData
         )
     }
@@ -449,8 +462,6 @@ struct Quota: Identifiable, Codable, Sendable {
         case balance
         case fiveHour
         case weekly
-        /// 月度总额度（如 Kimi 订阅的月额度），排序时排在窗口额度之前。
-        case monthly
     }
 
     /// 额度行的分组元数据：同一分组（如一个订阅套餐的每日/每周/每月窗口）在卡片中归入同一段落。

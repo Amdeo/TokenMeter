@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// Kimi 订阅卡：月额度 / 5 小时 / 每周三行窗口。月额度行与顶部「总使用量」
-/// 锚点同源（订阅月额度），锚点给出大字数值，正文行补进度条与重置时间。
+/// Kimi 订阅卡：5 小时 / 每周两行窗口。月总额度由顶部「总使用量」锚点呈现，
+/// 锚点文案直接带上月额度的重置时间，正文不重复该行。
 struct KimiCardRenderer: ProviderCardRenderer {
-    /// 订阅制的三个窗口额度；其余（如加油包余额、月消费）不进入正文。
-    private static let windowKinds: Set<Quota.Kind> = [.monthly, .fiveHour, .weekly]
+    /// 订阅制的窗口额度；余额、加油包等不进入正文。
+    private static let windowKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
 
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
         let windowQuotas = snapshot.quotas.filter { Self.windowKinds.contains($0.kind) }
         if !windowQuotas.isEmpty {
-            // 顺序由解析层的 quotaRank 决定：月额度 → 5 小时 → 每周。
+            // 顺序由解析层的 quotaRank 决定：5 小时 → 每周。
             return AnyView(
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(windowQuotas) { quota in
@@ -39,14 +39,18 @@ struct KimiCardRenderer: ProviderCardRenderer {
         guard subscription.authMethodID != .apiKey else { return nil }
         if let ratio = snapshot.overallUsageRatio {
             let percent = ratio.formatted(.percent.precision(.fractionLength(1)))
+            // 月额度的重置时间接在「总使用量」后面，如「总使用量 · 5 天后重置」。
+            let resetHint = snapshot.overallResetAt.map {
+                SubscriptionCardPresentation.resetHintText(for: $0, suffix: "重置")
+            }
             let status = SubscriptionCardPresentation.ratioStatus(for: ratio)
             let color = SubscriptionQuotaColors.hasOverallConfiguration(subscription.currentQuotaColors)
                 ? SubscriptionQuotaColors.resolveOverall(subscription.currentQuotaColors)
                 : status.tint
             return CardSummary(
-                label: "总使用量",
+                label: resetHint.map { "总使用量 · \($0)" } ?? "总使用量",
                 value: percent,
-                accessibilityLabel: "总使用量 \(percent)",
+                accessibilityLabel: resetHint.map { "总使用量 \(percent)，\($0)" } ?? "总使用量 \(percent)",
                 colorRGB: color.tokenMeterRGB
             )
         }
@@ -57,7 +61,6 @@ struct KimiCardRenderer: ProviderCardRenderer {
     }
 
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus {
-        // 月额度也计入状态：月额度见底时不应再显示「正常」。
         let kinds = Self.windowKinds
         return snapshot.quotas.contains { kinds.contains($0.kind) }
             ? snapshot.status(for: kinds)

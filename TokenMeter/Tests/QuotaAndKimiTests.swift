@@ -242,12 +242,11 @@ struct QuotaAndKimiTests {
         let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
 
         #expect(snapshot.overallUsageRatio == 0.872)
-        #expect(snapshot.quotas.map(\.kind) == [.monthly, .fiveHour, .weekly])
-        #expect(snapshot.quotas[0].fraction == 0.872)
-        #expect(snapshot.quotas[0].resetAt != nil)
-        #expect(snapshot.quotas[1].fraction == 0)
-        #expect(snapshot.quotas[1].usedText == "0")
-        #expect(snapshot.quotas[2].fraction == 0.558)
+        #expect(snapshot.overallResetAt != nil)
+        #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
+        #expect(snapshot.quotas[0].fraction == 0)
+        #expect(snapshot.quotas[0].usedText == "0")
+        #expect(snapshot.quotas[1].fraction == 0.558)
     }
 
     @Test
@@ -313,9 +312,9 @@ struct QuotaAndKimiTests {
 
         let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
 
-        #expect(snapshot.quotas.map(\.kind) == [.monthly, .fiveHour, .weekly])
-        #expect(snapshot.quotas[1].used == 0.0797)
-        #expect(snapshot.quotas[1].fraction == 0.0797)
+        #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
+        #expect(snapshot.quotas[0].used == 0.0797)
+        #expect(snapshot.quotas[0].fraction == 0.0797)
     }
 
     @Test
@@ -334,9 +333,9 @@ struct QuotaAndKimiTests {
 
         let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
 
-        #expect(snapshot.quotas.map(\.kind) == [.monthly, .fiveHour, .weekly])
-        #expect(snapshot.quotas[2].fraction == 0)
-        #expect(snapshot.quotas[2].resetAt != nil)
+        #expect(snapshot.quotas.map(\.kind) == [.fiveHour, .weekly])
+        #expect(snapshot.quotas[1].fraction == 0)
+        #expect(snapshot.quotas[1].resetAt != nil)
     }
 
     @Test
@@ -353,40 +352,6 @@ struct QuotaAndKimiTests {
         let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
 
         #expect(snapshot.quotas.map(\.kind) == [.weekly])
-    }
-
-    @Test
-    func kimiSubscriptionStatsMonthlyQuotaCarriesResetTimeFromExpireTime() throws {
-        // 月额度行排在最前，重置时间取 subscriptionBalance.expireTime。
-        let data = Data("""
-        {
-          "ratelimitCode7d": {"ratio": 0.0175, "resetTime": "2030-01-07T00:00:00Z"},
-          "subscriptionBalance": {"amountUsedRatio": 0.9747, "expireTime": "2030-01-20T01:28:01.324990Z"}
-        }
-        """.utf8)
-        let response = try JSONDecoder().decode(KimiSubscriptionStatsResponse.self, from: data)
-        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
-
-        let snapshot = try KimiUsageProvider.parseSubscriptionStats(response, subscription: subscription)
-        let monthly = try #require(snapshot.quotas.first { $0.kind == .monthly })
-
-        #expect(monthly.name == "月额度")
-        #expect(monthly.fraction == 0.9747)
-        #expect(monthly.resetAt != nil)
-        #expect(snapshot.quotas.first?.kind == .monthly)
-    }
-
-    @Test
-    func kimiCardStatusCountsMonthlyQuota() {
-        // 月额度见底时状态点必须是 warning，不能被 5 小时/每周的低占用盖成 normal。
-        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
-        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
-            Quota(name: "月额度", used: 0.975, limit: 1, resetAt: nil, kind: .monthly),
-            Quota(name: "5 小时额度", used: 0.01, limit: 1, resetAt: nil, kind: .fiveHour),
-            Quota(name: "每周额度", used: 0.02, limit: 1, resetAt: nil, kind: .weekly)
-        ])
-
-        #expect(KimiCardRenderer().status(subscription: subscription, snapshot: snapshot) == .warning)
     }
 
     private func temporaryCredentialFileURL() -> URL {
@@ -439,6 +404,15 @@ extension QuotaAndKimiTests {
         #expect(SubscriptionCardPresentation.resetHintText(for: now.addingTimeInterval(3_600), now: now) == "1 小时后刷新额度")
         #expect(SubscriptionCardPresentation.resetHintText(for: now.addingTimeInterval(2 * 86_400), now: now) == "2 天后刷新额度")
         #expect(SubscriptionCardPresentation.resetHintText(for: now.addingTimeInterval(-10), now: now) == "即将刷新额度")
+        // 聚合额度（Kimi 总使用量）用「重置」措辞。
+        #expect(
+            SubscriptionCardPresentation.resetHintText(for: now.addingTimeInterval(5 * 86_400), now: now, suffix: "重置")
+                == "5 天后重置"
+        )
+        #expect(
+            SubscriptionCardPresentation.resetHintText(for: now.addingTimeInterval(-10), now: now, suffix: "重置")
+                == "即将重置"
+        )
     }
 
     @Test
