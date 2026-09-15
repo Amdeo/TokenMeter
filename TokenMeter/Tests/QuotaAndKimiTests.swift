@@ -562,34 +562,6 @@ extension QuotaAndKimiTests {
 
 
 
-    @Test(arguments: zip(
-        [UsageState.notConfigured, .unsupported, .authenticationRequired, .error],
-        [QuotaStatus.warning, .warning, .warning, .error]
-    ))
-    func cardIndicatorStatusMapsState(_ state: UsageState, _ expected: QuotaStatus) {
-        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
-        let snapshot = UsageSnapshot(
-            subscriptionID: subscription.id,
-            providerID: .kimi,
-            quotas: [],
-            updatedAt: .now,
-            errorMessage: nil,
-            state: state
-        )
-
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == expected)
-    }
-
-    @Test
-    func cardIndicatorStatusUsesRealtimeWarningQuota() {
-        let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)
-        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
-            Quota(name: "API 余额", used: 90, limit: 100, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
-        ])
-
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .warning)
-    }
-
     @Test
     func generalPlatformRealtimeVisibleStatusIgnoresErrorMessage() {
         let subscription = Subscription(providerID: .zhipu, name: "智谱 AI", authMethodID: .apiKey)
@@ -603,7 +575,6 @@ extension QuotaAndKimiTests {
         )
 
         #expect(snapshot.visibleStatus(for: subscription) == .warning)
-        #expect(SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription) == .warning)
     }
 
 }

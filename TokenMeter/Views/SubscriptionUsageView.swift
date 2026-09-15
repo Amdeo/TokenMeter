@@ -106,20 +106,6 @@ struct SubscriptionCardPresentation {
 
         return parts.joined(separator: "，")
     }
-
-    /// 卡片头部状态点颜色：按快照状态派生，避免 notConfigured/unsupported
-    /// 携带的错误消息把状态点覆盖成红色；仅 realtime 继续沿用额度状态语义。
-    @MainActor
-    static func cardIndicatorStatus(snapshot: UsageSnapshot, subscription: Subscription) -> QuotaStatus {
-        switch snapshot.state {
-        case .authenticationRequired, .notConfigured, .unsupported:
-            return .warning
-        case .error:
-            return .error
-        case .realtime:
-            return snapshot.visibleStatus(for: subscription)
-        }
-    }
 }
 
 extension QuotaStatus {

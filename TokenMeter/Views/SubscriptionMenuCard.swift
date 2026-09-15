@@ -73,11 +73,6 @@ struct SubscriptionMenuCard: View {
             ?? subscription.authMethodID.rawValue
     }
 
-    private var status: QuotaStatus? {
-        guard let snapshot else { return nil }
-        return SubscriptionCardPresentation.cardIndicatorStatus(snapshot: snapshot, subscription: subscription)
-    }
-
     private var cardAnchor: SubscriptionCardPresentation.Anchor? {
         guard let snapshot else { return nil }
         return SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
@@ -176,18 +171,10 @@ struct SubscriptionMenuCard: View {
             HStack(spacing: 9) {
                 PlatformLogo(definition: providerDefinition, size: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(subscription.name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        if let status {
-                            Circle()
-                                .fill(status == .normal ? TM.ok : (status == .warning ? TM.warn : TM.danger))
-                                .frame(width: 6, height: 6)
-                                .accessibilityLabel(status.label)
-                        }
-                    }
+                    Text(subscription.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     Text("\(providerDefinition.metadata.displayName) · \(authMethodTitle)")
                         .font(.system(size: 9))
                         .foregroundStyle(TM.textSecondary)
