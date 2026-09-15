@@ -51,6 +51,16 @@ struct SubscriptionMenuCard: View {
     let onEdit: () -> Void
     var isReordering: Bool = false
 
+    /// 长按判定阈值：按住超过它才切到重置倒计时；短于此仍是单击跳转。
+    static let resetCountdownLongPressDuration: TimeInterval = 0.5
+    /// 长按允许的最大位移：超过即判为拖动（滚动/排序），取消长按。
+    static let resetCountdownLongPressDistance: CGFloat = 10
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 长按态：为真时卡片正文显示额度重置倒计时。
+    @State private var showsResetCountdown = false
+    /// 本次按压是否已触过长按；抬手时的单击手势据此不跳转。
+    @State private var didLongPress = false
     @State private var hovering = false
 
     private var providerDefinition: any ProviderDefinition {
@@ -82,20 +92,63 @@ struct SubscriptionMenuCard: View {
     }
 
     var body: some View {
-        // 排序模式使用非 Button 容器，让原生 List 接管拖放；普通模式仍点击编辑。
+        // 排序模式使用非 Button 容器，让原生 List 接管拖放；普通模式单击编辑、长按切换倒计时。
+        // macOS 上 Button 会吞掉 `onLongPressGesture`，因此这里用 tap + long press 手势自己组合同一次按压。
         Group {
             if isReordering {
                 cardContent
             } else {
-                Button(action: onEdit) { cardContent }
-                    .buttonStyle(.plain)
+                cardContent
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: handleTap)
+                    .onLongPressGesture(
+                        minimumDuration: Self.resetCountdownLongPressDuration,
+                        maximumDistance: Self.resetCountdownLongPressDistance,
+                        perform: beginResetCountdown,
+                        onPressingChanged: handlePressingChange
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { handleTap() }
             }
         }
+        .environment(\.tokenMeterShowsResetCountdown, showsResetCountdown)
         .tmCard(hovering: hovering)
-        .onHover { hovering = $0 }
+        .onHover { hovering in
+            self.hovering = hovering
+            if !hovering { endResetCountdown() }
+        }
         .animation(.easeOut(duration: 0.15), value: hovering)
-        .help(isReordering ? "拖动排序" : "编辑配置")
+        .help(isReordering ? "拖动排序" : "单击编辑配置 · 长按查看额度重置时间")
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// 单击才跳转；长按结束后抬手不跳转。
+    private func handleTap() {
+        guard !didLongPress else { return }
+        onEdit()
+    }
+
+    /// 按住达到阈值：切到重置倒计时视图。
+    private func beginResetCountdown() {
+        didLongPress = true
+        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { showsResetCountdown = true }
+    }
+
+    /// 按压状态回调：`true` 为新一次按下（清掉上一轮的长按标记），`false` 为抬起/取消（还原长按态）。
+    private func handlePressingChange(_ pressing: Bool) {
+        if pressing {
+            didLongPress = false
+            return
+        }
+        endResetCountdown()
+    }
+
+    /// 还原长按态（抬起或指针离开卡片）。**不动 `didLongPress`**：它由下一次按下时才清除，
+    /// 这样同属一次 mouseUp 的单击回调无论先于还是晚于本回调，都能被 `handleTap` 拦下。
+    private func endResetCountdown() {
+        guard showsResetCountdown else { return }
+        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { showsResetCountdown = false }
     }
 
     private var cardContent: some View {

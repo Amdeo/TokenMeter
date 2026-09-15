@@ -69,6 +69,36 @@ struct KimiCompactCardTests {
     }
 
     @Test
+    func longPressSwapsOnlyStatsThatHaveAResetTime() {
+        // 长按期间：有重置时间的数值换成 d/h/m 倒计时，余额没有重置时间则保持原值。
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let kimi = subscription()
+        let snapshot = UsageSnapshot.realtime(
+            subscription: kimi,
+            quotas: [
+                Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: now.addingTimeInterval(11_100), kind: .fiveHour),
+                Quota(name: "每周额度", used: 34, limit: 100, resetAt: now.addingTimeInterval(5 * 86_400), kind: .weekly)
+            ],
+            overallUsageRatio: 0.52, overallResetAt: now.addingTimeInterval(12 * 86_400)
+        )
+
+        let stats = KimiCompactStat.stats(snapshot: snapshot)
+
+        #expect(stats.map { $0.displayValue(showsResetCountdown: true, now: now) } == ["3h5m", "5d", "12d"])
+        #expect(stats.map { $0.displayValue(showsResetCountdown: false, now: now) } == ["62%", "34%", "52%"])
+
+        let balanceSnapshot = UsageSnapshot.realtime(subscription: subscription(authMethod: .apiKey), quotas: [
+            Quota(
+                name: "可用余额", used: 0, limit: 3.5, resetAt: nil,
+                unit: .currency(code: "CNY", scale: 1), kind: .balance
+            )
+        ])
+        let balanceStats = KimiCompactStat.stats(snapshot: balanceSnapshot)
+        #expect(balanceStats.map { $0.displayValue(showsResetCountdown: true, now: now) } == ["CNY 3.50"])
+        #expect(balanceStats.map { $0.displayValue(showsResetCountdown: false, now: now) } == ["CNY 3.50"])
+    }
+
+    @Test
     func monthUsesTheRatioStatusThresholds() {
         // 月数值走共享阈值：≥80% 警告、=100% 用尽。
         let subscription = subscription()

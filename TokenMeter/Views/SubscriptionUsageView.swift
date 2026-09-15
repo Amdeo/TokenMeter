@@ -55,6 +55,20 @@ struct SubscriptionCardPresentation {
         return "\(max(1, Int(seconds / 86400))) 天后\(suffix)"
     }
 
+    /// 重置倒计时紧凑文案（长按态）：d/h/m 三级单位、最多两级。
+    /// "3h5m"、"3h"、"42m"、"5d"；已过期或不足 1 分钟返回 "即将"。now 供测试注入。
+    static func resetCountdownText(for resetAt: Date, now: Date = .now) -> String {
+        let seconds = resetAt.timeIntervalSince(now)
+        guard seconds > 0 else { return "即将" }
+        if seconds < 3_600 { return "\(max(1, Int(seconds / 60)))m" }
+        if seconds < 86_400 {
+            let hours = Int(seconds / 3_600)
+            let minutes = Int(seconds.truncatingRemainder(dividingBy: 3_600) / 60)
+            return minutes == 0 ? "\(hours)h" : "\(hours)h\(minutes)m"
+        }
+        return "\(Int(seconds / 86_400))d"
+    }
+
     /// 顶部摘要委托给供应商 renderer。
     @MainActor
     static func anchor(subscription: Subscription, snapshot: UsageSnapshot) -> Anchor? {
@@ -115,6 +129,19 @@ extension QuotaStatus {
         case .warning: TM.warn
         case .exhausted, .error: TM.danger
         }
+    }
+}
+
+/// 卡片是否处于长按态（显示额度重置倒计时）。由共享外壳 `SubscriptionMenuCard` 注入，
+/// 供应商 renderer 只读——避免为一个纯展示开关改动 `ProviderCardRenderer` 协议及其全部实现。
+private struct ShowsResetCountdownKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var tokenMeterShowsResetCountdown: Bool {
+        get { self[ShowsResetCountdownKey.self] }
+        set { self[ShowsResetCountdownKey.self] = newValue }
     }
 }
 

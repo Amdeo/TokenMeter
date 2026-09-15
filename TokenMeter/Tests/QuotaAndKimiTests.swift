@@ -416,6 +416,21 @@ extension QuotaAndKimiTests {
     }
 
     @Test
+    func subscriptionCardResetCountdownUsesDayHourMinuteUnits() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(90), now: now) == "1m")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(3_599), now: now) == "59m")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(3_600), now: now) == "1h")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(11_100), now: now) == "3h5m")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(86_399), now: now) == "23h59m")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(86_400), now: now) == "1d")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(5 * 86_400), now: now) == "5d")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now, now: now) == "即将")
+        #expect(SubscriptionCardPresentation.resetCountdownText(for: now.addingTimeInterval(-10), now: now) == "即将")
+    }
+
+    @Test
     func subscriptionCardAnchorIsNilForDeepSeekBalance() {
         // DeepSeek 头部不再显示「可用余额」锚点，余额改由正文单行展示。
         let subscription = Subscription(providerID: .deepSeek, name: "DeepSeek", authMethodID: .apiKey)

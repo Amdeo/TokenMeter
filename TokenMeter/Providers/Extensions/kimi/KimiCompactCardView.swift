@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - 紧凑双行卡（Kimi）
 
 /// Kimi 紧凑双行卡：图标在左，右侧上下两行（名称 / 数据），两行合计高度等于图标高度。
-/// 数据行把 5 小时、每周、月（总使用量）挤在同一行，不画进度条、不显示重置时间。
+/// 数据行把 5 小时、每周、月（总使用量）挤在同一行，不画进度条；常态显示百分比，
+/// 长按期间改为额度重置倒计时。
 ///
 /// 通过 `ProviderCardRenderer.makeCard` 接管整卡，因此图标与名称不再由共享外壳绘制；
 /// 字号比标准卡片小一档（名称 12 / 数值 12 / 标签 10），配色与阈值复用共享 helper。
@@ -51,19 +52,25 @@ struct KimiCompactCardView: View {
 // MARK: - 数据行
 
 /// 一行数字：`5h 62%  周 34%  月 52%`（标签 10pt 次要色 + 数值 12pt 半粗等宽）。
-/// 订阅制拿不到窗口时（API Key 形态）退回余额。紧凑卡的第二行与标准外壳下的正文共用它。
+/// 订阅制拿不到窗口时（API Key 形态）退回余额。仅紧凑卡数据行使用。
 struct KimiCompactDataLine: View {
     let subscription: Subscription
     let snapshot: UsageSnapshot
 
+    /// 常态三项间距；长按态数值更长（如 "3h5m"），用更宽的间距避免挤在一起。
+    static let defaultStatSpacing: CGFloat = 10
+    static let countdownStatSpacing: CGFloat = 16
+
+    @Environment(\.tokenMeterShowsResetCountdown) private var showsResetCountdown
+
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: showsResetCountdown ? Self.countdownStatSpacing : Self.defaultStatSpacing) {
             ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
                 HStack(spacing: 3) {
                     Text(stat.label)
                         .font(.system(size: 10))
                         .foregroundStyle(TM.textSecondary)
-                    Text(stat.value)
+                    Text(stat.displayValue(showsResetCountdown: showsResetCountdown))
                         .font(.system(size: 12, weight: .semibold).monospacedDigit())
                         .foregroundStyle(color(for: stat))
                 }
@@ -110,6 +117,14 @@ struct KimiCompactStat {
     let value: String
     let source: Source
     let status: QuotaStatus
+    /// 该数值对应的重置时间；余额等没有重置概念时为 nil。
+    let resetAt: Date?
+
+    /// 长按态展示值：有重置时间就换倒计时（d/h/m），否则保持原值（如余额金额）——不改常态 `value`。
+    func displayValue(showsResetCountdown: Bool, now: Date = .now) -> String {
+        guard showsResetCountdown, let resetAt else { return value }
+        return SubscriptionCardPresentation.resetCountdownText(for: resetAt, now: now)
+    }
 
     /// 数据行内容：5 小时 → 每周 → 月（总使用量）；
     /// 订阅制拿不到窗口时（API Key 形态）退回余额行。
@@ -122,7 +137,8 @@ struct KimiCompactStat {
                     label: label,
                     value: percentText(quota.fraction),
                     source: .quota(quota),
-                    status: quota.status
+                    status: quota.status,
+                    resetAt: quota.resetAt
                 )
             )
         }
@@ -132,7 +148,8 @@ struct KimiCompactStat {
                     label: "月",
                     value: percentText(ratio),
                     source: .overall,
-                    status: SubscriptionCardPresentation.ratioStatus(for: ratio)
+                    status: SubscriptionCardPresentation.ratioStatus(for: ratio),
+                    resetAt: snapshot.overallResetAt
                 )
             )
         }
@@ -142,7 +159,8 @@ struct KimiCompactStat {
                     label: "余额",
                     value: balance.remainingText,
                     source: .quota(balance),
-                    status: balance.status
+                    status: balance.status,
+                    resetAt: nil
                 )
             )
         }
