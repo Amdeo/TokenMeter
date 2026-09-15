@@ -70,6 +70,23 @@ struct ProgressColorSettingsTests {
     }
 
     @Test
+    func compactStyleKeepsBalanceCardsOnTheBalanceRow() {
+        // 紧凑汇总条用窄判定（样式 + renderer 的进度条能力）：余额型 renderer 只有 `.balanceValues`，
+        // 不得被改画成 used/limit 的假进度条；颜色入口仍可用，两个判定故意不同。
+        let compact = SubscriptionCardStyle.compact.capabilities
+        #expect(!SubscriptionCardCapabilities.renderProgressMeters(
+            style: compact, renderer: BalanceCardRenderer().capabilities
+        ))
+        #expect(SubscriptionCardCapabilities.renderProgressMeters(
+            style: compact, renderer: KimiCardRenderer().capabilities
+        ))
+        #expect(SubscriptionCardCapabilities.renderProgressMeters(
+            style: compact, renderer: QuotaListCardRenderer().capabilities
+        ))
+        #expect(QuotaColorSettings.isAvailable(style: .compact, providerID: .deepSeek))
+    }
+
+    @Test
     func balanceCardOffersBalanceColorsWithoutProgressTargets() {
         let balance = Quota(
             name: "API 余额", used: 81.58, limit: 100, resetAt: nil,
@@ -78,9 +95,9 @@ struct ProgressColorSettingsTests {
 
         let targets = QuotaColorSettings.targets(style: .standard, providerID: .deepSeek, quotas: [balance])
 
-        // 余额型卡片没有进度条：只有逐条余额目标（"默认颜色"属于进度条目标组），没有 overall 或窗口目标。
+        // 余额型卡片没有进度条：逐条余额目标 + 对所有未单独配置数值生效的「默认颜色」兜底行。
         #expect(QuotaColorSettings.isAvailable(style: .standard, providerID: .deepSeek))
-        #expect(targets.map(\.key) == [SubscriptionQuotaColors.nameKey("API 余额")])
+        #expect(targets.map(\.key) == [SubscriptionQuotaColors.nameKey("API 余额"), SubscriptionQuotaColors.genericKey])
         #expect(targets.first?.kind == .balance)
         #expect(targets.first?.name == "API 余额")
         #expect(targets.first?.previewText == "CNY 18.42")
@@ -91,7 +108,7 @@ struct ProgressColorSettingsTests {
         // 新建订阅没有快照：给一个语义键兜底目标，编辑时也能先配好颜色。
         let targets = QuotaColorSettings.targets(style: .standard, providerID: .deepSeek, quotas: [])
 
-        #expect(targets.map(\.key) == [SubscriptionQuotaColors.balanceKey])
+        #expect(targets.map(\.key) == [SubscriptionQuotaColors.balanceKey, SubscriptionQuotaColors.genericKey])
         #expect(targets.first?.label == "余额数值")
         #expect(targets.first?.name == nil)
         #expect(targets.first?.kind == .balance)
