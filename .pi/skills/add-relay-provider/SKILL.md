@@ -104,7 +104,7 @@ playwright-cli -s=relay detach
 | 2 | 行内时间信息 | N 天后刷新额度 / 剩 N 天到期 / 状态词「正常」/ 都不显示 |
 | 3 | 数值口径 | 百分比 / 金额 / 百分比 + 金额 |
 | 4 | 配色来源 | 平台 tint / 状态色（绿 <80%、橙 ≥80%、红 =100%）/ 按额度名自定义 |
-| 5 | 进度表现 | 进度条 / 圆点比例 / 纯数值（不要条） |
+| 5 | 进度表现 | 进度条 / 圆点比例 / 纯数值（不要条）/ 单行内联多窗口（所有窗口挤一行） |
 
 每题的推荐项按探测结果给（例如只有余额接口 → 锚点默认「不显示」、口径默认「金额」）。
 
@@ -119,10 +119,10 @@ cp .pi/skills/add-relay-provider/scripts/card-preview.html /tmp/tokenmeter-card-
 它按 `TM` 令牌与真实 SwiftUI 尺寸写死：340pt 面板 / 卡片圆角 14 / 内边距 11 / 条高 4 / 字号 13·11·10·9。
 
 - `site`：`name` / `subtitle`（`显示名 · 认证方式标题`）/ `icon` / `tint` / `status`（余额偏低 `warning`、用尽 `danger`）
-- `variants`：模板自带 11 套——**有条**（① 余额 ② 额度列表 ③ 混合 ④ 订阅分段 ⑤ 总用量锚点）、
+- `variants`：模板自带 12 套——**有条**（① 余额 ② 额度列表 ③ 混合 ④ 订阅分段 ⑤ 总用量锚点）、
   **无条**（⑥ 纯数值行 ⑦ 数值 + 时间提示 ⑧ 单行紧凑表 ⑨ 圆点比例 ⑩ 数值 + 状态徽标）、
-  **精简头部**（⑪ 去掉副标题行）；
-  探测做不到的直接删——最终留 3-6 套给用户挑，别把 11 套全堆上去
+  **精简头部**（⑪ 去掉副标题行）、**单行内联**（⑫ 所有窗口挤一行 + 标题后套餐标签）；
+  探测做不到的直接删——最终留 3-6 套给用户挑，别把 12 套全堆上去
 - 数值一律填**真实探测到的数据**，不要占位符；行类型只有三种：
   `balance{title,value}` / `progress{title,value,percent,state,hints}` / `group{title,hint}`
 - `progress` 行的表现力全靠这几个可选字段，用户想要哪种就选哪个：
@@ -162,6 +162,10 @@ bash .pi/skills/add-relay-provider/scripts/preview.sh /tmp/tokenmeter-card-previ
 | ⑤ 总用量锚点卡 | 照抄 `Extensions/kimi/KimiCardRenderer.swift` |
 | ⑥⑦⑧⑩ 无条数值行 | `BalanceMenuRow`（无提示行时够用）或在 provider 目录里写一个只输出数值的行视图 |
 | ⑨ 圆点比例 | provider 目录里自带行视图，把 `MeterBar` 换成一排 6pt 圆点 |
+| ⑫ 单行内联多窗口 | provider 目录里自带单行行视图：`HStack` 装多组「标签 11pt `textSecondary` + 数值 13pt semibold 等宽」；`stats` 里的标签/数值都要来自真实接口字段 |
+
+⑫ 的头部套餐标签（`名称 | Plus`）取决于接口有没有套餐名字段（如 `plan_title`）：
+放**标题行**要改共享 metadata（同 ⑪ 的路径，先问）；只想不动共享文件，就把标签放在正文行里（provider 自己的 renderer 就能做）。
 
 **「去掉副标题行」（⑪）需要改共享文件，必须先问**：那行 `显示名 · 认证方式标题` 是共享卡片视图硬编码的——
 `Views/SubscriptionMenuCard.swift` 里的 `Text("\(providerDefinition.metadata.displayName) · \(authMethodTitle)")`，

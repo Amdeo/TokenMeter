@@ -54,6 +54,18 @@
   }
   .hud button[aria-pressed="true"] { background:rgba(255,255,255,.22); }
 
+  /* 单行内联统计（⑫）：多个窗口挤一行，无进度条、无时间提示 */
+  .stats { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  .stats .stat { display:flex; align-items:baseline; gap:4px; }
+  .stats .stat-label { font-size:11px; color:var(--text-secondary); }
+  .stats .stat-value {
+    font-size:13px; font-weight:600; color:var(--text-primary);
+    font-variant-numeric:tabular-nums;
+  }
+  /* 标题后的套餐标签：名称 | Plus */
+  .plan-divider { font-size:12px; color:var(--text-tertiary); }
+  .plan-tag { font-size:12px; font-weight:600; white-space:nowrap; }
+
   /* ===== 舞台：每套卡片一个 340pt 真面板 ===== */
   .stages { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; }
   .stage { display:flex; flex-direction:column; gap:7px; flex:0 0 auto; }
@@ -159,6 +171,8 @@
               group    分段头      { title, hint? }（后面紧跟该分段的 progress 行）
      anchor   顶部锚点 { label, value, color? }；不需要锚点就写 null
      hideSubtitle: true  → 这一套不画头部副标题行（「显示名 · 网页登录态」），名称与 30pt 图标垂直居中
+     planTag  { text, tint? } → 标题后接「| 套餐名」标签（如 Plus），颜色跟随 tint
+     stats    [{ label, value, tint? }] → 用单行内联统计代替 body（多窗口挤一行，无条无时间）
      tint     行/条颜色：写平台色（#RRGGBB）或用 'ok' / 'warn' / 'danger' 引用状态色
    ========================================================================================== */
 window.CARD_DATA = {
@@ -280,6 +294,17 @@ window.CARD_DATA = {
         { type: "progress", title: "每周窗口", percent: 0.34, value: "34.0%", tint: "#2DD4BF",
           state: "正常", hints: ["2 天后刷新额度"] }
       ]
+    },
+    {
+      key: "inline", title: "⑫ 单行内联多窗口",
+      note: "所有窗口挤一行 + 标题后金色套餐标签",
+      hideSubtitle: true,
+      planTag: { text: "Plus", tint: "#E0A33E" },
+      stats: [
+        { label: "5h", value: "62%" },
+        { label: "周", value: "34%" },
+        { label: "月", value: "72%", tint: "warn" }
+      ]
     }
   ]
 };
@@ -366,16 +391,30 @@ function renderVariant(variant, site) {
   // 副标题行（显示名 · 认证方式）：工具栏总开关 关掉，或这一套自己声明 hideSubtitle。
   // SwiftUI 侧 HStack 默认垂直居中，所以隐藏副标题后图标与名称要居中对齐。
   const showSubtitle = variant.hideSubtitle !== true && !hideAllSubtitles;
-  const groups = variant.body.some((row) => row.type === "group");
+  const groups = (variant.body ?? []).some((row) => row.type === "group");
+  const planTag = variant.planTag
+    ? [
+        el("span", { class: "plan-divider", text: "|" }),
+        el("span", { class: "plan-tag", style: { color: color(variant.planTag.tint, "var(--text-primary)") }, text: variant.planTag.text ?? "" })
+      ]
+    : [];
+  // stats：多个窗口挤一行的内联形态（无条、无时间提示）
+  const body = variant.stats
+    ? el("div", { class: "stats" }, variant.stats.map((stat) =>
+        el("span", { class: "stat" },
+          el("span", { class: "stat-label", text: stat.label ?? "" }),
+          el("span", { class: "stat-value", style: { color: color(stat.tint, "var(--text-primary)") }, text: stat.value ?? "" }))))
+    : el("div", { class: "body", style: { gap: groups ? "12px" : "8px" } }, variant.body.map(renderRow));
   const card = el("div", { class: "card", style: { "--tint": site.tint || "#2DD4BF" } },
     el("div", { class: "head", style: { alignItems: showSubtitle ? "flex-start" : "center" } }, logo,
       el("div", { class: "titles" },
         el("div", { class: "name-line" },
           el("span", { class: "name", text: site.name ?? "" }),
+          ...planTag,
           el("span", { class: "dot", style: { background: STATUS[site.status] || STATUS.normal } })),
         showSubtitle ? el("div", { class: "sub", text: site.subtitle ?? "" }) : null),
       anchor),
-    el("div", { class: "body", style: { gap: groups ? "12px" : "8px" } }, variant.body.map(renderRow)));
+    body);
   return el("div", { class: "stage", "data-variant": variant.key },
     el("div", { class: "caption" },
       el("b", { text: variant.title ?? "" }),
