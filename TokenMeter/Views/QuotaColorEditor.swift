@@ -106,7 +106,7 @@ struct AppearanceEntryRow: View {
 
 // MARK: - 外观二级页
 
-/// 从订阅编辑流程进入的外观页：卡片样式、配色与预览三类改动共用同一份
+/// 从订阅编辑流程进入的外观页：卡片样式与配色两类改动共用同一份
 /// `SubscriptionEditorDraft`，返回后仍在编辑页，保存订阅时才落盘。
 struct SubscriptionAppearancePage: View {
     @Environment(UsageStore.self) private var store
@@ -149,18 +149,11 @@ struct SubscriptionAppearancePage: View {
         draft.original.flatMap { store.snapshots[$0.id] }
     }
 
-    /// 外观页两块预览的共同数据源：有真实快照时顶部预览与样式轮播都用它，
-    /// 同一个页面里不会看到互相矛盾的两种卡片；颜色目标也从这里取，
+    /// 样式轮播预览的数据源：有真实快照时用它，颜色目标也从这里取，
     /// 非实时快照回退示例额度，行名与预览一致。
     private var realtimePreview: (subscription: Subscription, snapshot: UsageSnapshot)? {
         guard let snapshot, snapshot.state == .realtime else { return nil }
         return (previewSubscription, snapshot)
-    }
-
-    /// 有真实数据就用真实卡片，否则用 renderer 的示例快照（形态与该供应商真实卡片一致）。
-    private var previewSnapshot: UsageSnapshot {
-        realtimePreview?.snapshot
-            ?? providerDefinition.cardRenderer.sampleSnapshot(subscription: previewSubscription)
     }
 
     private var previewName: String {
@@ -178,17 +171,13 @@ struct SubscriptionAppearancePage: View {
             )
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    AppearanceSection(title: "预览") {
-                        SubscriptionMenuCard(subscription: previewSubscription, snapshot: previewSnapshot, onEdit: {})
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
                     AppearanceSection(title: "卡片样式", subtitle: "左右滑动预览，点按卡片或圆点选择。") {
                         CardStyleCarouselPicker(
                             selection: $draft.cardStyle,
                             providerID: draft.providerID,
                             displayName: previewName,
-                            realPreview: realtimePreview
+                            realPreview: realtimePreview,
+                            quotaColors: draft.quotaColors
                         )
                     }
                     AppearanceSection(title: "颜色") {
@@ -236,7 +225,7 @@ private struct AppearanceSection<Content: View>: View {
 // MARK: - 卡片样式轮播选择器
 
 /// 横向分页轮播：每页渲染一张真实 `SubscriptionMenuCard` 预览，滑动/点按切换草稿的卡片样式。
-/// 有真实快照时用它，没有时用当前供应商 renderer 的示例额度，与顶部预览同一来源。
+/// 有真实快照时用它，没有时用当前供应商 renderer 的示例额度。
 /// 预览不读写任何真实订阅数据（真实快照只读）。
 struct CardStyleCarouselPicker: View {
     @Binding var selection: SubscriptionCardStyle
@@ -244,6 +233,8 @@ struct CardStyleCarouselPicker: View {
     let displayName: String
     /// 真实快照（编辑已有订阅且已抓到数据）；nil 时用 renderer 的示例快照。
     var realPreview: (subscription: Subscription, snapshot: UsageSnapshot)?
+    /// 草稿配色调色板：轮播卡按各自样式取色，保证「颜色」分区的修改实时生效。
+    let quotaColors: SubscriptionQuotaPalette
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleID: String?
@@ -269,12 +260,6 @@ struct CardStyleCarouselPicker: View {
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: $visibleID)
             .scrollIndicators(.hidden)
-            .frame(height: 190)
-            .background(TM.fieldFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(TM.border, lineWidth: 1)
-            )
 
             Text(selection.title)
                 .font(.system(size: 11, weight: .semibold))
@@ -312,9 +297,10 @@ struct CardStyleCarouselPicker: View {
         selection = style
     }
 
-    /// 预览卡：有真实快照时与顶部预览共用同一份订阅与数据（订阅标识因此一致）；
+    /// 预览卡：有真实快照时用真实订阅与数据；
     /// 否则用当前供应商 renderer 的示例快照，认证方式取该供应商的非 API Key 形态
     /// （订阅制最完整），否则用默认项。
+    /// 配色一律取自草稿调色板，卡片按自身样式取色。
     private func previewCard(for style: SubscriptionCardStyle) -> some View {
         var subscription = realPreview?.subscription
             ?? Subscription(
@@ -322,8 +308,9 @@ struct CardStyleCarouselPicker: View {
                 name: displayName,
                 authMethodID: Self.previewAuthMethod(for: providerID)
             )
-        // 轮播每页只改样式，其余字段与顶部预览保持一致。
+        // 轮播每页只改样式，其余字段保持一致。
         subscription.cardStyle = style
+        subscription.quotaColors = quotaColors
         let snapshot = realPreview?.snapshot
             ?? providerDefinition.cardRenderer.sampleSnapshot(subscription: subscription)
         return SubscriptionMenuCard(subscription: subscription, snapshot: snapshot) {
