@@ -12,13 +12,16 @@ struct KimiCardRenderer: ProviderCardRenderer {
     var supportedStyles: Set<SubscriptionCardStyle> { [.standard, .compact] }
 
     /// 仅在紧凑样式下接管整卡（图标与名称/数据同排，共享外壳的头部不参与）。
+    /// 数据行没有内容时（既无窗口也无余额）退回标准外壳，避免只剩图标与名称的空卡。
     func makeCard(
         definition: any ProviderDefinition,
         subscription: Subscription,
         snapshot: UsageSnapshot
     ) -> AnyView? {
         guard subscription.cardStyle == .compact else { return nil }
-        return AnyView(KimiCompactCardView(definition: definition, subscription: subscription, snapshot: snapshot))
+        let stats = KimiCompactStats.stats(snapshot: snapshot)
+        guard !stats.isEmpty else { return nil }
+        return AnyView(CompactUsageCard(definition: definition, subscription: subscription, stats: stats))
     }
 
     /// 订阅制的窗口额度；余额、加油包等不进入正文。

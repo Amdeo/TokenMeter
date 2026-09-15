@@ -38,4 +38,53 @@ struct OpenCodeGoTests {
         #expect(anchor.label == "每月窗口 · 9 天后重置")
         #expect(anchor.value == 0.35.formatted(.percent.precision(.fractionLength(0))))
     }
+
+    @Test
+    func compactStyleTakesOverTheWholeCard() {
+        let renderer = OpenCodeGoCardRenderer()
+        let definition = OpenCodeGoProviderDefinition()
+        let subscription = Subscription(providerID: .openCodeGo, name: "OpenCode Go", authMethodID: .apiKey)
+        let snapshot = renderer.sampleSnapshot(subscription: subscription)
+        var compact = subscription
+        compact.cardStyle = .compact
+
+        #expect(renderer.supportedStyles == [.standard, .compact])
+        #expect(renderer.makeCard(definition: definition, subscription: compact, snapshot: snapshot) != nil)
+        // 标准样式仍由共享外壳画头部 + 进度条正文。
+        #expect(renderer.makeCard(definition: definition, subscription: subscription, snapshot: snapshot) == nil)
+        // 紧凑样式只画数值不画条，但额度数值仍按订阅配色渲染，颜色目标必须还在。
+        #expect(QuotaColorSettings.isAvailable(style: .compact, providerID: .openCodeGo))
+    }
+
+    @Test
+    func compactDataLineShowsTheParsedWindows() {
+        // 数据行取真实解析出的窗口名；百分比取整（标准卡片行内是 1 位小数）。
+        let subscription = Subscription(providerID: .openCodeGo, name: "OpenCode Go", authMethodID: .apiKey)
+        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(name: "5 小时窗口", used: 62, limit: 100, resetAt: .now.addingTimeInterval(3_600)),
+            Quota(name: "每周窗口", used: 34, limit: 100, resetAt: .now.addingTimeInterval(86_400)),
+            Quota(name: "每月窗口", used: 52, limit: 100, resetAt: .now.addingTimeInterval(9 * 86_400))
+        ])
+
+        let stats = OpenCodeGoCardRenderer.stats(snapshot: snapshot)
+
+        #expect(stats.map(\.label) == ["5h", "周", "月"])
+        #expect(stats.map(\.value) == ["62%", "34%", "52%"])
+        #expect(stats.map(\.status) == [.normal, .normal, .normal])
+    }
+
+    @Test
+    func compactDataLineSkipsWindowsTheResponseDidNotReturn() {
+        // 接口可能只返回部分窗口：缺哪个就少哪一项，标签顺序不变。
+        let subscription = Subscription(providerID: .openCodeGo, name: "OpenCode Go", authMethodID: .apiKey)
+        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(name: "5 小时窗口", used: 18, limit: 100, resetAt: nil),
+            Quota(name: "每月窗口", used: 96, limit: 100, resetAt: nil)
+        ])
+
+        let stats = OpenCodeGoCardRenderer.stats(snapshot: snapshot)
+
+        #expect(stats.map(\.label) == ["5h", "月"])
+        #expect(stats.map(\.status) == [.normal, .warning])
+    }
 }

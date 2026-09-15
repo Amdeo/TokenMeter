@@ -43,7 +43,7 @@ struct KimiCompactCardTests {
             overallUsageRatio: 0.52, overallResetAt: .now.addingTimeInterval(86400 * 5)
         )
 
-        let stats = KimiCompactStat.stats(snapshot: snapshot)
+        let stats = KimiCompactStats.stats(snapshot: snapshot)
 
         #expect(stats.map(\.label) == ["5h", "周", "月"])
         // 紧凑行取整（标准卡片行内是 1 位小数）。
@@ -62,7 +62,7 @@ struct KimiCompactCardTests {
             )
         ])
 
-        let stats = KimiCompactStat.stats(snapshot: snapshot)
+        let stats = KimiCompactStats.stats(snapshot: snapshot)
 
         #expect(stats.map(\.label) == ["余额"])
         #expect(stats.map(\.value) == ["CNY 3.50"])
@@ -82,7 +82,7 @@ struct KimiCompactCardTests {
             overallUsageRatio: 0.52, overallResetAt: now.addingTimeInterval(12 * 86_400)
         )
 
-        let stats = KimiCompactStat.stats(snapshot: snapshot)
+        let stats = KimiCompactStats.stats(snapshot: snapshot)
 
         #expect(stats.map { $0.displayValue(showsResetCountdown: true, now: now) } == ["3h5m", "5d", "12d"])
         #expect(stats.map { $0.displayValue(showsResetCountdown: false, now: now) } == ["62%", "34%", "52%"])
@@ -93,7 +93,7 @@ struct KimiCompactCardTests {
                 unit: .currency(code: "CNY", scale: 1), kind: .balance
             )
         ])
-        let balanceStats = KimiCompactStat.stats(snapshot: balanceSnapshot)
+        let balanceStats = KimiCompactStats.stats(snapshot: balanceSnapshot)
         #expect(balanceStats.map { $0.displayValue(showsResetCountdown: true, now: now) } == ["CNY 3.50"])
         #expect(balanceStats.map { $0.displayValue(showsResetCountdown: false, now: now) } == ["CNY 3.50"])
     }
@@ -104,7 +104,7 @@ struct KimiCompactCardTests {
         let subscription = subscription()
         func monthStatus(_ ratio: Double) -> QuotaStatus {
             let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [], overallUsageRatio: ratio)
-            return KimiCompactStat.stats(snapshot: snapshot).first { $0.label == "月" }?.status ?? .error
+            return KimiCompactStats.stats(snapshot: snapshot).first { $0.label == "月" }?.status ?? .error
         }
 
         #expect(monthStatus(0.79) == .normal)

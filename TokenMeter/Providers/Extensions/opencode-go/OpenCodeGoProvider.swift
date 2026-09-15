@@ -31,7 +31,7 @@ struct OpenCodeGoProviderDefinition: ProviderDefinition {
         [AuthMethodDefinition(id: .apiKey, flowID: .apiKey, title: "手动 API Key", systemImage: "key.fill", detail: "适用于所有平台")]
     }
 
-    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer(anchorHint: "月") }
+    @MainActor var cardRenderer: any ProviderCardRenderer { OpenCodeGoCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         OpenCodeGoUsageProvider(subscription: subscription)
@@ -42,6 +42,41 @@ struct OpenCodeGoProviderDefinition: ProviderDefinition {
 // MARK: - 用量提供者
 
 struct OpenCodeGoUsageProvider: UsageProvider {
+    /// 用量窗口：接口字段别名 → 额度行显示名 + 紧凑卡短标签。
+    /// 一处定义，解析侧与卡片侧不再各写一份窗口字符串。
+    enum UsageWindow: String, CaseIterable {
+        case rolling
+        case weekly
+        case monthly
+
+        /// 接口里该窗口的字段名，按命中优先级排列。
+        var aliases: [String] {
+            switch self {
+            case .rolling: ["rolling", "5h", "5_hour", "five_hour", "five_hours", "fivehour"]
+            case .weekly: ["weekly", "week"]
+            case .monthly: ["monthly", "month"]
+            }
+        }
+
+        /// 额度行显示名（标准卡片与顶部锚点用）。
+        var quotaName: String {
+            switch self {
+            case .rolling: "5 小时窗口"
+            case .weekly: "每周窗口"
+            case .monthly: "每月窗口"
+            }
+        }
+
+        /// 紧凑卡数据行的短标签：与标准卡片的三个窗口一一对应。
+        var compactLabel: String {
+            switch self {
+            case .rolling: "5h"
+            case .weekly: "周"
+            case .monthly: "月"
+            }
+        }
+    }
+
     let subscription: Subscription
     private let credentials = CredentialStore()
 
@@ -54,13 +89,9 @@ struct OpenCodeGoUsageProvider: UsageProvider {
             providerID: subscription.providerID,
             authorization: "Bearer \(key)"
         )
-        let windows = [
-            ("5 小时窗口", ["rolling", "5h", "5_hour", "five_hour", "five_hours", "fivehour"]),
-            ("每周窗口", ["weekly", "week"]),
-            ("每月窗口", ["monthly", "month"])
-        ].compactMap { name, aliases -> Quota? in
-            guard let value = response.findObject(for: aliases) else { return nil }
-            return try? Self.quota(fromWindow: name, object: value)
+        let windows = UsageWindow.allCases.compactMap { window -> Quota? in
+            guard let value = response.findObject(for: window.aliases) else { return nil }
+            return try? Self.quota(fromWindow: window.quotaName, object: value)
         }
         guard !windows.isEmpty else {
             throw UsageProviderError.invalidResponse(subscription.providerID, "OpenCode Go 返回中未找到可可靠解析的用量窗口")

@@ -40,6 +40,7 @@ Providers/
 │   ├── EmbeddedWebLoginController.swift 内置浏览器登录窗口
 │   ├── BrowserSessionRefresher.swift `/auth/refresh` 续期实现
 │   ├── JWT.swift                token 过期时间解析
+│   ├── CompactUsageCard.swift   紧凑样式的共享整卡呈现（图标 + 名称/数据两行）
 │   └── RelayBalanceProvider.swift  余额型中转站的通用定义
 └── Extensions/                  ← 唯一扩展点（Xcode 文件系统同步组，新增文件零登记）
     ├── ProviderCatalog.swift    唯一手写清单：一行一个供应商
@@ -238,6 +239,21 @@ extension RelayBalanceProviderDefinition {
 （参考 `Extensions/kimi/KimiCardRenderer.swift`、`Extensions/siyu/SiyuCardRenderer.swift`），
 把文件放在该供应商自己的文件夹里，并在定义中替换 `cardRenderer`。
 自定义卡片可通过 `snapshot.providerData`（Codable JSON 值树）读取自己命名空间的字段。
+
+卡片样式（`SubscriptionCardStyle`）由 renderer 声明自己能画哪些：
+`supportedStyles` 默认只有 `.standard`，样式选择器只列声明过的样式。
+
+紧凑样式（`.compact`）的布局是共享的，实现在 `Providers/Common/CompactUsageCard.swift`
+（图标 + 名称/数据两行、长按倒计时、配色解析都在那里）。供应商只需要两件事：
+
+1. `supportedStyles` 加上 `.compact`，并在 `makeCard` 里返回
+   `CompactUsageCard(definition:subscription:stats:)`（非紧凑样式返回 nil）；
+2. 组装数据行内容 `[CompactUsageStat]`——放哪几项、短标签叫什么由供应商决定
+   （Kimi 见 `Extensions/kimi/KimiCompactStats.swift`，OpenCode Go 见
+   `Extensions/opencode-go/OpenCodeGoCardRenderer.swift`）。
+
+紧凑样式不画进度条，因此 renderer 的 `capabilities` 还要声明 `.quotaValues`，
+否则该样式下额度颜色目标会整块消失。
 
 ## 测试要求
 

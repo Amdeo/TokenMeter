@@ -35,8 +35,9 @@ struct ProgressColorSettingsTests {
         #expect(QuotaListCardRenderer().capabilities.contains(.progressMeters))
         #expect(SiyuCardRenderer().capabilities.contains(.progressMeters))
         #expect(NowCodingCardRenderer().capabilities.contains(.progressMeters))
-        // Kimi 的标准样式画进度条（紧凑样式不画，由样式那一侧声明）。
+        // Kimi 与 OpenCode Go 的标准样式画进度条（紧凑样式不画，由样式那一侧声明）。
         #expect(KimiCardRenderer().capabilities.contains(.progressMeters))
+        #expect(OpenCodeGoCardRenderer().capabilities.contains(.progressMeters))
         // 余额型与降级卡片只有一行文本，没有进度条。
         #expect(!BalanceCardRenderer().capabilities.contains(.progressMeters))
         #expect(!UnsupportedCardRenderer().capabilities.contains(.progressMeters))
@@ -57,8 +58,9 @@ struct ProgressColorSettingsTests {
 
     @Test
     func onlyRenderersThatImplementAStyleAdvertiseIt() {
-        // 样式选择器只列 renderer 自己支持的样式：Kimi 两套，其他供应商暂时只有标准。
+        // 样式选择器只列 renderer 自己支持的样式：Kimi 与 OpenCode Go 两套，其他供应商暂时只有标准。
         #expect(KimiCardRenderer().supportedStyles == [.standard, .compact])
+        #expect(OpenCodeGoCardRenderer().supportedStyles == [.standard, .compact])
         #expect(QuotaListCardRenderer().supportedStyles == [.standard])
         #expect(NowCodingCardRenderer().supportedStyles == [.standard])
     }
