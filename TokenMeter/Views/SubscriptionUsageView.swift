@@ -121,7 +121,7 @@ extension QuotaStatus {
 // MARK: - 卡片顶部摘要
 
 extension CardSummary {
-    /// 用量百分比摘要（顶部锚点）：颜色沿配置解析链回退到状态色。
+    /// 用量百分比摘要（顶部锚点）：数值默认即「已用」，标签不再重复；颜色沿配置解析链回退到状态色。
     /// `showsResetHint` 供重置时间拿不到正文行的卡片使用（该额度行已被锚点从正文排除）。
     @MainActor
     static func usage(_ quota: Quota, subscription: Subscription, showsResetHint: Bool = false) -> CardSummary {
@@ -130,7 +130,7 @@ extension CardSummary {
             ? quota.resetAt.map { SubscriptionCardPresentation.resetHintText(for: $0, suffix: "重置") }
             : nil
         return CardSummary(
-            label: resetHint.map { "\(quota.name) · 已用 · \($0)" } ?? "\(quota.name) · 已用",
+            label: resetHint.map { "\(quota.name) · \($0)" } ?? quota.name,
             value: percent,
             accessibilityLabel: resetHint.map { "\(quota.name)，已用 \(percent)，\($0)" } ?? "\(quota.name)，已用 \(percent)",
             colorRGB: anchorColor(for: quota, subscription: subscription)

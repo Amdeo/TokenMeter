@@ -35,7 +35,7 @@ struct OpenCodeGoTests {
 
         let anchor = try #require(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot))
 
-        #expect(anchor.label == "每月窗口 · 已用 · 9 天后重置")
+        #expect(anchor.label == "每月窗口 · 9 天后重置")
         #expect(anchor.value == 0.35.formatted(.percent.precision(.fractionLength(0))))
     }
 }
