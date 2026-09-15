@@ -597,7 +597,7 @@ private struct DashboardHeader: View {
                 )
             }
 
-            HeaderIconButton(systemName: "power", label: "退出 TokenMeter", tint: TM.danger, action: onQuit)
+            HeaderIconButton(systemName: "power", label: "退出 TokenMeter", tint: .red, action: onQuit)
         }
     }
 }
