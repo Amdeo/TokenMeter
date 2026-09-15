@@ -60,15 +60,21 @@ final class PanelNavigationState {
     var route: Route = .overview {
         didSet {
             guard route != oldValue else { return }
-            if let manualHeight = manualHeight(for: route) {
-                panelSize = PanelSize(width: PanelSize.compact.width, height: manualHeight)
-            }
+            // 切页立刻用上目标页记住的高度（手动高度优先，其次它上次的测量值）。
+            // 如果等新页面报出测量值再改，两次更新之间原生窗口与 SwiftUI 根视图会不同高，
+            // 内容被居中裁掉首尾，顶部的返回按钮既看不到也点不到。
+            let adopted = size(for: route)
+            guard adopted != panelSize else { return }
+            panelSize = adopted
         }
     }
     var draft: SubscriptionEditorDraft?
     private(set) var panelSize = PanelSize.compact
+    /// 当前屏幕可视区允许的面板高度上限；由窗口控制器按锚定屏幕设置。
+    /// 只是显示上限：既不写回 `panelSize`，也不影响用户保存的手动高度。
+    private(set) var maximumVisibleHeight: Double?
     private var manualHeights: [HeightRoute: Double] = [:]
-    /// 每个路由最近一次量到的高度：弹出面板时按当前路由取，不借用其它页面的尺寸
+    /// 每个路由最后量到的高度：切页与弹出面板都按当前路由取，不借用其它页面的尺寸
     /// （否则内容比窗口高时 SwiftUI 根视图会被居中，上下两端一起被裁）。
     private var measuredHeights: [Route: Double] = [:]
     private let defaults: UserDefaults
@@ -90,14 +96,37 @@ final class PanelNavigationState {
     func reportMeasuredHeight(_ height: CGFloat, for measuredRoute: Route) {
         guard measuredRoute == route, height.isFinite else { return }
         let clamped = Self.clampedHeight(Double(height))
+        // 被屏幕限高时窗口比期望高度矮，此时量到的高度正好等于窗口高度，说明它是被裁出来的，
+        // 不是内容的自适应高度；采纳它会让屏幕恢复后高度回不来。
+        guard !isHeightLimitedByScreen
+            || abs(clamped - displayedSize.height) >= PanelSize.measurementTolerance else { return }
         measuredHeights[measuredRoute] = clamped
         guard manualHeight(for: measuredRoute) == nil else { return }
         guard abs(clamped - panelSize.height) >= PanelSize.measurementTolerance else { return }
         panelSize = PanelSize(width: PanelSize.compact.width, height: clamped)
     }
 
-    /// 弹出面板时的目标尺寸：取当前路由记住的高度；没有记录时沿用当前尺寸，
-    /// 内容随后报出的测量值会把它校准。
+    /// 面板实际显示的高度：高过屏幕可视区时窗口顶部会跑到屏幕上沿之外
+    /// （返回按钮跟着消失），所以窗口与 SwiftUI 根视图都按它收缩。
+    var displayedSize: PanelSize {
+        guard let maximumVisibleHeight else { return panelSize }
+        return PanelSize(width: panelSize.width, height: min(panelSize.height, maximumVisibleHeight))
+    }
+
+    /// 屏幕限高是否正在生效：窗口比期望高度矮，页面拿到的高度也被压缩。
+    var isHeightLimitedByScreen: Bool {
+        guard let maximumVisibleHeight else { return false }
+        return maximumVisibleHeight < panelSize.height - PanelSize.measurementTolerance
+    }
+
+    func setMaximumVisibleHeight(_ height: Double?) {
+        let resolved = height.flatMap { $0.isFinite ? max($0, 0) : nil }
+        guard resolved != maximumVisibleHeight else { return }
+        maximumVisibleHeight = resolved
+    }
+
+    /// 某个路由的目标尺寸：手动高度优先，其次它上次的测量值；都没有就沿用当前尺寸，
+    /// 内容随后报出的测量值会把它校准。切页与弹出面板都走它。
     func size(for route: Route) -> PanelSize {
         if let manualHeight = manualHeight(for: route) {
             return PanelSize(width: PanelSize.compact.width, height: manualHeight)

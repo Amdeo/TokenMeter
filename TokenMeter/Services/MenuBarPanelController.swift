@@ -192,14 +192,12 @@ final class MenuBarPanelController: NSObject {
     private var screenObserver: NSObjectProtocol?
     private var applicationResignObserver: NSObjectProtocol?
     private var secondaryClickMonitor: Any?
-    private var panelSize: PanelSize
     private var visibilityGate = PanelVisibilityGate()
     private var isStarted = false
 
     init(store: UsageStore, navigation: PanelNavigationState) {
         self.store = store
         self.navigation = navigation
-        self.panelSize = navigation.panelSize
         self.panel = MenuBarPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -228,14 +226,15 @@ final class MenuBarPanelController: NSObject {
             button.setAccessibilityLabel("TokenMeter")
         }
         self.statusItem = statusItem
-        if let frame = frame(for: panelSize) {
+        updateVisibleHeightLimit()
+        if let frame = frame(for: navigation.displayedSize) {
             panel.setFrame(frame, display: false)
         }
 
         let rootView = AnyView(
             MenuBarView(
-                onPanelSizeChange: { [weak self] size in
-                    self?.updatePanelSize(size)
+                onPanelSizeChange: { [weak self] _ in
+                    self?.refreshPanelGeometry()
                 },
                 onReorderModeChange: { [weak self] reordering in
                     self?.panel.isReordering = reordering
@@ -244,12 +243,9 @@ final class MenuBarPanelController: NSObject {
             .environment(store)
             .environment(navigation)
         )
-        let container = NSView(frame: NSRect(origin: .zero, size: panel.frame.size))
+        let container = PanelContainerView(frame: NSRect(origin: .zero, size: panel.frame.size))
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor.clear.cgColor
-        container.layer?.cornerRadius = PanelLayoutMetrics.cornerRadius
-        container.layer?.cornerCurve = .continuous
-        container.layer?.masksToBounds = true
         container.autoresizingMask = [.width, .height]
 
         let hostingView = MenuBarHostingView(rootView: rootView)
@@ -263,7 +259,7 @@ final class MenuBarPanelController: NSObject {
         self.hostingView = hostingView
 
         installEventHandling()
-        updatePanelSize(navigation.panelSize)
+        refreshPanelGeometry()
     }
 
     func stop() {
@@ -328,7 +324,7 @@ final class MenuBarPanelController: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyCurrentFrame() }
+            MainActor.assumeIsolated { self?.refreshPanelGeometry() }
         }
         applicationResignObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification,
@@ -339,23 +335,19 @@ final class MenuBarPanelController: NSObject {
         }
     }
 
-    /// 面板圆角靠 contentView 的图层遮罩；每次改尺寸与弹出前重申一次，
-    /// 避免中途替换图层的操作把面板掉回直角。
-    private func applyPanelShape() {
-        guard let contentView = panel.contentView else { return }
-        contentView.wantsLayer = true
-        contentView.layer?.cornerRadius = PanelLayoutMetrics.cornerRadius
-        contentView.layer?.cornerCurve = .continuous
-        contentView.layer?.masksToBounds = true
+    /// 面板几何变化的统一入口：先按当前屏幕刷新可视高度上限，再对齐窗口。
+    private func refreshPanelGeometry() {
+        updateVisibleHeightLimit()
+        applyCurrentFrame()
     }
 
-    private func updatePanelSize(_ size: PanelSize) {
-        panelSize = size
-        applyPanelShape()
-        // 不按可见性跳过：从右击菜单触发的导航发生在菜单跟踪循环里，
-        // orderFrontRegardless 会被推迟到菜单关闭后才生效，此时内容已经
-        // 报出新高度。若此时丢弃，窗口就会停在旧高度，内容上下被裁。
-        applyCurrentFrame()
+    /// 限高只影响显示：窗口比期望高度矮、内容在内部滚动，
+    /// 但 `navigation.panelSize` 与用户保存的高度都不动。
+    private func updateVisibleHeightLimit() {
+        guard let screen = anchorScreen else { return }
+        navigation.setMaximumVisibleHeight(
+            Double(PanelFramePositioner.maximumVisibleHeight(in: screen.visibleFrame))
+        )
     }
 
     @objc private func togglePanel() {
@@ -422,10 +414,10 @@ final class MenuBarPanelController: NSObject {
 
     private func showPanel() {
         guard isStarted else { return }
-        // 用当前路由记住的高度：借用别的页面的尺寸会让内容被居中裁掉上下两端。
-        panelSize = navigation.size(for: navigation.route)
-        applyPanelShape()
-        guard let frame = frame(for: panelSize) else { return }
+        // 窗口尺寸只用当前路由记住的高度（navigation 在切页时就已同步好）：
+        // 借用别的页面的尺寸会让内容被居中裁掉上下两端。
+        updateVisibleHeightLimit()
+        guard let frame = frame(for: navigation.displayedSize) else { return }
 
         // 先设置最终 frame，再显示窗口；自有面板不会经过系统的二次重摆。
         panel.setFrame(frame, display: true)
@@ -460,31 +452,28 @@ final class MenuBarPanelController: NSObject {
         return window.convertToScreen(button.convert(button.bounds, to: nil))
     }
 
+    /// 面板锚定的屏幕：状态栏按钮所在屏幕 → 按钮中心命中的屏幕 → 主屏。
+    private var anchorScreen: NSScreen? {
+        guard let buttonWindow = statusItem?.button?.window else { return NSScreen.main }
+        if let screen = buttonWindow.screen { return screen }
+        guard let buttonFrame = statusButtonFrame else { return NSScreen.main }
+        let buttonCenter = NSPoint(x: buttonFrame.midX, y: buttonFrame.midY)
+        return NSScreen.screens.first { $0.frame.contains(buttonCenter) } ?? NSScreen.main
+    }
+
     private func frame(for size: PanelSize) -> NSRect? {
-        guard let button = statusItem?.button,
-              let buttonWindow = button.window,
-              let buttonFrame = statusButtonFrame else {
-            guard let screen = NSScreen.main else { return nil }
+        guard let screen = anchorScreen else { return nil }
+        let contentSize = NSSize(width: size.width, height: size.height)
+        guard let buttonFrame = statusButtonFrame else {
             return PanelFramePositioner.frame(
-                contentSize: NSSize(width: size.width, height: size.height),
+                contentSize: contentSize,
                 screenFrame: screen.visibleFrame,
                 anchorX: screen.visibleFrame.midX,
                 anchorTop: screen.visibleFrame.maxY
             )
         }
-
-        var screen = buttonWindow.screen
-        if screen == nil {
-            let buttonCenter = NSPoint(x: buttonFrame.midX, y: buttonFrame.midY)
-            for candidate in NSScreen.screens where candidate.frame.contains(buttonCenter) {
-                screen = candidate
-                break
-            }
-        }
-        screen = screen ?? NSScreen.main
-        guard let screen else { return nil }
         return PanelFramePositioner.frame(
-            contentSize: NSSize(width: size.width, height: size.height),
+            contentSize: contentSize,
             screenFrame: screen.visibleFrame,
             anchorX: buttonFrame.midX,
             anchorTop: buttonFrame.minY
@@ -492,7 +481,10 @@ final class MenuBarPanelController: NSObject {
     }
 
     private func applyCurrentFrame() {
-        guard let frame = frame(for: panelSize) else { return }
+        // 不按可见性跳过：从右击菜单触发的导航发生在菜单跟踪循环里，
+        // orderFrontRegardless 会被推迟到菜单关闭后才生效，此时内容已经报出新高度。
+        // 若此时丢弃，窗口就会停在旧高度，内容上下被裁。
+        guard let frame = frame(for: navigation.displayedSize) else { return }
         guard abs(panel.frame.minX - frame.minX) > 0.5
             || abs(panel.frame.minY - frame.minY) > 0.5
             || abs(panel.frame.width - frame.width) > 0.5

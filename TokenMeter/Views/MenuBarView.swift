@@ -222,7 +222,10 @@ struct MenuBarView: View {
         .padding(.horizontal, TM.panelHorizontal)
         .padding(.top, 8)
         .padding(.bottom, 8)
-        .frame(width: navigation.panelSize.width, height: navigation.panelSize.height)
+        // 尺寸跟随原生窗口（窗口尺寸由控制器按 navigation.displayedSize 设置）：
+        // 根视图不读高度状态，所以切页动画不会把面板几何一起动画。
+        // 高度不够时从顶部对齐、超出部分交给窗口裁剪，而不是居中把首尾一起裁掉。
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onPreferenceChange(PanelHeightPreferenceKey.self) { measurement in
             guard let measurement else { return }
             navigation.reportMeasuredHeight(measurement.height, for: measurement.route)
@@ -267,7 +270,7 @@ struct MenuBarView: View {
         }
         .overlay(alignment: .bottom) {
             PanelHeightResizeHandle(
-                panelHeight: CGFloat(navigation.panelSize.height),
+                panelHeight: CGFloat(navigation.displayedSize.height),
                 onChanged: { navigation.setUserHeight($0, persist: false) },
                 onEnded: { navigation.setUserHeight($0, persist: true) }
             )
@@ -275,8 +278,8 @@ struct MenuBarView: View {
             .frame(height: 8)
             .accessibilityHidden(true)
         }
-        .onAppear { onPanelSizeChange(navigation.panelSize) }
-        .onChange(of: navigation.panelSize) { _, size in onPanelSizeChange(size) }
+        .onAppear { onPanelSizeChange(navigation.displayedSize) }
+        .onChange(of: navigation.displayedSize) { _, size in onPanelSizeChange(size) }
         .onChange(of: store.settings.autoRefreshEnabled) { _, enabled in
             if enabled { store.start() } else { store.stop() }
         }
@@ -379,7 +382,11 @@ struct MenuBarView: View {
         .padding(.horizontal, -TM.listRowHorizontalInset)
         .frame(
             idealHeight: subscriptionListIdealHeight,
-            maxHeight: navigation.hasManualHeight ? .infinity : subscriptionListIdealHeight
+            // 面板被屏幕限高时列表按剩余空间收缩，超出部分在列表内部滚动；
+            // 否则列表按内容高度铺开，让面板高度继续随内容自适应。
+            maxHeight: navigation.hasManualHeight || navigation.isHeightLimitedByScreen
+                ? .infinity
+                : subscriptionListIdealHeight
         )
         .padding(.vertical, 2)
     }

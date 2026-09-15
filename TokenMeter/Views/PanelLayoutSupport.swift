@@ -14,7 +14,7 @@ struct PanelVisibilityGate {
 }
 
 enum PanelLayoutMetrics {
-    /// 面板窗口圆角；由 contentView 的图层遮罩实现，见 `MenuBarPanelController.applyPanelShape()`。
+    /// 面板窗口圆角；由 contentView（`PanelContainerView`）的图层遮罩实现。
     static let cornerRadius: CGFloat = 14
     static let rootVerticalChrome: CGFloat = 16
     static let pageChrome: CGFloat = 116
@@ -24,7 +24,6 @@ enum PanelLayoutMetrics {
     /// 概览订阅列表的最大可视高度：内容超过后列表内部滚动，
     /// 面板高度仍随内容自适应，但整体不超过默认面板高度量级。
     static let subscriptionListMaxHeight: CGFloat = 480
-
 }
 
 struct IntrinsicPanelHeightModifier: ViewModifier {
@@ -52,6 +51,12 @@ extension View {
 enum PanelFramePositioner {
     static let screenMargin: CGFloat = 8
 
+    /// 面板在给定屏幕可视范围内允许的最大高度：上下各留一个边距。
+    /// 高度超过它时锚点钳制会让面板顶边越过屏幕上沿，头部返回按钮跟着跑到屏幕外。
+    static func maximumVisibleHeight(in screenFrame: NSRect) -> CGFloat {
+        max(screenFrame.height - screenMargin * 2, 0)
+    }
+
     static func frame(
         contentSize: NSSize,
         screenFrame: NSRect,
@@ -76,6 +81,21 @@ enum PanelFramePositioner {
             ? min(max(desiredY, minimumY), maximumY)
             : screenFrame.minY
         return NSRect(x: horizontalOrigin, y: verticalOrigin, width: width, height: height)
+    }
+}
+
+/// 面板容器：窗口内容视图。圆角遮罩在每次布局时重申 ——
+/// AppKit 创建后备图层后会丢掉 `makeBackingLayer()` 里设的形状，图层重建（wantsLayer 关→开）
+/// 也会把一次性赋值的圆角清回 0；`layout()` 在 AppKit 建立/更新图层之后运行，
+/// 所以形状能跟上图层重建与尺寸变化。
+@MainActor
+final class PanelContainerView: NSView {
+    override func layout() {
+        super.layout()
+        guard let layer else { return }
+        layer.cornerRadius = PanelLayoutMetrics.cornerRadius
+        layer.cornerCurve = .continuous
+        layer.masksToBounds = true
     }
 }
 
@@ -221,13 +241,17 @@ struct NativeGlassBackground: NSViewRepresentable {
 
 /// macOS 26+ 的 Liquid Glass 面板背景：以覆盖整个面板的透明形状作为唯一的外层玻璃表面，
 /// 随面板背后的桌面/窗口内容实时折射与模糊。
-/// 形状不额外加圆角，交由窗口自身的圆角裁剪，避免玻璃形状与窗口边角产生透明缝隙；
+/// 玻璃形状自带与面板容器一致的圆角：系统玻璃可能绕过视图图层的遮罩，
+/// 让四个角在面板上直接变直角。
 /// 外层只保留这一层玻璃，卡片用低透明度填充而非再叠 glassEffect（避免玻璃叠玻璃）。
 @available(macOS 26.0, *)
 struct LiquidGlassBackground: View {
     var body: some View {
         Color.clear
-            .glassEffect(.regular, in: .rect(cornerRadius: 0))
+            .glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: PanelLayoutMetrics.cornerRadius, style: .continuous)
+            )
     }
 }
 
