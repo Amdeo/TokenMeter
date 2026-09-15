@@ -27,8 +27,10 @@ enum QuotaColorSettings {
         if renderer.contains(.balanceValues) {
             result += QuotaColorTarget.balanceTargets(quotas: quotas)
         }
-        // 批量默认色：作用于所有未单独配置的数值（进度条或余额），只要有目标就兜底一条。
-        if !result.isEmpty {
+        // 批量默认色：作用于所有未单独配置的数值（进度条或余额）。
+        // 兜底行按宽判定给出：列表型卡片在新建订阅（无快照、无额度）时没有任何具体目标，
+        // 但仍可先配好默认色，否则颜色区会整块空白。
+        if isAvailable(style: style, providerID: providerID) {
             result.append(QuotaColorTarget(
                 key: SubscriptionQuotaColors.genericKey,
                 label: "默认颜色",
@@ -36,6 +38,16 @@ enum QuotaColorSettings {
             ))
         }
         return result
+    }
+
+    /// 紧凑样式的汇总进度条会不会真的画出来：窄判定，只认进度条能力。
+    /// 与 `isAvailable` 故意不同——余额数值可配颜色，但余额卡不画汇总条。
+    @MainActor
+    static func rendersCompactSummaryMeter(style: SubscriptionCardStyle, providerID: ProviderID) -> Bool {
+        SubscriptionCardCapabilities.renderProgressMeters(
+            style: style.capabilities,
+            renderer: cardCapabilities(for: providerID)
+        )
     }
 
     /// 入口行的一句话摘要：已自定义项数或默认配色。
@@ -109,7 +121,7 @@ struct SubscriptionAppearancePage: View {
         QuotaColorSettings.targets(
             style: draft.cardStyle,
             providerID: draft.providerID,
-            quotas: snapshot?.quotas ?? []
+            quotas: realtimePreview?.snapshot.quotas ?? []
         )
     }
 
@@ -138,10 +150,11 @@ struct SubscriptionAppearancePage: View {
     }
 
     /// 外观页两块预览的共同数据源：有真实快照时顶部预览与样式轮播都用它，
-    /// 同一个页面里不会看到互相矛盾的两种卡片。
-    private var realtimePreview: CardPreviewSource? {
+    /// 同一个页面里不会看到互相矛盾的两种卡片；颜色目标也从这里取，
+    /// 非实时快照回退示例额度，行名与预览一致。
+    private var realtimePreview: (subscription: Subscription, snapshot: UsageSnapshot)? {
         guard let snapshot, snapshot.state == .realtime else { return nil }
-        return CardPreviewSource(subscription: previewSubscription, snapshot: snapshot)
+        return (previewSubscription, snapshot)
     }
 
     /// 有真实数据就用真实卡片，否则用 renderer 的示例快照（形态与该供应商真实卡片一致）。
@@ -220,12 +233,6 @@ private struct AppearanceSection<Content: View>: View {
     }
 }
 
-/// 外观页预览的数据源：与顶部预览同一份订阅身份 + 真实快照，两块预览的来源不会分叉。
-struct CardPreviewSource {
-    let subscription: Subscription
-    let snapshot: UsageSnapshot
-}
-
 // MARK: - 卡片样式轮播选择器
 
 /// 横向分页轮播：每页渲染一张真实 `SubscriptionMenuCard` 预览，滑动/点按切换草稿的卡片样式。
@@ -236,7 +243,7 @@ struct CardStyleCarouselPicker: View {
     let providerID: ProviderID
     let displayName: String
     /// 真实快照（编辑已有订阅且已抓到数据）；nil 时用 renderer 的示例快照。
-    var realPreview: CardPreviewSource?
+    var realPreview: (subscription: Subscription, snapshot: UsageSnapshot)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visibleID: String?

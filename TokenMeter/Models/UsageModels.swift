@@ -31,7 +31,8 @@ enum SubscriptionCardStyle: String, Codable, CaseIterable, Identifiable, Sendabl
 
 extension SubscriptionCardStyle {
     /// 该样式在卡片里渲染的进度条能力。三种现有样式都会画进度条（紧凑样式画一条汇总条）；
-    /// 未来新增「不含进度条」的样式时在这里返回空集合，颜色设置入口会自动消失。
+    /// 未来新增「不含进度条」的样式时在这里返回空集合：该样式不再画进度条与汇总条，
+    /// 但颜色设置入口由宽判定（进度条或余额数值任一可配）决定，不会因此消失。
     var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
 }
 
@@ -54,7 +55,9 @@ struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
     static let balanceValues = SubscriptionCardCapabilities(rawValue: 1 << 1)
 
     /// 卡片真正渲染出进度条：样式与供应商 renderer 都必须声明该能力。
-    /// 颜色设置入口与紧凑样式的汇总条共用这一判定，两者不会各自脱节。
+    /// 紧凑样式的汇总条走这条窄判定（见 `QuotaColorSettings.rendersCompactSummaryMeter`）；
+    /// 颜色设置入口走更宽的判定（`QuotaColorSettings.isAvailable`），两者故意不同——
+    /// 余额卡可配颜色但不画汇总条。
     static func renderProgressMeters(
         style: SubscriptionCardCapabilities,
         renderer: SubscriptionCardCapabilities

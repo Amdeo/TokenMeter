@@ -185,15 +185,13 @@ struct SubscriptionMenuCard: View {
     }
 
     /// 紧凑样式的汇总进度：取月总比例或第一个额度，颜色与锚点一致。
-    /// 没有进度条的卡片（如余额型）不画这条汇总条：样式与 renderer 的能力声明
-    /// 同时成立才渲染，颜色设置入口用的是同一条判定（`renderProgressMeters`），两者不会脱节。
+    /// 没有进度条的卡片（如余额型）不画这条汇总条：这里只认进度条能力，
+    /// 与颜色设置入口的宽判定故意不同（余额卡可配颜色但不画汇总条）。
     @MainActor
     private var compactMeter: (fraction: Double, tint: Color)? {
-        // 必须是窄判定：余额型 renderer 靠 `.balanceValues` 仍然可配颜色，
-        // 用颜色入口的可用性判定的话，余额卡会被改画成 used/limit 的假进度条。
-        guard SubscriptionCardCapabilities.renderProgressMeters(
-            style: subscription.cardStyle.capabilities,
-            renderer: providerDefinition.cardRenderer.capabilities
+        guard QuotaColorSettings.rendersCompactSummaryMeter(
+            style: subscription.cardStyle,
+            providerID: subscription.providerID
         ) else { return nil }
         guard let snapshot,
               let fraction = snapshot.overallUsageRatio ?? snapshot.quotas.first?.fraction

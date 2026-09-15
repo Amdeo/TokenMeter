@@ -71,18 +71,11 @@ struct ProgressColorSettingsTests {
 
     @Test
     func compactStyleKeepsBalanceCardsOnTheBalanceRow() {
-        // 紧凑汇总条用窄判定（样式 + renderer 的进度条能力）：余额型 renderer 只有 `.balanceValues`，
-        // 不得被改画成 used/limit 的假进度条；颜色入口仍可用，两个判定故意不同。
-        let compact = SubscriptionCardStyle.compact.capabilities
-        #expect(!SubscriptionCardCapabilities.renderProgressMeters(
-            style: compact, renderer: BalanceCardRenderer().capabilities
-        ))
-        #expect(SubscriptionCardCapabilities.renderProgressMeters(
-            style: compact, renderer: KimiCardRenderer().capabilities
-        ))
-        #expect(SubscriptionCardCapabilities.renderProgressMeters(
-            style: compact, renderer: QuotaListCardRenderer().capabilities
-        ))
+        // 紧凑汇总条走生产入口的窄判定（样式 + renderer 的进度条能力）：余额型 renderer 只有
+        // `.balanceValues`，不得被改画成 used/limit 的假进度条；颜色入口仍可用，两个判定故意不同。
+        #expect(!QuotaColorSettings.rendersCompactSummaryMeter(style: .compact, providerID: .deepSeek))
+        #expect(QuotaColorSettings.rendersCompactSummaryMeter(style: .compact, providerID: .kimi))
+        #expect(QuotaColorSettings.rendersCompactSummaryMeter(style: .compact, providerID: .claude))
         #expect(QuotaColorSettings.isAvailable(style: .compact, providerID: .deepSeek))
     }
 
@@ -468,6 +461,27 @@ struct ProgressColorSettingsTests {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         return PanelNavigationState(defaults: defaults)
+    }
+}
+
+/// 无快照（新建订阅）时的颜色目标：列表型卡片没有具体进度目标，也不能整块空白。
+@MainActor
+struct ColorTargetsWithoutSnapshotTests {
+    @Test
+    func listCardStyleKeepsADefaultColorRow() {
+        // 列表型（无 overallUsageLabel）：只有「默认颜色」兜底行，恢复基线行为。
+        #expect(QuotaColorSettings.targets(style: .standard, providerID: .claude, quotas: [])
+            .map(\.key) == [SubscriptionQuotaColors.genericKey])
+
+        // Kimi：overall + 5 小时 + 每周 + 余额兜底 + 默认颜色。
+        #expect(QuotaColorSettings.targets(style: .standard, providerID: .kimi, quotas: [])
+            .map(\.key) == [
+                SubscriptionQuotaColors.overallKey,
+                SubscriptionQuotaColors.fiveHourKey,
+                SubscriptionQuotaColors.weeklyKey,
+                SubscriptionQuotaColors.balanceKey,
+                SubscriptionQuotaColors.genericKey
+            ])
     }
 }
 
