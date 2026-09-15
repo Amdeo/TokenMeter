@@ -66,6 +66,23 @@
   .plan-divider { font-size:12px; color:var(--text-tertiary); }
   .plan-tag { font-size:12px; font-weight:600; white-space:nowrap; }
 
+  /* ⑬ 紧凑双行：图标 +（名称 / 数据）上下两行，两行总高 = 图标高 30pt，字体小一档 */
+  .card.stack-layout { flex-direction:row; align-items:center; gap:8px; }
+  .stack-layout .stack {
+    flex:1 1 auto; min-width:0; height:30px;
+    display:flex; flex-direction:column; justify-content:space-between;
+  }
+  .stack-layout .stack-name {
+    display:flex; align-items:baseline; gap:5px; font-size:12px; font-weight:600; line-height:1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .stack-layout .stack-data { display:flex; align-items:baseline; line-height:1; white-space:nowrap; overflow:hidden; }
+  .stack-layout .plan-divider, .stack-layout .plan-tag { font-size:11px; }
+  .stack-layout .stats { gap:10px; }
+  .stack-layout .stat { gap:3px; }
+  .stack-layout .stat-label { font-size:10px; }
+  .stack-layout .stat-value { font-size:12px; }
+
   /* ===== 舞台：每套卡片一个 340pt 真面板 ===== */
   .stages { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; }
   .stage { display:flex; flex-direction:column; gap:7px; flex:0 0 auto; }
@@ -173,6 +190,8 @@
      hideSubtitle: true  → 这一套不画头部副标题行（「显示名 · 网页登录态」），名称与 30pt 图标垂直居中
      planTag  { text, tint? } → 标题后接「| 套餐名」标签（如 Plus），颜色跟随 tint
      stats    [{ label, value, tint? }] → 用单行内联统计代替 body（多窗口挤一行，无条无时间）
+     layout   "stack" → 图标 +（名称行 / 数据行）上下两行，两行总高 = 图标高 30pt（配 stats 用）
+     name     只给这一套换显示名（看长/短名字在某个布局下会不会被截断；不写就用 site.name）
      tint     行/条颜色：写平台色（#RRGGBB）或用 'ok' / 'warn' / 'danger' 引用状态色
    ========================================================================================== */
 window.CARD_DATA = {
@@ -305,6 +324,18 @@ window.CARD_DATA = {
         { label: "周", value: "34%" },
         { label: "月", value: "72%", tint: "warn" }
       ]
+    },
+    {
+      key: "single-row", title: "⑬ 紧凑双行：名称 / 数据",
+      note: "图标左侧，右侧名称一行 + 数据一行，两行总高 = 图标高（字体小一档）",
+      layout: "stack",
+      hideSubtitle: true,
+      name: "Codex 公司",
+      planTag: { text: "Plus", tint: "#E0A33E" },
+      stats: [
+        { label: "5h", value: "100%" },
+        { label: "周", value: "89%" }
+      ]
     }
   ]
 };
@@ -376,10 +407,45 @@ function renderRow(row) {
   return rowNode;
 }
 
+function captionEl(variant) {
+  return el("div", { class: "caption" },
+    el("b", { text: variant.title ?? "" }),
+    variant.note ? el("span", { text: ` · ${variant.note}` }) : null);
+}
+
+function statNodes(stats) {
+  return stats.map((stat) =>
+    el("span", { class: "stat" },
+      el("span", { class: "stat-label", text: stat.label ?? "" }),
+      el("span", { class: "stat-value", style: { color: color(stat.tint, "var(--text-primary)") }, text: stat.value ?? "" })));
+}
+
 function renderVariant(variant, site) {
+  const displayName = variant.name ?? site.name ?? "";
   const logo = site.icon
     ? el("div", { class: "logo" }, el("img", { src: site.icon, alt: "" }))
-    : el("div", { class: "logo", text: (site.name || "?").slice(0, 1) });
+    : el("div", { class: "logo", text: (displayName || "?").slice(0, 1) });
+  const planTag = variant.planTag
+    ? [
+        el("span", { class: "plan-divider", text: "|" }),
+        el("span", { class: "plan-tag", style: { color: color(variant.planTag.tint, "var(--text-primary)") }, text: variant.planTag.text ?? "" })
+      ]
+    : [];
+  const dot = el("span", { class: "dot", style: { background: STATUS[site.status] || STATUS.normal } });
+  const tint = site.tint || "#2DD4BF";
+
+  // ⑬ 紧凑双行：图标左侧，右侧名称 / 数据两行，总高与图标对齐。
+  if (variant.layout === "stack") {
+    const card = el("div", { class: "card stack-layout", style: { "--tint": tint } }, logo,
+      el("div", { class: "stack" },
+        el("div", { class: "stack-name" },
+          el("span", { class: "name", text: displayName }), ...planTag, dot),
+        el("div", { class: "stack-data" },
+          el("div", { class: "stats" }, statNodes(variant.stats ?? [])))));
+    return el("div", { class: "stage", "data-variant": variant.key }, captionEl(variant),
+      el("div", { class: "panel" }, card));
+  }
+
   const anchor = variant.anchor
     ? el("div", { class: "anchor" },
         el("span", { text: variant.anchor.label ?? "" }),
@@ -392,33 +458,20 @@ function renderVariant(variant, site) {
   // SwiftUI 侧 HStack 默认垂直居中，所以隐藏副标题后图标与名称要居中对齐。
   const showSubtitle = variant.hideSubtitle !== true && !hideAllSubtitles;
   const groups = (variant.body ?? []).some((row) => row.type === "group");
-  const planTag = variant.planTag
-    ? [
-        el("span", { class: "plan-divider", text: "|" }),
-        el("span", { class: "plan-tag", style: { color: color(variant.planTag.tint, "var(--text-primary)") }, text: variant.planTag.text ?? "" })
-      ]
-    : [];
   // stats：多个窗口挤一行的内联形态（无条、无时间提示）
   const body = variant.stats
-    ? el("div", { class: "stats" }, variant.stats.map((stat) =>
-        el("span", { class: "stat" },
-          el("span", { class: "stat-label", text: stat.label ?? "" }),
-          el("span", { class: "stat-value", style: { color: color(stat.tint, "var(--text-primary)") }, text: stat.value ?? "" }))))
-    : el("div", { class: "body", style: { gap: groups ? "12px" : "8px" } }, variant.body.map(renderRow));
-  const card = el("div", { class: "card", style: { "--tint": site.tint || "#2DD4BF" } },
+    ? el("div", { class: "stats" }, statNodes(variant.stats))
+    : el("div", { class: "body", style: { gap: groups ? "12px" : "8px" } }, (variant.body ?? []).map(renderRow));
+  const card = el("div", { class: "card", style: { "--tint": tint } },
     el("div", { class: "head", style: { alignItems: showSubtitle ? "flex-start" : "center" } }, logo,
       el("div", { class: "titles" },
         el("div", { class: "name-line" },
-          el("span", { class: "name", text: site.name ?? "" }),
-          ...planTag,
-          el("span", { class: "dot", style: { background: STATUS[site.status] || STATUS.normal } })),
+          el("span", { class: "name", text: displayName }),
+          ...planTag, dot),
         showSubtitle ? el("div", { class: "sub", text: site.subtitle ?? "" }) : null),
       anchor),
     body);
-  return el("div", { class: "stage", "data-variant": variant.key },
-    el("div", { class: "caption" },
-      el("b", { text: variant.title ?? "" }),
-      variant.note ? el("span", { text: ` · ${variant.note}` }) : null),
+  return el("div", { class: "stage", "data-variant": variant.key }, captionEl(variant),
     el("div", { class: "panel" }, card));
 }
 
