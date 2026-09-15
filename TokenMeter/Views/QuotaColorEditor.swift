@@ -40,16 +40,6 @@ enum QuotaColorSettings {
         return result
     }
 
-    /// 紧凑样式的汇总进度条会不会真的画出来：窄判定，只认进度条能力。
-    /// 与 `isAvailable` 故意不同——余额数值可配颜色，但余额卡不画汇总条。
-    @MainActor
-    static func rendersCompactSummaryMeter(style: SubscriptionCardStyle, providerID: ProviderID) -> Bool {
-        SubscriptionCardCapabilities.renderProgressMeters(
-            style: style.capabilities,
-            renderer: cardCapabilities(for: providerID)
-        )
-    }
-
     /// 入口行的一句话摘要：已自定义项数或默认配色。
     static func summary(for colors: [String: UInt32]) -> String {
         colors.isEmpty ? "使用默认配色" : "已自定义 \(colors.count) 项"

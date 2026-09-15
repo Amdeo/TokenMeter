@@ -7,31 +7,30 @@ import SwiftUI
 /// 菜单栏订阅卡片的展示样式。持久化在订阅上，缺失时回退标准样式。
 enum SubscriptionCardStyle: String, Codable, CaseIterable, Identifiable, Sendable {
     case standard
-    case compact
-    case hero
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .standard: "标准"
-        case .compact: "紧凑"
-        case .hero: "醒目"
         }
     }
 
     var subtitle: String {
         switch self {
         case .standard: "名称 + 摘要 + 完整额度行"
-        case .compact: "只保留名称与一条总览进度"
-        case .hero: "突出显示关键数值"
         }
+    }
+
+    /// 兼容已移除样式的旧数据：解不出的 rawValue 一律回退标准样式，不丢订阅。
+    init(from decoder: Decoder) throws {
+        self = SubscriptionCardStyle(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .standard
     }
 }
 
 extension SubscriptionCardStyle {
-    /// 该样式在卡片里渲染的进度条能力。三种现有样式都会画进度条（紧凑样式画一条汇总条）；
-    /// 未来新增「不含进度条」的样式时在这里返回空集合：该样式不再画进度条与汇总条，
+    /// 该样式在卡片里渲染的进度条能力：现有样式都会画进度条。
+    /// 未来新增「不含进度条」的样式时在这里返回空集合：该样式不再画进度条，
     /// 但颜色设置入口由宽判定（进度条或余额数值任一可配）决定，不会因此消失。
     var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
 }
@@ -48,16 +47,15 @@ extension SubscriptionCardStyle {
 struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
     let rawValue: Int
 
-    /// 卡片渲染进度条（含紧凑样式的汇总进度条）。
+    /// 卡片渲染进度条。
     static let progressMeters = SubscriptionCardCapabilities(rawValue: 1 << 0)
 
     /// 卡片渲染余额数值（正文余额行或头部余额锚点）；颜色设置据此提供余额颜色目标。
     static let balanceValues = SubscriptionCardCapabilities(rawValue: 1 << 1)
 
     /// 卡片真正渲染出进度条：样式与供应商 renderer 都必须声明该能力。
-    /// 紧凑样式的汇总条走这条窄判定（见 `QuotaColorSettings.rendersCompactSummaryMeter`）；
     /// 颜色设置入口走更宽的判定（`QuotaColorSettings.isAvailable`），两者故意不同——
-    /// 余额卡可配颜色但不画汇总条。
+    /// 余额卡可配颜色但不画进度条。
     static func renderProgressMeters(
         style: SubscriptionCardCapabilities,
         renderer: SubscriptionCardCapabilities
@@ -68,7 +66,7 @@ struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
 
 /// 订阅的进度条配色：按卡片样式隔离。
 ///
-/// 同一订阅可以为「标准 / 紧凑 / 醒目」各配一套颜色，切换样式后各自的配色保留、互不覆盖；
+/// 同一订阅可以为每种卡片样式各配一套颜色，切换样式后各自的配色保留、互不覆盖；
 /// 卡片渲染、摘要锚点与颜色编辑页都只读当前样式的那一份。
 struct SubscriptionQuotaPalette: Codable, Hashable, Sendable {
     /// 外层键为样式 rawValue；用字符串存键，未来新增样式的配色也能原样往返。

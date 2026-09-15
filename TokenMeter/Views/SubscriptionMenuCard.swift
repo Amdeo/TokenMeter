@@ -73,15 +73,6 @@ struct SubscriptionMenuCard: View {
         return SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
     }
 
-    /// 紧凑/醒目样式使用的数值锚点：renderer 未提供摘要（如余额型供应商）时
-    /// 回退到第一个额度的用量摘要，保证这两种样式始终有数值可突出。
-    @MainActor
-    private var displayAnchor: SubscriptionCardPresentation.Anchor? {
-        if let cardAnchor { return cardAnchor }
-        guard let snapshot, let quota = snapshot.quotas.first else { return nil }
-        return .usage(quota, subscription: subscription)
-    }
-
     private var accessibilityLabel: String {
         SubscriptionCardPresentation.cardAccessibilityLabel(
             subscription: subscription,
@@ -134,8 +125,7 @@ struct SubscriptionMenuCard: View {
 
                 Spacer(minLength: 8)
 
-                // 醒目样式把锚点数值移到正文大字展示，头部不再重复。
-                if subscription.cardStyle != .hero, let anchor = cardAnchor {
+                if let anchor = cardAnchor {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(anchor.label)
                             .font(.system(size: 9, weight: .medium))
@@ -161,21 +151,6 @@ struct SubscriptionMenuCard: View {
                 }
             }
 
-            // 醒目样式：头部下方突出大号锚点数值。
-            if subscription.cardStyle == .hero, let anchor = displayAnchor {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(anchor.value)
-                        .font(.system(size: 24, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(Color(hex: anchor.colorRGB))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                    Text(anchor.label)
-                        .font(.system(size: 9))
-                        .foregroundStyle(TM.textTertiary)
-                        .lineLimit(1)
-                }
-            }
-
             cardBody
         }
         .padding(.horizontal, TM.cardContentHorizontal)
@@ -184,32 +159,10 @@ struct SubscriptionMenuCard: View {
         .contentShape(Rectangle())
     }
 
-    /// 紧凑样式的汇总进度：取月总比例或第一个额度，颜色与锚点一致。
-    /// 没有进度条的卡片（如余额型）不画这条汇总条：这里只认进度条能力，
-    /// 与颜色设置入口的宽判定故意不同（余额卡可配颜色但不画汇总条）。
-    @MainActor
-    private var compactMeter: (fraction: Double, tint: Color)? {
-        guard QuotaColorSettings.rendersCompactSummaryMeter(
-            style: subscription.cardStyle,
-            providerID: subscription.providerID
-        ) else { return nil }
-        guard let snapshot,
-              let fraction = snapshot.overallUsageRatio ?? snapshot.quotas.first?.fraction
-        else { return nil }
-        let tint = displayAnchor.map { Color(hex: $0.colorRGB) } ?? TM.accent
-        return (fraction, tint)
-    }
-
     @ViewBuilder
     private var cardBody: some View {
         if let snapshot, snapshot.state == .realtime {
-            if subscription.cardStyle == .compact, let meter = compactMeter {
-                MeterBar(fraction: meter.fraction, tint: meter.tint, height: 4)
-                    .accessibilityLabel("用量总览")
-                    .accessibilityValue(meter.fraction.formatted(.percent.precision(.fractionLength(0))))
-            } else {
-                SubscriptionUsageView(subscription: subscription, snapshot: snapshot)
-            }
+            SubscriptionUsageView(subscription: subscription, snapshot: snapshot)
         } else if let snapshot {
             stateRow(for: snapshot)
         } else {

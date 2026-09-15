@@ -27,9 +27,9 @@ struct QuotaAndKimiTests {
         encoder.dateEncodingStrategy = .secondsSince1970
         let roundTripped = try decoder.decode(
             Subscription.self,
-            from: encoder.encode(Subscription(id: id, providerID: .deepSeek, name: "DeepSeek", cardStyle: .compact))
+            from: encoder.encode(Subscription(id: id, providerID: .deepSeek, name: "DeepSeek", cardStyle: .standard))
         )
-        #expect(roundTripped.cardStyle == .compact)
+        #expect(roundTripped.cardStyle == .standard)
     }
 
     @Test

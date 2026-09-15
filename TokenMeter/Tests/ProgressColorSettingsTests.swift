@@ -70,16 +70,6 @@ struct ProgressColorSettingsTests {
     }
 
     @Test
-    func compactStyleKeepsBalanceCardsOnTheBalanceRow() {
-        // 紧凑汇总条走生产入口的窄判定（样式 + renderer 的进度条能力）：余额型 renderer 只有
-        // `.balanceValues`，不得被改画成 used/limit 的假进度条；颜色入口仍可用，两个判定故意不同。
-        #expect(!QuotaColorSettings.rendersCompactSummaryMeter(style: .compact, providerID: .deepSeek))
-        #expect(QuotaColorSettings.rendersCompactSummaryMeter(style: .compact, providerID: .kimi))
-        #expect(QuotaColorSettings.rendersCompactSummaryMeter(style: .compact, providerID: .claude))
-        #expect(QuotaColorSettings.isAvailable(style: .compact, providerID: .deepSeek))
-    }
-
-    @Test
     func balanceCardOffersBalanceColorsWithoutProgressTargets() {
         let balance = Quota(
             name: "API 余额", used: 81.58, limit: 100, resetAt: nil,
@@ -307,14 +297,12 @@ struct ProgressColorSettingsTests {
 
         let subscription = try JSONDecoder().decode(Subscription.self, from: data)
 
-        // 旧单一字典整体落到标准样式，一个键都不丢；其余样式保持空。
+        // 旧单一字典整体落到标准样式，一个键都不丢。
         #expect(subscription.cardStyle == .standard)
         #expect(subscription.currentQuotaColors == [
             SubscriptionQuotaColors.overallKey: 0x112233,
             SubscriptionQuotaColors.nameKey("每周额度"): 0x6ED822
         ])
-        #expect(subscription.quotaColors[.compact].isEmpty)
-        #expect(subscription.quotaColors[.hero].isEmpty)
 
         // 解码后重新编码写的是按样式隔离的新格式，旧键不会消失。
         let json = try #require(
@@ -350,37 +338,30 @@ struct ProgressColorSettingsTests {
         #expect(migrated.currentQuotaColors == [
             SubscriptionQuotaColors.nameKey("deepseek大月卡 · 每日"): 15485081
         ])
-        #expect(migrated.quotaColors[.compact].isEmpty)
-        // 没有颜色字段的订阅保持空，但自己的卡片样式不受迁移影响。
+        // 没有颜色字段的订阅保持空；已移除的卡片样式解码时回退标准样式，不丢订阅。
         #expect(store.subscriptions[1].quotaColors.isEmpty)
-        #expect(store.subscriptions[1].cardStyle == .compact)
+        #expect(store.subscriptions[1].cardStyle == .standard)
     }
 
     @Test
-    func stylePalettesStayIsolatedAndSurviveStyleSwitches() throws {
-        var subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
-        subscription.currentQuotaColors = [SubscriptionQuotaColors.fiveHourKey: 0x111111]
+    func paletteKeepsUnknownStyleKeysAcrossCodableRoundTrips() throws {
+        // 调色板按样式 rawValue 字符串存键：未来新增样式写入的配色，当前版本不认识也原样往返。
+        var configured = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
+        configured.quotaColors[.standard] = [SubscriptionQuotaColors.fiveHourKey: 0x111111]
+        var json = try #require(
+            try JSONSerialization.jsonObject(with: JSONEncoder().encode(configured)) as? [String: Any]
+        )
+        var colors = try #require(json["quotaColors"] as? [String: Any])
+        colors["futureStyle"] = [SubscriptionQuotaColors.overallKey: 0x222222]
+        json["quotaColors"] = colors
 
-        // 颜色页读写的是草稿当前样式的配色：切到紧凑样式不会看到也不会覆盖标准样式的颜色。
-        let draft = SubscriptionEditorDraft(subscription: subscription)
-        #expect(draft.currentQuotaColors == [SubscriptionQuotaColors.fiveHourKey: 0x111111])
-        draft.cardStyle = .compact
-        #expect(draft.currentQuotaColors.isEmpty)
-        draft.currentQuotaColors = [SubscriptionQuotaColors.overallKey: 0x222222]
+        let decoded = try JSONDecoder().decode(Subscription.self, from: JSONSerialization.data(withJSONObject: json))
 
-        // 来回切换样式：两套配色各自保留。
-        draft.cardStyle = .standard
-        #expect(draft.currentQuotaColors == [SubscriptionQuotaColors.fiveHourKey: 0x111111])
-        draft.cardStyle = .compact
-        #expect(draft.currentQuotaColors == [SubscriptionQuotaColors.overallKey: 0x222222])
-
-        // 编码往返同样保留各样式配色。
-        var configured = subscription
-        configured.quotaColors[.compact] = [SubscriptionQuotaColors.overallKey: 0x222222]
-        let decoded = try JSONDecoder().decode(Subscription.self, from: JSONEncoder().encode(configured))
         #expect(decoded.quotaColors[.standard] == [SubscriptionQuotaColors.fiveHourKey: 0x111111])
-        #expect(decoded.quotaColors[.compact] == [SubscriptionQuotaColors.overallKey: 0x222222])
-        #expect(decoded.quotaColors[.hero].isEmpty)
+        let reencoded = try #require(
+            try JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? [String: Any]
+        )
+        #expect((reencoded["quotaColors"] as? [String: Any])?.keys.sorted() == ["futureStyle", "standard"])
     }
 
     @Test
@@ -388,25 +369,20 @@ struct ProgressColorSettingsTests {
         let quota = Quota(name: "每月窗口", used: 85, limit: 100, resetAt: nil, kind: .generic)
         var subscription = Subscription(providerID: .zhipu, name: "智谱", authMethodID: .apiKey)
         subscription.quotaColors[.standard] = [SubscriptionQuotaColors.nameKey(quota.name): 0x111111]
-        subscription.quotaColors[.compact] = [SubscriptionQuotaColors.nameKey(quota.name): 0x222222]
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [quota])
 
-        let anchor = SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
-        #expect(anchor?.colorRGB == 0x111111)
-        subscription.cardStyle = .compact
-        #expect(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)?.colorRGB == 0x222222)
+        #expect(SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)?.colorRGB == 0x111111)
     }
 
     @Test
     func currentStylePaletteDrivesKimiOverallAnchor() throws {
         var subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiDeviceOAuth)
-        subscription.quotaColors[.hero] = [SubscriptionQuotaColors.overallKey: 0x0A0B0C]
         let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [], overallUsageRatio: 0.41)
 
-        // 标准样式没配过色：锚点用状态色；切到醒目样式后取该样式自己的配色。
-        let standardAnchor = try #require(anchorOf(subscription, snapshot))
-        #expect(standardAnchor.colorRGB == SubscriptionCardPresentation.ratioStatus(for: 0.41).tint.tokenMeterRGB)
-        subscription.cardStyle = .hero
+        // 没配过色：锚点用状态色；给当前样式配色后取配置色。
+        let unconfiguredAnchor = try #require(anchorOf(subscription, snapshot))
+        #expect(unconfiguredAnchor.colorRGB == SubscriptionCardPresentation.ratioStatus(for: 0.41).tint.tokenMeterRGB)
+        subscription.quotaColors[.standard] = [SubscriptionQuotaColors.overallKey: 0x0A0B0C]
         #expect(anchorOf(subscription, snapshot)?.colorRGB == 0x0A0B0C)
     }
 
@@ -421,7 +397,6 @@ struct ProgressColorSettingsTests {
 
         // 颜色页写的是编辑草稿；保存订阅时经 updateQuotaColors 落盘。
         let draft = SubscriptionEditorDraft(subscription: subscription)
-        draft.cardStyle = .hero
         draft.currentQuotaColors = [
             SubscriptionQuotaColors.overallKey: 0x3366AA,
             SubscriptionQuotaColors.nameKey("每周额度"): 0x11BB22
@@ -431,8 +406,7 @@ struct ProgressColorSettingsTests {
 
         let reloaded = fixture.makeStore()
         #expect(reloaded.subscriptions.first?.quotaColors == draft.quotaColors)
-        #expect(reloaded.subscriptions.first?.quotaColors[.hero] == draft.currentQuotaColors)
-        #expect(reloaded.subscriptions.first?.currentQuotaColors.isEmpty == true)
+        #expect(reloaded.subscriptions.first?.currentQuotaColors == draft.currentQuotaColors)
     }
 
     @Test
