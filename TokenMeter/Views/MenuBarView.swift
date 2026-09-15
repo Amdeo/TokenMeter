@@ -230,18 +230,6 @@ struct MenuBarView: View {
         .background(TMPanelBackground(glassEnabled: store.settings.glassEffectEnabled))
         .foregroundStyle(TM.textPrimary)
         .modifier(TMColorSchemeModifier(mode: store.settings.appearanceMode))
-        .overlay(alignment: .bottom) {
-            if navigation.route == .overview {
-                PanelHeightResizeHandle(
-                    panelHeight: CGFloat(navigation.panelSize.height),
-                    onChanged: { navigation.setUserOverviewHeight($0, persist: false) },
-                    onEnded: { navigation.setUserOverviewHeight($0, persist: true) }
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 8)
-                .accessibilityHidden(true)
-            }
-        }
         #if DEBUG
         .overlay {
             if let previewMode {
@@ -277,6 +265,16 @@ struct MenuBarView: View {
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
         }
+        .overlay(alignment: .bottom) {
+            PanelHeightResizeHandle(
+                panelHeight: CGFloat(navigation.panelSize.height),
+                onChanged: { navigation.setUserHeight($0, persist: false) },
+                onEnded: { navigation.setUserHeight($0, persist: true) }
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 8)
+            .accessibilityHidden(true)
+        }
         .onAppear { onPanelSizeChange(navigation.panelSize) }
         .onChange(of: navigation.panelSize) { _, size in onPanelSizeChange(size) }
         .onChange(of: store.settings.autoRefreshEnabled) { _, enabled in
@@ -310,7 +308,7 @@ struct MenuBarView: View {
             if store.subscriptions.isEmpty {
                 MenuBarEmptyState { openAddSubscription() }
                     .frame(
-                        maxHeight: navigation.hasManualOverviewHeight ? .infinity : nil,
+                        maxHeight: navigation.hasManualHeight ? .infinity : nil,
                         alignment: .top
                     )
             } else {
@@ -381,7 +379,7 @@ struct MenuBarView: View {
         .padding(.horizontal, -TM.listRowHorizontalInset)
         .frame(
             idealHeight: subscriptionListIdealHeight,
-            maxHeight: navigation.hasManualOverviewHeight ? .infinity : subscriptionListIdealHeight
+            maxHeight: navigation.hasManualHeight ? .infinity : subscriptionListIdealHeight
         )
         .padding(.vertical, 2)
     }

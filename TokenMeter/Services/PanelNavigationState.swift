@@ -60,28 +60,30 @@ final class PanelNavigationState {
     var route: Route = .overview {
         didSet {
             guard route != oldValue else { return }
-            if route == .overview, let manualOverviewHeight {
-                panelSize = PanelSize(width: PanelSize.compact.width, height: manualOverviewHeight)
+            if let manualHeight = manualHeight(for: route) {
+                panelSize = PanelSize(width: PanelSize.compact.width, height: manualHeight)
             }
         }
     }
     var draft: SubscriptionEditorDraft?
     private(set) var panelSize = PanelSize.compact
-    private(set) var manualOverviewHeight: Double?
+    private var manualHeights: [HeightRoute: Double] = [:]
     /// 每个路由最近一次量到的高度：弹出面板时按当前路由取，不借用其它页面的尺寸
     /// （否则内容比窗口高时 SwiftUI 根视图会被居中，上下两端一起被裁）。
     private var measuredHeights: [Route: Double] = [:]
     private let defaults: UserDefaults
 
-    var hasManualOverviewHeight: Bool { manualOverviewHeight != nil }
+    var hasManualHeight: Bool { manualHeight(for: route) != nil }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let savedHeight = defaults.object(forKey: Self.overviewHeightKey) as? Double,
-           savedHeight.isFinite {
-            let height = Self.clampedHeight(savedHeight)
-            manualOverviewHeight = height
-            panelSize = PanelSize(width: PanelSize.compact.width, height: height)
+        for heightRoute in HeightRoute.allCases {
+            guard let savedHeight = defaults.object(forKey: heightRoute.defaultsKey) as? Double,
+                  savedHeight.isFinite else { continue }
+            manualHeights[heightRoute] = Self.clampedHeight(savedHeight)
+        }
+        if let manualHeight = manualHeight(for: route) {
+            panelSize = PanelSize(width: PanelSize.compact.width, height: manualHeight)
         }
     }
 
@@ -89,7 +91,7 @@ final class PanelNavigationState {
         guard measuredRoute == route, height.isFinite else { return }
         let clamped = Self.clampedHeight(Double(height))
         measuredHeights[measuredRoute] = clamped
-        guard measuredRoute != .overview || manualOverviewHeight == nil else { return }
+        guard manualHeight(for: measuredRoute) == nil else { return }
         guard abs(clamped - panelSize.height) >= PanelSize.measurementTolerance else { return }
         panelSize = PanelSize(width: PanelSize.compact.width, height: clamped)
     }
@@ -97,26 +99,55 @@ final class PanelNavigationState {
     /// 弹出面板时的目标尺寸：取当前路由记住的高度；没有记录时沿用当前尺寸，
     /// 内容随后报出的测量值会把它校准。
     func size(for route: Route) -> PanelSize {
-        if route == .overview, let manualOverviewHeight {
-            return PanelSize(width: PanelSize.compact.width, height: manualOverviewHeight)
+        if let manualHeight = manualHeight(for: route) {
+            return PanelSize(width: PanelSize.compact.width, height: manualHeight)
         }
         guard let measured = measuredHeights[route] else { return panelSize }
         return PanelSize(width: PanelSize.compact.width, height: measured)
     }
 
-    func setUserOverviewHeight(_ height: CGFloat, persist: Bool) {
-        guard route == .overview, height.isFinite else { return }
+    func setUserHeight(_ height: CGFloat, persist: Bool) {
+        guard height.isFinite else { return }
         let clamped = Self.clampedHeight(Double(height))
-        manualOverviewHeight = clamped
+        let heightRoute = HeightRoute(route)
+        manualHeights[heightRoute] = clamped
         if abs(clamped - panelSize.height) >= PanelSize.measurementTolerance {
             panelSize = PanelSize(width: PanelSize.compact.width, height: clamped)
         }
         if persist {
-            defaults.set(clamped, forKey: Self.overviewHeightKey)
+            defaults.set(clamped, forKey: heightRoute.defaultsKey)
         }
     }
 
-    private static let overviewHeightKey = "panel.overviewHeight"
+    private func manualHeight(for route: Route) -> Double? {
+        manualHeights[HeightRoute(route)]
+    }
+
+    private enum HeightRoute: String, CaseIterable {
+        case overview
+        case settings
+        case migration
+        case addProvider
+        case addConfiguration
+        case editConfiguration
+        case appearance
+
+        init(_ route: Route) {
+            self = switch route {
+            case .overview: .overview
+            case .settings: .settings
+            case .migration: .migration
+            case .addProvider: .addProvider
+            case .addConfiguration: .addConfiguration
+            case .editConfiguration: .editConfiguration
+            case .appearance: .appearance
+            }
+        }
+
+        var defaultsKey: String {
+            self == .overview ? "panel.overviewHeight" : "panel.\(rawValue)Height"
+        }
+    }
 
     private static func clampedHeight(_ height: Double) -> Double {
         min(max(height, PanelSize.minimumAdaptiveHeight), PanelSize.maximumAdaptiveHeight)

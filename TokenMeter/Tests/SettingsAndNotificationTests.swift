@@ -617,13 +617,13 @@ struct PanelNavigationTests {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let navigation = PanelNavigationState(defaults: defaults)
-        navigation.setUserOverviewHeight(710, persist: false)
+        navigation.setUserHeight(710, persist: false)
         #expect(navigation.panelSize.height == 710)
         #expect(PanelNavigationState(defaults: defaults).panelSize == .compact)
 
-        navigation.setUserOverviewHeight(710, persist: true)
+        navigation.setUserHeight(710, persist: true)
         let restored = PanelNavigationState(defaults: defaults)
-        #expect(restored.hasManualOverviewHeight)
+        #expect(restored.hasManualHeight)
         #expect(restored.panelSize.height == 710)
     }
 
@@ -634,9 +634,9 @@ struct PanelNavigationTests {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let navigation = PanelNavigationState(defaults: defaults)
-        navigation.setUserOverviewHeight(100, persist: false)
+        navigation.setUserHeight(100, persist: false)
         #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
-        navigation.setUserOverviewHeight(1_000, persist: false)
+        navigation.setUserHeight(1_000, persist: false)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
 
         navigation.reportMeasuredHeight(420, for: .overview)
@@ -646,6 +646,38 @@ struct PanelNavigationTests {
         #expect(navigation.panelSize.height == 420)
         navigation.route = .overview
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+    }
+
+    @Test
+    func manualHeightPersistsForEveryPageCategory() {
+        let suite = "TokenMeterTests.PanelHeight.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let routes: [(PanelNavigationState.Route, Double)] = [
+            (.overview, 410),
+            (.settings, 420),
+            (.migration, 430),
+            (.addProvider, 440),
+            (.addConfiguration, 450),
+            (.editConfiguration(UUID()), 460),
+            (.appearance, 470),
+        ]
+        let navigation = PanelNavigationState(defaults: defaults)
+        for (route, height) in routes {
+            navigation.route = route
+            navigation.setUserHeight(CGFloat(height), persist: true)
+            navigation.reportMeasuredHeight(CGFloat(height + 100), for: route)
+            #expect(navigation.panelSize.height == height)
+        }
+
+        let restored = PanelNavigationState(defaults: defaults)
+        for (route, height) in routes {
+            restored.route = route
+            #expect(restored.hasManualHeight)
+            #expect(restored.panelSize.height == height)
+            #expect(restored.size(for: route).height == height)
+        }
     }
 
     @Test
