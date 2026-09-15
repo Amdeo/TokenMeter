@@ -5,6 +5,8 @@ import SwiftUI
 /// 分组用额度行自带的分组元数据（`Quota.group`），不解析显示名。
 /// 复用标准基础行组件（BalanceMenuRow / QuotaProgressRow）。
 struct SiyuCardRenderer: ProviderCardRenderer {
+    var capabilities: SubscriptionCardCapabilities { [.progressMeters, .balanceValues] }
+
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
         let groups = Self.planGroups(snapshot.quotas.filter { $0.kind == .generic })
         return AnyView(
@@ -109,6 +111,27 @@ struct SiyuCardRenderer: ProviderCardRenderer {
         case "GBP": "£"
         default: "\(code ?? "") "
         }
+    }
+
+    /// 与真实 Siyu 卡一致：一个带分组元数据的套餐（每日/每月窗口 + 到期日）+ 余额行
+    /// （余额供顶部 summary 锚点使用）。
+    func sampleSnapshot(subscription: Subscription) -> UsageSnapshot {
+        let plan = Quota.Group(key: "plan", title: "DeepSeek 大月卡")
+        let daily = Quota(
+            name: "DeepSeek 大月卡 · 每日", used: 4.2, limit: 10,
+            resetAt: .now.addingTimeInterval(3600), expiresAt: .now.addingTimeInterval(86400 * 12),
+            unit: .currency(code: "CNY", scale: 1), kind: .generic, group: plan
+        )
+        let monthly = Quota(
+            name: "DeepSeek 大月卡 · 每月", used: 86.5, limit: 300,
+            resetAt: .now.addingTimeInterval(86400 * 9), expiresAt: .now.addingTimeInterval(86400 * 12),
+            unit: .currency(code: "CNY", scale: 1), kind: .generic, group: plan
+        )
+        let balance = Quota(
+            name: "可用余额", used: 12.34, limit: 100, resetAt: nil,
+            unit: .currency(code: "CNY", scale: 1), kind: .balance
+        )
+        return .realtime(subscription: subscription, quotas: [daily, monthly, balance])
     }
 
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary? {

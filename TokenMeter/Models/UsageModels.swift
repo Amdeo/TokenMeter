@@ -37,10 +37,10 @@ extension SubscriptionCardStyle {
 
 /// 订阅卡片的渲染能力声明。
 ///
-/// 能力由两处共同声明，共享 UI（如进度条颜色设置）据此决定是否提供对应配置：
+/// 能力由两处共同声明，共享 UI（如颜色设置）据此决定是否提供对应配置：
 /// - `SubscriptionCardStyle.capabilities`：该样式画不画进度条；
 /// - `ProviderCardRenderer.capabilities`：该供应商卡片的数据有没有进度条
-///   （如余额型卡片只有一行余额）。
+///   （如余额型卡片只有一行余额，但它声明 `.balanceValues`，余额数值仍可配颜色）。
 ///
 /// 新增不含进度条的卡片样式或供应商卡片时只需一处不声明 `.progressMeters`，
 /// 不需要在共享视图里按供应商写分支。
@@ -49,6 +49,9 @@ struct SubscriptionCardCapabilities: OptionSet, Sendable, Hashable {
 
     /// 卡片渲染进度条（含紧凑样式的汇总进度条）。
     static let progressMeters = SubscriptionCardCapabilities(rawValue: 1 << 0)
+
+    /// 卡片渲染余额数值（正文余额行或头部余额锚点）；颜色设置据此提供余额颜色目标。
+    static let balanceValues = SubscriptionCardCapabilities(rawValue: 1 << 1)
 
     /// 卡片真正渲染出进度条：样式与供应商 renderer 都必须声明该能力。
     /// 颜色设置入口与紧凑样式的汇总条共用这一判定，两者不会各自脱节。
@@ -196,6 +199,8 @@ enum SubscriptionQuotaColors: Sendable {
     /// 语义稳定的额度窗口键。
     static let fiveHourKey = "kind.fiveHour"
     static let weeklyKey = "kind.weekly"
+    /// 余额数值的语义键（正文余额行与头部余额锚点共用）。
+    static let balanceKey = "kind.balance"
 
     /// Kimi 总使用量的内置默认色。
     static let overallDefault: Color = .indigo
@@ -220,7 +225,8 @@ enum SubscriptionQuotaColors: Sendable {
         switch kind {
         case .fiveHour: fiveHourKey
         case .weekly: weeklyKey
-        case .generic, .balance: nil
+        case .balance: balanceKey
+        case .generic: nil
         }
     }
 

@@ -30,6 +30,18 @@ struct MeterBar: View {
 struct BalanceMenuRow: View {
     let quota: Quota?
     var title: String = "可用余额"
+    /// 当前样式的配色；配过色时优先用配置色（含偏低/用尽状态）。
+    var colors: [String: UInt32] = [:]
+
+    /// 余额数值颜色：配过色（name → kind.balance → generic）始终优先，
+    /// 否则正常态用文字主色、偏低/用尽维持状态警示色。
+    static func valueColor(quota: Quota?, colors: [String: UInt32]) -> Color {
+        guard let quota else { return TM.textSecondary }
+        if SubscriptionQuotaColors.hasConfiguration(colors, name: quota.name, kind: quota.kind) {
+            return SubscriptionQuotaColors.resolve(colors, quota: quota)
+        }
+        return quota.status == .normal ? TM.textPrimary : quota.status.tint
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -39,7 +51,7 @@ struct BalanceMenuRow: View {
             Spacer(minLength: 8)
             Text(quota?.remainingText ?? "—")
                 .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
-                .foregroundStyle(quota.map { $0.status == .normal ? TM.textPrimary : $0.status.tint } ?? TM.textSecondary)
+                .foregroundStyle(Self.valueColor(quota: quota, colors: colors))
         }
         .accessibilityElement(children: .combine)
     }
@@ -121,12 +133,22 @@ struct QuotaProgressRow: View {
 // MARK: - 标准卡片渲染器
 
 /// 余额型供应商：正文显示单行余额，无顶部摘要，状态只看余额。
-/// 余额没有进度条，因此不声明 `.progressMeters`：编辑流程不会提供进度条颜色设置。
+/// 余额没有进度条，因此不声明 `.progressMeters`；但余额数值本身可配颜色，
+/// 编辑流程据此提供余额颜色设置。
 struct BalanceCardRenderer: ProviderCardRenderer {
-    var capabilities: SubscriptionCardCapabilities { [] }
+    var capabilities: SubscriptionCardCapabilities { [.balanceValues] }
 
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
-        AnyView(BalanceMenuRow(quota: snapshot.quotas.first { $0.kind == .balance }))
+        AnyView(BalanceMenuRow(
+            quota: snapshot.quotas.first { $0.kind == .balance },
+            colors: subscription.currentQuotaColors
+        ))
+    }
+
+    func sampleSnapshot(subscription: Subscription) -> UsageSnapshot {
+        .realtime(subscription: subscription, quotas: [
+            Quota(name: "API 余额", used: 81.58, limit: 100, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
+        ])
     }
 
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary? {

@@ -103,11 +103,25 @@ protocol ProviderCardRenderer {
     func summary(subscription: Subscription, snapshot: UsageSnapshot) -> CardSummary?
     /// 卡片状态点/无障碍状态的额度状态派生（realtime 分支）。
     func status(subscription: Subscription, snapshot: UsageSnapshot) -> QuotaStatus
-    /// 卡片渲染能力；默认支持进度条，没有进度条的卡片（如余额型）在自己的 renderer 里声明空集合。
+    /// 卡片渲染能力；默认支持进度条，只有一行余额的卡片在自己声明 `.balanceValues`。
     var capabilities: SubscriptionCardCapabilities { get }
+    /// 样式预览用的示例快照：与该 renderer 的真实卡片形态一致（余额型只给余额行，窗口型只给窗口行）。
+    @MainActor func sampleSnapshot(subscription: Subscription) -> UsageSnapshot
 }
 
 @MainActor
 extension ProviderCardRenderer {
     var capabilities: SubscriptionCardCapabilities { [.progressMeters] }
+
+    /// 默认示例：两个窗口额度（5 小时 / 每周），不带总使用量聚合。
+    /// 余额型或带聚合锚点的卡片在自己的 renderer 里覆写。
+    func sampleSnapshot(subscription: Subscription) -> UsageSnapshot {
+        .realtime(
+            subscription: subscription,
+            quotas: [
+                Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: .now.addingTimeInterval(7200), kind: .fiveHour),
+                Quota(name: "每周额度", used: 34, limit: 100, resetAt: .now.addingTimeInterval(86400 * 2), kind: .weekly)
+            ]
+        )
+    }
 }

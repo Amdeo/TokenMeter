@@ -42,8 +42,8 @@ final class PanelNavigationState {
         case addProvider
         case addConfiguration
         case editConfiguration(UUID)
-        /// 进度条颜色二级页；从新建/编辑配置页进入，返回仍在原配置页。
-        case quotaColors
+        /// 外观二级页（卡片样式 + 配色 + 预览）；从新建/编辑配置页进入，返回仍在原配置页。
+        case appearance
     }
 
     enum Content {
@@ -53,7 +53,7 @@ final class PanelNavigationState {
         case addProvider
         case addConfiguration(SubscriptionEditorDraft)
         case editConfiguration(draft: SubscriptionEditorDraft, subscription: Subscription)
-        case quotaColors(SubscriptionEditorDraft)
+        case appearance(SubscriptionEditorDraft)
         case recovery
     }
 
@@ -151,19 +151,19 @@ final class PanelNavigationState {
                   let subscription = subscriptions.first(where: { $0.id == id })
             else { return .recovery }
             return .editConfiguration(draft: draft, subscription: subscription)
-        case .quotaColors:
+        case .appearance:
             guard let draft else { return .recovery }
-            return .quotaColors(draft)
+            return .appearance(draft)
         }
     }
 
-    /// 进入颜色二级页：草稿由配置页延续，颜色改动仍属于同一次编辑。
-    func showQuotaColorSettings() {
+    /// 进入外观二级页：草稿由配置页延续，样式与颜色改动仍属于同一次编辑。
+    func showAppearanceSettings() {
         guard draft != nil else { return }
-        route = .quotaColors
+        route = .appearance
     }
 
-    /// 从颜色页返回它来自的配置页（新建或编辑），不丢草稿。
+    /// 从外观页返回它来自的配置页（新建或编辑），不丢草稿。
     func returnToEditor() {
         guard let draft else { returnToOverview(); return }
         route = draft.original.map { .editConfiguration($0.id) } ?? .addConfiguration

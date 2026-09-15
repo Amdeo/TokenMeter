@@ -163,7 +163,7 @@ struct MenuBarView: View {
         }
     }
 
-    /// 从颜色二级页回到它来自的配置页，草稿（含未保存的颜色）原样保留。
+    /// 从外观二级页回到它来自的配置页，草稿（含未保存的样式与颜色）原样保留。
     private func navigateBackToEditor() {
         withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) {
             navigation.returnToEditor()
@@ -201,18 +201,18 @@ struct MenuBarView: View {
                 }
                 .transition(pushTransition)
             case .addConfiguration(let draft):
-                SubscriptionEditorSheet(draft: draft, onClose: navigateBack, onQuotaColors: openQuotaColors)
+                SubscriptionEditorSheet(draft: draft, onClose: navigateBack, onAppearance: openAppearance)
                     .transition(pushTransition)
             case .editConfiguration(let draft, let subscription):
                 SubscriptionEditorSheet(
                     draft: draft,
                     subscription: subscription,
                     onClose: navigateBack,
-                    onQuotaColors: openQuotaColors
+                    onAppearance: openAppearance
                 )
                 .transition(pushTransition)
-            case .quotaColors(let draft):
-                QuotaColorsPage(draft: draft, onBack: navigateBackToEditor)
+            case .appearance(let draft):
+                SubscriptionAppearancePage(draft: draft, onBack: navigateBackToEditor)
                     .transition(pushTransition)
             case .recovery:
                 NavigationRecoveryView(onReturn: navigateBack).transition(pushTransition)
@@ -459,9 +459,9 @@ private extension MenuBarView {
         navigateForward { navigation.beginAdding() }
     }
 
-    /// 进入颜色二级页；草稿仍是当前编辑会话，颜色在保存订阅时一并落盘。
-    func openQuotaColors() {
-        navigateForward { navigation.showQuotaColorSettings() }
+    /// 进入外观二级页；草稿仍是当前编辑会话，样式与颜色在保存订阅时一并落盘。
+    func openAppearance() {
+        navigateForward { navigation.showAppearanceSettings() }
     }
 
     func openEditor(for subscription: Subscription) {

@@ -3,6 +3,8 @@ import SwiftUI
 /// Kimi 订阅卡：5 小时 / 每周两行窗口。月总额度由顶部「总使用量」锚点呈现，
 /// 锚点文案直接带上月额度的重置时间，正文不重复该行。
 struct KimiCardRenderer: ProviderCardRenderer {
+    var capabilities: SubscriptionCardCapabilities { [.progressMeters, .balanceValues] }
+
     /// 订阅制的窗口额度；余额、加油包等不进入正文。
     private static let windowKinds: Set<Quota.Kind> = [.fiveHour, .weekly]
 
@@ -28,9 +30,26 @@ struct KimiCardRenderer: ProviderCardRenderer {
         return AnyView(
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(balances) { quota in
-                    BalanceMenuRow(quota: quota, title: quota.name)
+                    BalanceMenuRow(
+                        quota: quota,
+                        title: quota.name,
+                        colors: subscription.currentQuotaColors
+                    )
                 }
             }
+        )
+    }
+
+    /// 与真实 Kimi 卡一致：两个窗口行 + 顶部「总使用量」锚点（含月额度重置时间）。
+    func sampleSnapshot(subscription: Subscription) -> UsageSnapshot {
+        .realtime(
+            subscription: subscription,
+            quotas: [
+                Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: .now.addingTimeInterval(7200), kind: .fiveHour),
+                Quota(name: "每周额度", used: 34, limit: 100, resetAt: .now.addingTimeInterval(86400 * 2), kind: .weekly)
+            ],
+            overallUsageRatio: 0.52,
+            overallResetAt: .now.addingTimeInterval(86400 * 5)
         )
     }
 
