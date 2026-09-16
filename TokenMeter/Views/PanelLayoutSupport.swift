@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import os
 
 struct PanelVisibilityGate {
     private(set) var isVisible = false
@@ -88,10 +89,31 @@ enum PanelFramePositioner {
 /// AppKit 创建后备图层后会丢掉 `makeBackingLayer()` 里设的形状，图层重建（wantsLayer 关→开）
 /// 也会把一次性赋值的圆角清回 0；`layout()` 在 AppKit 建立/更新图层之后运行，
 /// 所以形状能跟上图层重建与尺寸变化。
+///
+/// 宿主内容（SwiftUI 视图）由控制器注册进来，尺寸必须恒等于容器 bounds：
+/// 宿主一旦比容器矮，内容就会整块贴到底部、顶部露出空白，而窗口在手动高度下不会再变化，
+/// 错位会一直保留。`layout()` 只观测不纠正 —— 几何由约束保证，这里记录一次便于复发时定位。
 @MainActor
 final class PanelContainerView: NSView {
+    private static let logger = Logger(subsystem: "com.tokenmeter.app", category: "panel")
+
+    /// 面板内容宿主视图；由 `MenuBarPanelController` 在装配时注册。
+    weak var hostedContentView: NSView?
+
     override func layout() {
         super.layout()
+        if let hostedContentView, hostedContentView.frame != bounds {
+            let hostFrame = NSStringFromRect(hostedContentView.frame)
+            let containerBounds = NSStringFromRect(self.bounds)
+            let windowFrame = NSStringFromRect(self.window?.frame ?? .zero)
+            let safeArea = String(describing: hostedContentView.safeAreaInsets)
+            Self.logger.error("""
+            panel host geometry drift host=\(hostFrame, privacy: .public) \
+            bounds=\(containerBounds, privacy: .public) \
+            window=\(windowFrame, privacy: .public) \
+            safe=\(safeArea, privacy: .public)
+            """)
+        }
         guard let layer else { return }
         layer.cornerRadius = PanelLayoutMetrics.cornerRadius
         layer.cornerCurve = .continuous

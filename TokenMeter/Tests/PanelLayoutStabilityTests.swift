@@ -235,7 +235,7 @@ struct PanelLayoutStabilityTests {
         }
     }
 
-    /// 宿主视图靠自动尺寸跟随容器：面板窗口变高变矮后宿主必须同尺寸，否则内容会被裁。
+    /// 宿主视图靠约束跟随容器：面板窗口变高变矮后宿主必须同尺寸，否则内容会被裁。
     @Test
     func hostingViewTracksContainerSizeThroughWindowResize() {
         let harness = makePanelHost(root: Color.clear)
@@ -257,19 +257,42 @@ struct PanelLayoutStabilityTests {
         #expect(hosting.frame.height == container.bounds.height)
     }
 
+    /// 宿主视图与容器几何不一致时必须由约束纠正：宿主被外力改小（平台视图插约束、布局引擎
+    /// 重解、被跳过的布局）后，内容会整块贴到底部、顶部露出空白，而手动高度下面板窗口不会再
+    /// 变化，错位就永久保留（用户现场：窗口 724pt，内容与玻璃只有 638pt 且贴底）。
+    @Test
+    func hostedContentViewIsPulledBackToContainerBounds() {
+        let harness = makePanelHost(root: Color.clear, height: 724)
+        let window = harness.window
+        let container = harness.container
+        let hosting = harness.hosting
+
+        container.layoutSubtreeIfNeeded()
+        #expect(hosting.frame == container.bounds)
+
+        // 模拟失同步：宿主比容器矮 86pt（贴底、顶部留白）。
+        hosting.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: container.bounds.width,
+            height: container.bounds.height - 86
+        )
+        #expect(hosting.frame.height != container.bounds.height)
+
+        container.layoutSubtreeIfNeeded()
+        #expect(hosting.frame == container.bounds)
+        #expect(hosting.frame.height == window.frame.height)
+    }
+
     /// 组装与生产一致的链路：面板容器 → NSHostingView → 无边框窗口。
-    /// 宿主靠自动尺寸跟随容器，测试里不创建真实状态栏与菜单。
+    /// 宿主尺寸由四边约束钉死在容器上（与 `MenuBarPanelController.start()` 一致），
+    /// 测试里不创建真实状态栏与菜单。
     private func makePanelHost(
         root: some View,
         height: CGFloat = 584
     ) -> (window: NSWindow, container: PanelContainerView, hosting: NSHostingView<AnyView>) {
         let container = PanelContainerView(frame: NSRect(x: 0, y: 0, width: 340, height: height))
         container.wantsLayer = true
-        let hosting = NSHostingView(rootView: AnyView(root))
-        hosting.translatesAutoresizingMaskIntoConstraints = true
-        hosting.autoresizingMask = [.width, .height]
-        hosting.frame = container.bounds
-        container.addSubview(hosting)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 340, height: height),
             styleMask: [.borderless],
@@ -277,6 +300,18 @@ struct PanelLayoutStabilityTests {
             defer: false
         )
         window.contentView = container
+
+        let hosting = NSHostingView(rootView: AnyView(root))
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        hosting.frame = container.bounds
+        container.hostedContentView = hosting
+        container.addSubview(hosting)
+        NSLayoutConstraint.activate([
+            hosting.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            hosting.topAnchor.constraint(equalTo: container.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
         return (window, container, hosting)
     }
 

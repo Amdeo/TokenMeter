@@ -283,6 +283,10 @@ struct MenuBarView: View {
         .onChange(of: store.settings.autoRefreshEnabled) { _, enabled in
             if enabled { store.start() } else { store.stop() }
         }
+        // 面板是一整块无 chrome 的表面（无标题栏、菜单栏、Dock 语义），窗口内容矩形就是它的
+        // 全部可用区域：任何来源的 safe area inset 都不允许内缩内容，否则内容会整体偏离窗口
+        // （顶部露出空白、玻璃面跟着变矮）。窗口尺寸与内容尺寸必须始终一一对应。
+        .ignoresSafeArea()
     }
 
     private var dashboardContent: some View {
