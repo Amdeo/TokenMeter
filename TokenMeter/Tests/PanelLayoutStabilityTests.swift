@@ -317,8 +317,29 @@ struct PanelLayoutStabilityTests {
         #expect(hosting.frame == container.bounds)
     }
 
+    /// 增高方向：设置页脚注（登录项/通知状态）异步到达后，测量把面板抬高，容器跟着变高，宿主
+    /// 必须同高。NSHostingView 默认按 SwiftUI 内容的 fitting 尺寸给自己加尺寸约束，会一路顶回去：
+    /// HEAD 下容器被拽回内容的 fitting 高度（620，而不是请求的 756），窗口停在 810 而宿主留在
+    /// 838 的容器里（顶部 28pt 空白，见 drift 日志）。装配里关掉自尺寸后，容器保持请求高度、
+    /// 宿主填满它。这里只走生产装配 + 生产求解入口，测试自身不调 `layoutSubtreeIfNeeded()`。
+    @Test
+    func hostedViewFollowsContainerGrowthEvenWhenTheContentFitsShorter() {
+        // 内容自然高度 620，比容器矮 —— 正是自尺寸约束会把宿主钉住的情形。
+        let harness = makePanelHost(root: Color.clear.frame(height: 620), height: 728)
+        let container = harness.container
+        let hosting = harness.hosting
+
+        // 测量把面板抬高 28pt：窗口 frame 的变化最终落到容器 bounds 上。
+        container.frame = NSRect(x: 0, y: 0, width: 340, height: 756)
+        container.resolveHostedGeometry()
+
+        #expect(container.bounds.height == 756)
+        #expect(hosting.frame.height == container.bounds.height)
+        #expect(hosting.frame == container.bounds)
+    }
+
     /// 组装与生产一致的链路：面板容器 → NSHostingView → 无边框窗口。
-    /// 宿主尺寸由四边约束钉死在容器上（与 `MenuBarPanelController.start()` 一致），
+    /// 宿主装配走容器的同一个入口（与 `MenuBarPanelController.start()` 一致），
     /// 测试里不创建真实状态栏与菜单。
     private func makePanelHost(
         root: some View,
@@ -335,16 +356,7 @@ struct PanelLayoutStabilityTests {
         window.contentView = container
 
         let hosting = NSHostingView(rootView: AnyView(root))
-        hosting.translatesAutoresizingMaskIntoConstraints = false
-        hosting.frame = container.bounds
-        container.hostedContentView = hosting
-        container.addSubview(hosting)
-        NSLayoutConstraint.activate([
-            hosting.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            hosting.topAnchor.constraint(equalTo: container.topAnchor),
-            hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
+        container.installHostedContentView(hosting)
         return (window, container, hosting)
     }
 

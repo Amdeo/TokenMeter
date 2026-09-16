@@ -249,23 +249,12 @@ final class MenuBarPanelController: NSObject {
         container.autoresizingMask = [.width, .height]
 
         let hostingView = MenuBarHostingView(rootView: rootView)
-        // 宿主视图尺寸只由容器决定，且必须是结构性的：过去用一次赋值 + autoresizing 同步，
-        // 而 autoresizing 只按增量调整 frame —— 宿主一旦被外力改小（平台视图插约束、布局引擎
-        // 重解、被跳过的布局），错位就会一直保留（窗口在手动高度下不再变化），表现为内容比
-        // 窗口矮一截且贴底。四边约束让布局引擎在每次布局里把宿主拉回容器尺寸。
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         panel.contentView = container
-        hostingView.frame = container.bounds
-        container.hostedContentView = hostingView
-        container.addSubview(hostingView)
-        NSLayoutConstraint.activate([
-            hostingView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            hostingView.topAnchor.constraint(equalTo: container.topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
+        // 宿主尺寸只由容器决定：四边约束 + 关掉 NSHostingView 自尺寸，装配写在容器里，
+        // 控制器与回归测试共用同一入口。
+        container.installHostedContentView(hostingView)
         self.hostingView = hostingView
 
         installEventHandling()

@@ -92,8 +92,9 @@ enum PanelFramePositioner {
 ///
 /// 宿主内容（SwiftUI 视图）由控制器注册进来，尺寸必须恒等于容器 bounds：
 /// 宿主一旦比容器矮，内容就会整块贴到底部、顶部露出空白，而窗口在手动高度下不会再变化，
-/// 错位会一直保留。几何由约束保证，`layout()` 只观测不纠正 —— 但约束只有在布局 pass 真的
-/// 发生时才有机会求解，所以改窗口 frame 的路径必须用 `resolveHostedGeometry()` 显式推动。
+/// 错位会一直保留。装配（`installHostedContentView`）用四边约束钉死尺寸，并关掉
+/// NSHostingView 按内容 fitting 高度给自己加的自尺寸约束；`layout()` 只观测不纠正，
+/// 改窗口 frame 的路径用 `resolveHostedGeometry()` 显式推动求解、必要时幂等写回一次。
 @MainActor
 final class PanelContainerView: NSView {
     private static let logger = Logger(subsystem: "com.tokenmeter.app", category: "panel")
@@ -124,10 +125,36 @@ final class PanelContainerView: NSView {
         }
     }
 
+    /// 面板内容宿主装配：四边约束把宿主钉死在容器上，并关掉 NSHostingView 的自尺寸约束。
+    /// 控制器与回归测试共用这一处入口，尺寸不变量只有一份实现。
+    func installHostedContentView<Content: View>(_ view: NSHostingView<Content>) {
+        view.translatesAutoresizingMaskIntoConstraints = false
+        // NSHostingView 默认按 SwiftUI 内容的 fitting 尺寸给自己加尺寸约束，与下面的四边约束
+        // 打架：内容比窗口矮时（设置页脚注异步到达、测量把窗口从 810 抬到 838）宿主被留在
+        // fitting 高度上，容器与窗口继续长高，顶部露出 28pt 空白；连显式设 frame 也会被它的
+        // 自尺寸约束覆盖回来（实测容器 728/宿主 620，两次求解后仍是 620）。面板高度本来就由
+        // 测量值驱动（displayedSize），宿主只负责填满容器，所以这里关掉自尺寸。
+        view.sizingOptions = []
+        view.frame = bounds
+        hostedContentView = view
+        addSubview(view)
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: trailingAnchor),
+            view.topAnchor.constraint(equalTo: topAnchor),
+            view.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
     private func solveHostedLayout() {
         needsLayout = true
         layoutSubtreeIfNeeded()
-        // 求解之后宿主仍不等同容器 bounds 说明约束没被满足，记录一次便于复发时定位。
+        // 求解没有把宿主拉回来时显式设一次：容器 frame 走的是 AppKit/窗口那条路，
+        // 约束不保证每次都会重解，幂等写回保证「立即正确」而不是等下一次布局。
+        if let hostedContentView, hostedContentView.frame != bounds {
+            hostedContentView.frame = bounds
+        }
+        // 写回之后仍不等同容器 bounds 说明不变量真的被破坏了，记录最终状态便于定位。
         logHostGeometryDriftIfNeeded()
     }
 
