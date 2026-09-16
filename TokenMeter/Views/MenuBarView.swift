@@ -319,6 +319,7 @@ struct MenuBarView: View {
             DashboardHeader(
                 status: synchronizationStatus,
                 isRefreshing: store.isRefreshing,
+                onAdd: { openAddSubscription() },
                 onRefresh: { store.refreshAll(source: .manual) },
                 onQuit: { confirmQuit = true },
                 isReordering: isReordering,
@@ -584,6 +585,7 @@ private struct DashboardHeader: View {
     /// 同步状态由时间驱动，单独用 TimelineView 包裹，避免整块面板随计时器重建。
     let status: (Date) -> (text: String, color: Color)
     let isRefreshing: Bool
+    let onAdd: () -> Void
     let onRefresh: () -> Void
     let onQuit: () -> Void
     var isReordering: Bool = false
@@ -611,6 +613,10 @@ private struct DashboardHeader: View {
             .layoutPriority(1)
 
             Spacer()
+
+            // 常驻轻 accent 底色（无描边），把“添加订阅”与刷新/排序/退出等工具动作区分开。
+            HeaderIconButton(systemName: "plus", label: "添加订阅", tint: TM.accent, action: onAdd)
+                .background(TM.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             HeaderIconButton(systemName: "arrow.clockwise", label: "刷新全部", rotation: spinning && !reduceMotion ? 360 : 0, action: onRefresh)
             .disabled(isRefreshing)
