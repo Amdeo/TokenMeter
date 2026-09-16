@@ -284,6 +284,39 @@ struct PanelLayoutStabilityTests {
         #expect(hosting.frame.height == window.frame.height)
     }
 
+    /// 右击菜单导航路径（添加订阅 / 设置…）：窗口 frame 在菜单跟踪循环里被改掉时，SwiftUI 会
+    /// 跳过那次布局（`NSHostingView is being laid out reentrantly ... the current layout pass
+    /// will be skipped.`），四边约束没有机会求解，宿主就停在陈旧尺寸上；手动高度下窗口不再
+    /// 变化、面板也不刷新，之后不会再有布局 pass，错位一直保留（实测：窗口 810pt、宿主 896pt）。
+    ///
+    /// 这里只走生产入口 —— 测试自己不调 `layoutSubtreeIfNeeded()`，撤销补修后宿主就回不到容器
+    /// 尺寸（实测重建的窗口改尺寸会顺带同步求解一次，所以失同步必须在改完尺寸之后制造，
+    /// 否则测试会掩盖缺陷）。
+    @Test
+    func forcedGeometrySolvePullsTheHostBackAfterTheFrameChange() {
+        let harness = makePanelHost(root: Color.clear, height: 724)
+        let window = harness.window
+        let container = harness.container
+        let hosting = harness.hosting
+
+        // 路由切到设置页：窗口 frame 改成该页记住的高度。
+        window.setContentSize(NSSize(width: 340, height: 810))
+
+        // 被跳过的那次布局留下的错位：宿主比容器高 86pt，顶边跑到窗口上方。
+        hosting.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: container.bounds.width,
+            height: container.bounds.height + 86
+        )
+        #expect(hosting.frame != container.bounds)
+
+        container.resolveHostedGeometry()
+
+        #expect(hosting.frame.height == window.frame.height)
+        #expect(hosting.frame == container.bounds)
+    }
+
     /// 组装与生产一致的链路：面板容器 → NSHostingView → 无边框窗口。
     /// 宿主尺寸由四边约束钉死在容器上（与 `MenuBarPanelController.start()` 一致），
     /// 测试里不创建真实状态栏与菜单。

@@ -431,6 +431,7 @@ final class MenuBarPanelController: NSObject {
 
         // 先设置最终 frame，再显示窗口；自有面板不会经过系统的二次重摆。
         panel.setFrame(frame, display: true)
+        resolveHostedGeometry()
         NSApp.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -500,5 +501,13 @@ final class MenuBarPanelController: NSObject {
             || abs(panel.frame.width - frame.width) > 0.5
             || abs(panel.frame.height - frame.height) > 0.5 else { return }
         panel.setFrame(frame, display: true)
+        resolveHostedGeometry()
+    }
+
+    /// 改完窗口 frame 后强制容器求解一次：菜单跟踪循环里改 frame 会让 SwiftUI 跳过那次布局，
+    /// 四边约束没有机会把宿主拉回容器尺寸，而手动高度下窗口不再变化、面板也不刷新，
+    /// 错位就会一直保留（详见 `PanelContainerView.resolveHostedGeometry()`）。
+    private func resolveHostedGeometry() {
+        (panel.contentView as? PanelContainerView)?.resolveHostedGeometry()
     }
 }

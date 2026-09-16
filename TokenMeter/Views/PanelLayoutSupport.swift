@@ -92,7 +92,8 @@ enum PanelFramePositioner {
 ///
 /// 宿主内容（SwiftUI 视图）由控制器注册进来，尺寸必须恒等于容器 bounds：
 /// 宿主一旦比容器矮，内容就会整块贴到底部、顶部露出空白，而窗口在手动高度下不会再变化，
-/// 错位会一直保留。`layout()` 只观测不纠正 —— 几何由约束保证，这里记录一次便于复发时定位。
+/// 错位会一直保留。几何由约束保证，`layout()` 只观测不纠正 —— 但约束只有在布局 pass 真的
+/// 发生时才有机会求解，所以改窗口 frame 的路径必须用 `resolveHostedGeometry()` 显式推动。
 @MainActor
 final class PanelContainerView: NSView {
     private static let logger = Logger(subsystem: "com.tokenmeter.app", category: "panel")
@@ -102,22 +103,46 @@ final class PanelContainerView: NSView {
 
     override func layout() {
         super.layout()
-        if let hostedContentView, hostedContentView.frame != bounds {
-            let hostFrame = NSStringFromRect(hostedContentView.frame)
-            let containerBounds = NSStringFromRect(self.bounds)
-            let windowFrame = NSStringFromRect(self.window?.frame ?? .zero)
-            let safeArea = String(describing: hostedContentView.safeAreaInsets)
-            Self.logger.error("""
-            panel host geometry drift host=\(hostFrame, privacy: .public) \
-            bounds=\(containerBounds, privacy: .public) \
-            window=\(windowFrame, privacy: .public) \
-            safe=\(safeArea, privacy: .public)
-            """)
-        }
+        logHostGeometryDriftIfNeeded()
         guard let layer else { return }
         layer.cornerRadius = PanelLayoutMetrics.cornerRadius
         layer.cornerCurve = .continuous
         layer.masksToBounds = true
+    }
+
+    /// 改完窗口 frame 之后的统一收尾：立刻推动一次布局求解，让四边约束把宿主拉回容器尺寸。
+    ///
+    /// 菜单跟踪循环里改 frame 时（右击菜单 → 添加订阅 / 设置…），SwiftUI 会判定宿主被重入布局
+    /// 并跳过该次 pass（系统日志：`NSHostingView is being laid out reentrantly ... the current
+    /// layout pass will be skipped.`），此后没有任何布局 pass，约束永远得不到求解的机会：
+    /// 手动高度下窗口不再变化、面板也不刷新，错位就一直保留（用户现场：窗口 724pt，
+    /// 内容与玻璃 638pt 且贴底）。这里显式求解一次；同步这次仍被跳过时，主线程下一轮再补一次。
+    func resolveHostedGeometry() {
+        solveHostedLayout()
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.solveHostedLayout() }
+        }
+    }
+
+    private func solveHostedLayout() {
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+        // 求解之后宿主仍不等同容器 bounds 说明约束没被满足，记录一次便于复发时定位。
+        logHostGeometryDriftIfNeeded()
+    }
+
+    private func logHostGeometryDriftIfNeeded() {
+        guard let hostedContentView, hostedContentView.frame != bounds else { return }
+        let hostFrame = NSStringFromRect(hostedContentView.frame)
+        let containerBounds = NSStringFromRect(self.bounds)
+        let windowFrame = NSStringFromRect(self.window?.frame ?? .zero)
+        let safeArea = String(describing: hostedContentView.safeAreaInsets)
+        Self.logger.error("""
+        panel host geometry drift host=\(hostFrame, privacy: .public) \
+        bounds=\(containerBounds, privacy: .public) \
+        window=\(windowFrame, privacy: .public) \
+        safe=\(safeArea, privacy: .public)
+        """)
     }
 }
 
