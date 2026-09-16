@@ -17,17 +17,17 @@ struct SettingsPanel: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HeaderIconButton(systemName: "chevron.left", label: "返回概览", action: onBack)
-
-            VStack(alignment: .leading, spacing: 3) {
+            ZStack {
                 Text("设置")
-                    .font(.system(size: 20, weight: .semibold))
-                    .tracking(-0.5)
-                Text("TokenMeter 偏好设置")
-                    .font(.system(size: 11))
-                    .foregroundStyle(TM.textSecondary)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(TM.textPrimary)
+
+                HStack {
+                    HeaderIconButton(systemName: "chevron.left", label: "返回概览", action: onBack)
+                    Spacer()
+                }
             }
-            .padding(.top, 10)
+            .frame(height: 20)
             .padding(.bottom, 10)
 
             ScrollView {

@@ -20,7 +20,9 @@ enum PanelLayoutMetrics {
     static let rootVerticalChrome: CGFloat = 16
     static let pageChrome: CGFloat = 116
     static let providerChrome: CGFloat = 66
-    static let settingsChrome: CGFloat = 108
+    static let settingsChrome: CGFloat = 58
+    /// 迁移页头部仍是「返回按钮 + 20pt 标题」两层结构，比设置页高。
+    static let migrationChrome: CGFloat = 108
 
     /// 概览订阅列表的最大可视高度：内容超过后列表内部滚动，
     /// 面板高度仍随内容自适应，但整体不超过默认面板高度量级。

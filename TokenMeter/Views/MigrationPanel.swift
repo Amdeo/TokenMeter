@@ -38,7 +38,7 @@ struct MigrationPanel: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .reportsIntrinsicPanelHeight(route: .migration, chrome: PanelLayoutMetrics.settingsChrome)
+                .reportsIntrinsicPanelHeight(route: .migration, chrome: PanelLayoutMetrics.migrationChrome)
             }
             .scrollIndicators(.hidden)
         }
