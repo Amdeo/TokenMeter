@@ -614,9 +614,8 @@ private struct DashboardHeader: View {
 
             Spacer()
 
-            // 常驻轻 accent 底色（无描边），把“添加订阅”与刷新/排序/退出等工具动作区分开。
+            // 仅用 accent 图标色区分“添加订阅”，静止不加底色，悬停反馈交给 HeaderIconButton。
             HeaderIconButton(systemName: "plus", label: "添加订阅", tint: TM.accent, action: onAdd)
-                .background(TM.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             HeaderIconButton(systemName: "arrow.clockwise", label: "刷新全部", rotation: spinning && !reduceMotion ? 360 : 0, action: onRefresh)
             .disabled(isRefreshing)
