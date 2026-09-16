@@ -194,6 +194,7 @@ final class MenuBarPanelController: NSObject {
     private var secondaryClickMonitor: Any?
     private var visibilityGate = PanelVisibilityGate()
     private var isStarted = false
+    private var geometryUpdateScheduled = false
 
     init(store: UsageStore, navigation: PanelNavigationState) {
         self.store = store
@@ -234,7 +235,7 @@ final class MenuBarPanelController: NSObject {
         let rootView = AnyView(
             MenuBarView(
                 onPanelSizeChange: { [weak self] _ in
-                    self?.refreshPanelGeometry()
+                    self?.schedulePanelGeometryUpdate()
                 },
                 onReorderModeChange: { [weak self] reordering in
                     self?.panel.isReordering = reordering
@@ -334,10 +335,23 @@ final class MenuBarPanelController: NSObject {
         }
     }
 
-    /// 面板几何变化的统一入口：先按当前屏幕刷新可视高度上限，再对齐窗口。
+    /// SwiftUI 测量与切页回调只排队；当前渲染结束后再改窗口，避免重入布局。
+    private func schedulePanelGeometryUpdate() {
+        guard !geometryUpdateScheduled else { return }
+        geometryUpdateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.geometryUpdateScheduled = false
+            guard self.isStarted else { return }
+            self.refreshPanelGeometry()
+        }
+    }
+
+    /// 所有页面共用一个入口：重新取菜单栏锚点、限制高度、同步窗口与宿主。
     private func refreshPanelGeometry() {
         updateVisibleHeightLimit()
-        applyCurrentFrame()
+        guard let frame = frame(for: navigation.displayedSize) else { return }
+        (panel.contentView as? PanelContainerView)?.synchronizeWindowFrame(frame)
     }
 
     /// 限高只影响显示：窗口比期望高度矮、内容在内部滚动，
@@ -413,14 +427,8 @@ final class MenuBarPanelController: NSObject {
 
     private func showPanel() {
         guard isStarted else { return }
-        // 窗口尺寸只用当前路由记住的高度（navigation 在切页时就已同步好）：
-        // 借用别的页面的尺寸会让内容被居中裁掉上下两端。
-        updateVisibleHeightLimit()
-        guard let frame = frame(for: navigation.displayedSize) else { return }
-
-        // 先设置最终 frame，再显示窗口；自有面板不会经过系统的二次重摆。
-        panel.setFrame(frame, display: true)
-        resolveHostedGeometry()
+        // 显示与切页走同一几何入口，先定位到菜单栏下沿再显示。
+        refreshPanelGeometry()
         NSApp.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -480,23 +488,4 @@ final class MenuBarPanelController: NSObject {
         )
     }
 
-    private func applyCurrentFrame() {
-        // 不按可见性跳过：从右击菜单触发的导航发生在菜单跟踪循环里，
-        // orderFrontRegardless 会被推迟到菜单关闭后才生效，此时内容已经报出新高度。
-        // 若此时丢弃，窗口就会停在旧高度，内容上下被裁。
-        guard let frame = frame(for: navigation.displayedSize) else { return }
-        guard abs(panel.frame.minX - frame.minX) > 0.5
-            || abs(panel.frame.minY - frame.minY) > 0.5
-            || abs(panel.frame.width - frame.width) > 0.5
-            || abs(panel.frame.height - frame.height) > 0.5 else { return }
-        panel.setFrame(frame, display: true)
-        resolveHostedGeometry()
-    }
-
-    /// 改完窗口 frame 后强制容器求解一次：菜单跟踪循环里改 frame 会让 SwiftUI 跳过那次布局，
-    /// 四边约束没有机会把宿主拉回容器尺寸，而手动高度下窗口不再变化、面板也不刷新，
-    /// 错位就会一直保留（详见 `PanelContainerView.resolveHostedGeometry()`）。
-    private func resolveHostedGeometry() {
-        (panel.contentView as? PanelContainerView)?.resolveHostedGeometry()
-    }
 }

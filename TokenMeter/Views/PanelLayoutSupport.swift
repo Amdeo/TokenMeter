@@ -111,6 +111,29 @@ final class PanelContainerView: NSView {
         layer.masksToBounds = true
     }
 
+    /// 外观变化（App 内浅色/深色切换、`.system` 下的系统主题变化）与改窗口 frame 是同一失败模式：
+    /// 面板外观桥在 SwiftUI 更新期间写 `window.appearance`，AppKit 随即同步重排内容视图，SwiftUI
+    /// 判定宿主被重入布局并跳过该次 pass，四边约束得不到求解；而这条路径不经过任何改窗口 frame 的
+    /// 入口，没有别的地方会再推动布局，错位就一直保留（主题切换后内容变矮、贴底，顶部与菜单栏之间
+    /// 露出透明间隙）。系统级主题变化同样会传播到内容视图，所以收在这里覆盖两条路径。
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        resolveHostedGeometry()
+    }
+
+    /// 所有页面、显示和屏幕变化共用的几何入口；等高切页也必须校正宿主。
+    func synchronizeWindowFrame(_ frame: NSRect) {
+        guard let window else { return }
+        let current = window.frame
+        if abs(current.minX - frame.minX) > 0.5
+            || abs(current.minY - frame.minY) > 0.5
+            || abs(current.width - frame.width) > 0.5
+            || abs(current.height - frame.height) > 0.5 {
+            window.setFrame(frame, display: true)
+        }
+        resolveHostedGeometry()
+    }
+
     /// 改完窗口 frame 之后的统一收尾：立刻推动一次布局求解，让四边约束把宿主拉回容器尺寸。
     ///
     /// 菜单跟踪循环里改 frame 时（右击菜单 → 添加订阅 / 设置…），SwiftUI 会判定宿主被重入布局

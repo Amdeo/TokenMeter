@@ -132,6 +132,58 @@ extension View {
 
 
 
+/// 等高切页也会重建内容，路由与尺寸共同决定是否需要同步面板几何。
+struct PanelGeometryRequest: Equatable {
+    let route: PanelNavigationState.Route
+    let size: PanelSize
+}
+
+/// 所有路由共用的面板表面。页面只提供内容；窗口提案、边距、背景、测量与缩放在此统一。
+struct PanelSurface<Content: View>: View {
+    @Environment(UsageStore.self) private var store
+    @Environment(PanelNavigationState.self) private var navigation
+    let onPanelSizeChange: (PanelSize) -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                content()
+            }
+            .padding(.horizontal, TM.panelHorizontal)
+            .padding(.vertical, PanelLayoutMetrics.rootVerticalChrome / 2)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+        }
+        .onPreferenceChange(PanelHeightPreferenceKey.self) { measurement in
+            guard let measurement else { return }
+            navigation.reportMeasuredHeight(measurement.height, for: measurement.route)
+        }
+        .background(TMPanelBackground(glassEnabled: store.settings.glassEffectEnabled))
+        .overlay {
+            PanelWindowAppearanceBridge(appearanceMode: store.settings.appearanceMode)
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottom) {
+            PanelHeightResizeHandle(
+                panelHeight: CGFloat(navigation.displayedSize.height),
+                onChanged: { navigation.setUserHeight($0, persist: false) },
+                onEnded: { navigation.setUserHeight($0, persist: true) }
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 8)
+            .accessibilityHidden(true)
+        }
+        .onChange(
+            of: PanelGeometryRequest(route: navigation.route, size: navigation.displayedSize),
+            initial: true
+        ) { _, request in
+            onPanelSizeChange(request.size)
+        }
+        .ignoresSafeArea()
+    }
+}
+
 struct MenuBarView: View {
     @Environment(UsageStore.self) private var store
     @Environment(PanelNavigationState.self) private var navigation
@@ -178,6 +230,48 @@ struct MenuBarView: View {
 
 
     var body: some View {
+        PanelSurface(onPanelSizeChange: onPanelSizeChange) {
+            pageContent
+                .id(navigation.route)
+        }
+        .foregroundStyle(TM.textPrimary)
+        #if DEBUG
+        .overlay {
+            if let previewMode {
+                StatusPreviewOverlay(mode: previewMode) {
+                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { self.previewMode = nil }
+                }
+                .transition(.opacity)
+            }
+        }
+        #endif
+        .overlay {
+            if confirmQuit {
+                ConfirmDialog(
+                    title: "退出 TokenMeter？",
+                    message: "退出后将停止后台刷新。",
+                    confirmTitle: "退出 TokenMeter",
+                    onConfirm: {
+                        confirmQuit = false
+                        store.stop()
+                        DispatchQueue.main.async {
+                            NSApplication.shared.terminate(nil)
+                        }
+                    },
+                    onCancel: {
+                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { confirmQuit = false }
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            }
+        }
+        .modifier(TMColorSchemeModifier(mode: store.settings.appearanceMode))
+        .onChange(of: store.settings.autoRefreshEnabled) { _, enabled in
+            if enabled { store.start() } else { store.stop() }
+        }
+    }
+
+    private var pageContent: some View {
         Group {
             switch navigation.content(for: store.subscriptions) {
             case .overview:
@@ -218,75 +312,6 @@ struct MenuBarView: View {
                 NavigationRecoveryView(onReturn: navigateBack).transition(pushTransition)
             }
         }
-        .id(navigation.route)
-        .padding(.horizontal, TM.panelHorizontal)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        // 尺寸跟随原生窗口（窗口尺寸由控制器按 navigation.displayedSize 设置）：
-        // 根视图不读高度状态，所以切页动画不会把面板几何一起动画。
-        // 高度不够时从顶部对齐、超出部分交给窗口裁剪，而不是居中把首尾一起裁掉。
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onPreferenceChange(PanelHeightPreferenceKey.self) { measurement in
-            guard let measurement else { return }
-            navigation.reportMeasuredHeight(measurement.height, for: measurement.route)
-        }
-        .background(TMPanelBackground(glassEnabled: store.settings.glassEffectEnabled))
-        .foregroundStyle(TM.textPrimary)
-        .modifier(TMColorSchemeModifier(mode: store.settings.appearanceMode))
-        #if DEBUG
-        .overlay {
-            if let previewMode {
-                StatusPreviewOverlay(mode: previewMode) {
-                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { self.previewMode = nil }
-                }
-                .transition(.opacity)
-            }
-        }
-        #endif
-        .overlay {
-            if confirmQuit {
-                ConfirmDialog(
-                    title: "退出 TokenMeter？",
-                    message: "退出后将停止后台刷新。",
-                    confirmTitle: "退出 TokenMeter",
-                    onConfirm: {
-                        confirmQuit = false
-                        store.stop()
-                        DispatchQueue.main.async {
-                            NSApplication.shared.terminate(nil)
-                        }
-                    },
-                    onCancel: {
-                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { confirmQuit = false }
-                    }
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            }
-        }
-        .overlay {
-            PanelWindowAppearanceBridge(appearanceMode: store.settings.appearanceMode)
-                .frame(width: 1, height: 1)
-                .allowsHitTesting(false)
-        }
-        .overlay(alignment: .bottom) {
-            PanelHeightResizeHandle(
-                panelHeight: CGFloat(navigation.displayedSize.height),
-                onChanged: { navigation.setUserHeight($0, persist: false) },
-                onEnded: { navigation.setUserHeight($0, persist: true) }
-            )
-            .frame(maxWidth: .infinity)
-            .frame(height: 8)
-            .accessibilityHidden(true)
-        }
-        .onAppear { onPanelSizeChange(navigation.displayedSize) }
-        .onChange(of: navigation.displayedSize) { _, size in onPanelSizeChange(size) }
-        .onChange(of: store.settings.autoRefreshEnabled) { _, enabled in
-            if enabled { store.start() } else { store.stop() }
-        }
-        // 面板是一整块无 chrome 的表面（无标题栏、菜单栏、Dock 语义），窗口内容矩形就是它的
-        // 全部可用区域：任何来源的 safe area inset 都不允许内缩内容，否则内容会整体偏离窗口
-        // （顶部露出空白、玻璃面跟着变矮）。窗口尺寸与内容尺寸必须始终一一对应。
-        .ignoresSafeArea()
     }
 
     private var dashboardContent: some View {

@@ -338,6 +338,36 @@ struct PanelLayoutStabilityTests {
         #expect(hosting.frame == container.bounds)
     }
 
+    /// 主题切换（App 内浅色/深色）走的是外观传播路径：`window.appearance` 赋值会让 AppKit 同步回调
+    /// 内容视图的 `viewDidChangeEffectiveAppearance()`（`.system` 模式下的系统主题变化同样传播到
+    /// 内容视图）。这条路径不经过改窗口 frame 的入口，SwiftUI 在其中的重入布局被跳过时，宿主就停在
+    /// 旧尺寸上没人拉回：内容整块贴底、顶部与菜单栏之间露出透明间隙。容器必须在外观变化后重新求解。
+    @Test
+    func appearanceChangePullsTheHostBackToContainerBounds() {
+        let harness = makePanelHost(root: Color.clear, height: 838)
+        let window = harness.window
+        let container = harness.container
+        let hosting = harness.hosting
+
+        // 先钉到浅色：系统当前若是深色，下面那次赋值就不是真实的外观变化，AppKit 不会回调。
+        window.appearance = NSAppearance(named: .aqua)
+        container.layoutSubtreeIfNeeded()
+        #expect(hosting.frame == container.bounds)
+
+        // 外观切换期间被跳过的布局留下的错位：宿主停在旧高度（贴底、顶部 28pt 空白）。
+        hosting.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: container.bounds.width,
+            height: container.bounds.height - 28
+        )
+        #expect(hosting.frame != container.bounds)
+
+        window.appearance = NSAppearance(named: .darkAqua)
+
+        #expect(hosting.frame == container.bounds)
+    }
+
     /// 组装与生产一致的链路：面板容器 → NSHostingView → 无边框窗口。
     /// 宿主装配走容器的同一个入口（与 `MenuBarPanelController.start()` 一致），
     /// 测试里不创建真实状态栏与菜单。
