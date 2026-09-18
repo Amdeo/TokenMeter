@@ -59,10 +59,12 @@ struct SubscriptionEditorSheet: View {
                     SheetSection(title: "订阅信息", subtitle: "名称仅用于本地识别，可稍后修改。") {
                         FormField("名称（可选）", text: $draft.name)
                     }
-                    AppearanceEntryRow(
-                        summary: "\(draft.cardStyle.title) · \(QuotaColorSettings.summary(for: draft.currentQuotaColors))",
-                        action: onAppearance
-                    )
+                    SheetSection(title: "外观", subtitle: "卡片样式与配色，保存订阅后生效。") {
+                        AppearanceEntryRow(
+                            summary: "\(draft.cardStyle.title) · \(QuotaColorSettings.summary(for: draft.currentQuotaColors))",
+                            action: onAppearance
+                        )
+                    }
                     SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
                         AuthMethodSelection(
                             authMethods: providerDefinition.authMethods,

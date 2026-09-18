@@ -62,6 +62,8 @@ struct CardPreviewHeightKey: PreferenceKey {
 }
 
 /// 编辑页里的外观入口：样式与配色都在二级页里改，点按进入。
+/// 标签由外层的 `SheetSection(title: "外观")` 承担，行内只显示当前值，
+/// 与同一页的字段行保持同一层级与行高。
 struct AppearanceEntryRow: View {
     let summary: String
     let action: () -> Void
@@ -75,21 +77,19 @@ struct AppearanceEntryRow: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(hovering ? TM.accent : TM.textSecondary)
                     .frame(width: 16)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("外观")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(TM.textPrimary)
-                    Text(summary)
-                        .font(.system(size: 10))
-                        .foregroundStyle(TM.textSecondary)
-                }
+                Text(summary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(TM.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer(minLength: 6)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(TM.textTertiary)
             }
             .padding(.horizontal, TM.cardContentHorizontal)
-            .padding(.vertical, 9)
+            // 与同一页的 `FormField` 同高（单行文本 + 10pt 上下内边距）。
+            .padding(.vertical, 10)
             .background(hovering ? TM.cardFillHover : TM.fieldFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
