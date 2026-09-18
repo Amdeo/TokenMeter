@@ -448,9 +448,9 @@ struct MenuBarView: View {
     }
 
     private func subscriptionCard(for subscription: Subscription) -> some View {
-        SubscriptionMenuCard(
+        SubscriptionRowCard(
+            store: store,
             subscription: subscription,
-            snapshot: store.snapshots[subscription.id],
             onEdit: { openEditor(for: subscription) },
             isReordering: isReordering
         )
@@ -486,6 +486,28 @@ struct MenuBarView: View {
         #else
         return {}
         #endif
+    }
+}
+
+/// 概览列表的单行卡片。快照在这一层读取，而不是在 `MenuBarView` 的 body 里：
+/// 读在父视图上时，任何一次快照写入都会让整个面板失效（列表理想高度重算、`List` 与表头
+/// 一起重建，还会带出一次行高测量 → 改 frame 的布局级联）；读在这里则只失效这一行。
+/// 注意观测粒度是 `snapshots` 这个属性本身，不是其中的单个键：别的订阅更新时本行
+/// body 仍会重算，但父视图与其余行的布局不再被牵动。
+/// 非 private：`SnapshotObservationTests` 直接引用它来锁定读取位置。
+struct SubscriptionRowCard: View {
+    let store: UsageStore
+    let subscription: Subscription
+    let onEdit: () -> Void
+    let isReordering: Bool
+
+    var body: some View {
+        SubscriptionMenuCard(
+            subscription: subscription,
+            snapshot: store.snapshots[subscription.id],
+            onEdit: onEdit,
+            isReordering: isReordering
+        )
     }
 }
 
