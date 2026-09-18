@@ -138,6 +138,27 @@ struct QuotaProgressRow: View {
 struct BalanceCardRenderer: ProviderCardRenderer {
     var capabilities: SubscriptionCardCapabilities { [.balanceValues] }
 
+    /// 标准样式画余额行；紧凑样式由 `makeCard` 接管整卡。
+    var supportedStyles: Set<SubscriptionCardStyle> { [.standard, .compact] }
+
+    /// 紧凑样式：图标 + 名称 + 金额，不再重复「可用余额」标签（金额已自带币种），
+    /// 也不画进度条。没有余额额度时退回标准外壳，避免只剩图标与名称的空卡。
+    func makeCard(
+        definition: any ProviderDefinition,
+        subscription: Subscription,
+        snapshot: UsageSnapshot
+    ) -> AnyView? {
+        guard subscription.cardStyle == .compact,
+              let quota = snapshot.quotas.first(where: { $0.kind == .balance }) else { return nil }
+        return AnyView(
+            CompactUsageCard(
+                definition: definition,
+                subscription: subscription,
+                stats: [.balance(quota)]
+            )
+        )
+    }
+
     func makeBody(subscription: Subscription, snapshot: UsageSnapshot) -> AnyView {
         AnyView(BalanceMenuRow(
             quota: snapshot.quotas.first { $0.kind == .balance },
