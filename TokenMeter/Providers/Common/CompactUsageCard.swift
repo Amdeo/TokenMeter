@@ -35,6 +35,40 @@ struct CompactUsageCard: View {
     }
 }
 
+// MARK: - 单值紧凑样式（余额）
+
+/// 余额卡的紧凑样式：单行——图标 + 名称 + 金额。
+///
+/// 余额只有一个数值，没有需要并排的窗口，所以不套 `CompactUsageCard` 的两行布局；
+/// 金额贴右且字号比两行卡的数据行大，一眼就能读到。金额自带币种（「CNY 28.17」），
+/// 因此不再重复「可用余额」这类标签。
+struct CompactBalanceCard: View {
+    let definition: any ProviderDefinition
+    let subscription: Subscription
+    let quota: Quota
+
+    /// 图标尺寸：与两行紧凑卡一致，卡片高度因此不变（图标 30 + 上下各 11pt 内边距）。
+    static let iconSize: CGFloat = 30
+
+    var body: some View {
+        HStack(spacing: 9) {
+            PlatformLogo(definition: definition, size: Self.iconSize)
+            Text(subscription.name)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 8)
+            Text(quota.remainingText)
+                .font(.system(size: 14, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(BalanceMenuRow.valueColor(quota: quota, colors: subscription.currentQuotaColors))
+                .lineLimit(1)
+                // 名称过长时先截断名称，金额始终完整可见。
+                .layoutPriority(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - 数据行
 
 /// 一行数字：`5h 62%  周 34%  月 52%`（标签 10pt 次要色 + 数值 12pt 半粗等宽）。
@@ -55,12 +89,9 @@ struct CompactUsageStatLine: View {
         HStack(spacing: Self.statSpacing) {
             ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
                 HStack(spacing: 3) {
-                    // 标签可为空（余额数值自带币种，如「CNY 28.17」），空标签不占位也不留间隙。
-                    if !stat.label.isEmpty {
-                        Text(stat.label)
-                            .font(.system(size: 10))
-                            .foregroundStyle(TM.textSecondary)
-                    }
+                    Text(stat.label)
+                        .font(.system(size: 10))
+                        .foregroundStyle(TM.textSecondary)
                     Text(stat.displayValue(showsResetCountdown: showsResetCountdown))
                         .font(.system(size: 12, weight: .semibold).monospacedDigit())
                         .foregroundStyle(color(for: stat))
@@ -118,17 +149,5 @@ struct CompactUsageStat {
     /// 紧凑行放不下小数位：百分比取整（标准卡片行内是 1 位小数）。
     static func percentText(_ ratio: Double) -> String {
         ratio.formatted(.percent.precision(.fractionLength(0)))
-    }
-
-    /// 余额卡片的紧凑数据项：只给数值，不给标签。
-    /// 金额自带币种（`Quota.remainingText` → 「CNY 28.17」），再放一个「可用余额」标签纯属重复。
-    static func balance(_ quota: Quota) -> CompactUsageStat {
-        CompactUsageStat(
-            label: "",
-            value: quota.remainingText,
-            source: .quota(quota),
-            status: quota.status,
-            resetAt: nil
-        )
     }
 }

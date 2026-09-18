@@ -141,8 +141,8 @@ struct BalanceCardRenderer: ProviderCardRenderer {
     /// 标准样式画余额行；紧凑样式由 `makeCard` 接管整卡。
     var supportedStyles: Set<SubscriptionCardStyle> { [.standard, .compact] }
 
-    /// 紧凑样式：图标 + 名称 + 金额，不再重复「可用余额」标签（金额已自带币种），
-    /// 也不画进度条。没有余额额度时退回标准外壳，避免只剩图标与名称的空卡。
+    /// 紧凑样式：单行——图标 + 名称 + 金额（金额贴右、字号更大）。
+    /// 没有余额额度时退回标准外壳，避免只剩图标与名称的空卡。
     func makeCard(
         definition: any ProviderDefinition,
         subscription: Subscription,
@@ -151,10 +151,10 @@ struct BalanceCardRenderer: ProviderCardRenderer {
         guard subscription.cardStyle == .compact,
               let quota = snapshot.quotas.first(where: { $0.kind == .balance }) else { return nil }
         return AnyView(
-            CompactUsageCard(
+            CompactBalanceCard(
                 definition: definition,
                 subscription: subscription,
-                stats: [.balance(quota)]
+                quota: quota
             )
         )
     }
