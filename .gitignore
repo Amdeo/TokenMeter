@@ -37,3 +37,5 @@ kimi-export-session*.md
 
 # xcode-build-server（SourceKit 编译数据库，含本机绝对路径，每台机器自行生成）
 buildServer.json
+.pi
+.scratch
