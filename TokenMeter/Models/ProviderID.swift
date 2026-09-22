@@ -64,6 +64,13 @@ struct ProviderMetadata: Sendable {
     let tintRGB: UInt32
     /// 图标内缩比例：部分厂商图标自带留白，需要按比例内缩（如 DeepSeek 0.08）。
     var iconInsetFraction: Double = 0
+    /// 悬浮条上用的单色标记资源名（`Rail/Marks/` 下，不含扩展名）。
+    ///
+    /// 与 `iconResourceName` 是两套视觉语言：那个是面板里带底色的彩色方块，
+    /// 这个是随用量状态染色的单色轮廓。优先取同名的 `.svg`，没有矢量时可以用
+    /// 一张透明底的单色 `.png`（见 `RailMarkStore`）。没有对应标记的供应商留 nil，
+    /// 悬浮条回落到 `fallbackSystemImage`。
+    var railMarkResource: String? = nil
     let capabilityDescription: String
     /// 供应商控制台 API Key 页面（编辑页"打开浏览器"入口）。
     let authPageURL: URL?
@@ -80,6 +87,7 @@ struct ProviderMetadata: Sendable {
         fallbackSystemImage: String,
         tintRGB: UInt32,
         iconInsetFraction: Double = 0,
+        railMarkResource: String? = nil,
         capabilityDescription: String,
         authPageURL: URL?,
         homepageURL: URL? = nil,
@@ -91,6 +99,7 @@ struct ProviderMetadata: Sendable {
         self.fallbackSystemImage = fallbackSystemImage
         self.tintRGB = tintRGB
         self.iconInsetFraction = iconInsetFraction
+        self.railMarkResource = railMarkResource
         self.capabilityDescription = capabilityDescription
         self.authPageURL = authPageURL
         self.homepageURL = homepageURL

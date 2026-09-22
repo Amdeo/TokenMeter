@@ -19,6 +19,7 @@ struct ClaudeProviderDefinition: ProviderDefinition {
             iconResourceName: nil,
             fallbackSystemImage: "asterisk",
             tintRGB: 0xD97757,
+            railMarkResource: "claude",
             capabilityDescription: "支持 Claude Pro/Max 订阅的 5 小时与每周额度。",
             authPageURL: URL(string: "https://claude.ai/oauth/authorize"),
             homepageURL: URL(string: "https://claude.ai"),

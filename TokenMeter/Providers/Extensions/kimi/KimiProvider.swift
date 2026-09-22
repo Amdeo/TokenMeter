@@ -25,6 +25,7 @@ struct KimiProviderDefinition: ProviderDefinition {
             iconResourceName: "icon-kimi",
             fallbackSystemImage: "moon.stars.fill",
             tintRGB: 0x5E5CE6,
+            railMarkResource: "kimi",
             capabilityDescription: "支持 Kimi For Coding 订阅额度、网页登录态和 API Key。",
             authPageURL: URL(string: "https://platform.moonshot.cn/console/api-keys"),
             homepageURL: URL(string: "https://www.kimi.com"),

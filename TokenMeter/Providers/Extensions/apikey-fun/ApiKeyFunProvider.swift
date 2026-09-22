@@ -40,6 +40,7 @@ extension RelayBalanceProviderDefinition {
         displayName: "APIKEY.FUN",
         iconResourceName: "icon-apikeyfun",
         fallbackSystemImage: "key.fill",
+        railMarkResource: "apikeyfun",
         tintRGB: 0x6E6CF0,
         homepageURL: URL(string: "https://apikey.fun")!,
         authMethod: AuthMethodDefinition(

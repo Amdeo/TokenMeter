@@ -65,10 +65,12 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AF0000010000000000000001 /* Providers */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Providers; sourceTree = "<group>"; };
 		AF0000010000000000000002 /* Tests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Tests; sourceTree = "<group>"; };
+		AF0000010000000000000003 /* Rail */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Rail; sourceTree = "<group>"; };
+		AF0000010000000000000004 /* Settings */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Settings; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXGroup section */
-		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A20000010000000000000009, A20000010000000000000001, AF0000010000000000000001, AF0000010000000000000002, ); path = TokenMeter; sourceTree = "<group>"; };
+		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A20000010000000000000009, A20000010000000000000001, AF0000010000000000000001, AF0000010000000000000002, AF0000010000000000000003, AF0000010000000000000004, ); path = TokenMeter; sourceTree = "<group>"; };
 		A30000010000000000000002 = {isa = PBXGroup; children = (A20000010000000000000002, A20000010000000000000033, A20000010000000000000034, A20000010000000000000064, ); name = Models; path = Models; sourceTree = "<group>"; };
 		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000025, A20000010000000000000026, A20000010000000000000027, A20000010000000000000032, A20000010000000000000065, ); name = Services; path = Services; sourceTree = "<group>"; };
 		A30000010000000000000005 = {isa = PBXGroup; children = (A20000010000000000000006, ); name = Store; path = Store; sourceTree = "<group>"; };
@@ -79,7 +81,7 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = A50000010000000000000002; buildPhases = (A60000010000000000000001, A60000010000000000000002, A60000010000000000000003, ); buildRules = ( ); dependencies = ( ); fileSystemSynchronizedGroups = (AF0000010000000000000001, ); name = TokenMeter; productName = TokenMeter; productReference = A20000010000000000000010; productType = "com.apple.product-type.application"; };
+		A40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = A50000010000000000000002; buildPhases = (A60000010000000000000001, A60000010000000000000002, A60000010000000000000003, ); buildRules = ( ); dependencies = ( ); fileSystemSynchronizedGroups = (AF0000010000000000000001, AF0000010000000000000003, AF0000010000000000000004, ); name = TokenMeter; productName = TokenMeter; productReference = A20000010000000000000010; productType = "com.apple.product-type.application"; };
 		B40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B50000010000000000000001; buildPhases = (B60000010000000000000001, B60000010000000000000002, B60000010000000000000003, ); buildRules = ( ); dependencies = (B91000010000000000000001, ); fileSystemSynchronizedGroups = (AF0000010000000000000002, ); name = TokenMeterTests; productName = TokenMeterTests; productReference = B20000010000000000000002; productType = "com.apple.product-type.bundle.unit-test"; };
 /* End PBXNativeTarget section */
 

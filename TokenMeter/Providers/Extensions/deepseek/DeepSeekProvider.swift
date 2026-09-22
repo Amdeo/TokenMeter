@@ -21,6 +21,7 @@ struct DeepSeekProviderDefinition: ProviderDefinition {
             fallbackSystemImage: "bubble.left.and.bubble.right.fill",
             tintRGB: 0x0A84FF,
             iconInsetFraction: 0.08,
+            railMarkResource: "deepseek",
             capabilityDescription: "支持余额接口，可使用 API Key。",
             authPageURL: URL(string: "https://platform.deepseek.com/api_keys"),
             homepageURL: URL(string: "https://platform.deepseek.com"),

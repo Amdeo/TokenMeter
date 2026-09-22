@@ -115,6 +115,25 @@ final class SettingsStore {
             if serviceErrorAlerts && !oldValue { requestNotificationsIfNeeded() }
         }
     }
+
+    /// 是否显示贴边/悬浮的常驻悬浮条。
+    ///
+    /// 默认关闭：它是一个常驻在屏幕上的元素，不该在用户没要求的时候出现。
+    var railEnabled: Bool { didSet { defaults.set(railEnabled, forKey: Keys.railEnabled) } }
+    /// 悬浮条是否在指针离开时卷成细条。只对贴边的条生效——悬浮着的条保持展开，
+    /// 它就在用户刻意放的地方，收起来反而找不回来。
+    var railAutoCollapse: Bool { didSet { defaults.set(railAutoCollapse, forKey: Keys.railAutoCollapse) } }
+    /// 悬浮条是否跟着指针所在的显示器走。
+    ///
+    /// 默认关闭：只有一块屏时它什么也做不了，两块屏时它会覆盖用户把条拖到某块屏上的选择。
+    var railFollowsActiveDisplay: Bool {
+        didSet { defaults.set(railFollowsActiveDisplay, forKey: Keys.railFollowsActiveDisplay) }
+    }
+    /// 悬浮条是否躲开别的 app 的全屏空间。用公开的 collectionBehavior 实现，
+    /// 不需要辅助功能权限。
+    var railHidesInFullScreen: Bool {
+        didSet { defaults.set(railHidesInFullScreen, forKey: Keys.railHidesInFullScreen) }
+    }
     private var cnyThresholdStorage = 0.0
     private var usdThresholdStorage = 0.0
 
@@ -164,6 +183,10 @@ final class SettingsStore {
         lowBalanceAlerts = defaults.object(forKey: Keys.lowBalanceAlerts) as? Bool ?? true
         authenticationAlerts = defaults.object(forKey: Keys.authenticationAlerts) as? Bool ?? true
         serviceErrorAlerts = defaults.object(forKey: Keys.serviceErrorAlerts) as? Bool ?? false
+        railEnabled = defaults.object(forKey: Keys.railEnabled) as? Bool ?? false
+        railAutoCollapse = defaults.object(forKey: Keys.railAutoCollapse) as? Bool ?? true
+        railFollowsActiveDisplay = defaults.object(forKey: Keys.railFollowsActiveDisplay) as? Bool ?? false
+        railHidesInFullScreen = defaults.object(forKey: Keys.railHidesInFullScreen) as? Bool ?? true
         cnyBalanceThreshold = max(0, defaults.object(forKey: Keys.cnyThreshold) as? Double ?? 5)
         usdBalanceThreshold = max(0, defaults.object(forKey: Keys.usdThreshold) as? Double ?? 1)
         refreshLoginItemStatus()
@@ -253,5 +276,9 @@ final class SettingsStore {
         static let serviceErrorAlerts = "settings.serviceErrorAlerts"
         static let cnyThreshold = "settings.cnyBalanceThreshold"
         static let usdThreshold = "settings.usdBalanceThreshold"
+        static let railEnabled = "settings.railEnabled"
+        static let railAutoCollapse = "settings.railAutoCollapse"
+        static let railFollowsActiveDisplay = "settings.railFollowsActiveDisplay"
+        static let railHidesInFullScreen = "settings.railHidesInFullScreen"
     }
 }

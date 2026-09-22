@@ -262,6 +262,8 @@ final class SubscriptionEditorDraft {
     /// 按卡片样式隔离的进度条配色；编辑页读写的是 `currentQuotaColors`。
     var quotaColors: SubscriptionQuotaPalette
     var cardStyle: SubscriptionCardStyle
+    /// 悬浮条上的呈现配置：是否显示、追踪哪个额度、环的颜色。
+    var rail: SubscriptionRailSettings
     var apiKey = ""
     var oauthCredential: OAuthCredential?
     var browserCredential: BrowserTokenCredential?
@@ -292,6 +294,7 @@ final class SubscriptionEditorDraft {
         name = ""
         quotaColors = SubscriptionQuotaPalette()
         cardStyle = .standard
+        rail = SubscriptionRailSettings()
     }
 
     init(subscription: Subscription) {
@@ -304,6 +307,7 @@ final class SubscriptionEditorDraft {
         name = subscription.name
         quotaColors = subscription.quotaColors
         cardStyle = subscription.cardStyle
+        rail = subscription.rail
     }
 
     var isEditing: Bool { original != nil }
@@ -330,6 +334,7 @@ final class SubscriptionEditorDraft {
                 || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 || !quotaColors.isEmpty
                 || cardStyle != .standard
+                || rail != SubscriptionRailSettings()
         }
         return providerID != initialProviderID
             || authMethodID != originalAuthMethodID
@@ -337,6 +342,7 @@ final class SubscriptionEditorDraft {
             || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             || quotaColors != original?.quotaColors
             || cardStyle != (original?.cardStyle ?? .standard)
+            || rail != (original?.rail ?? SubscriptionRailSettings())
     }
 
     func cancelTasks() {

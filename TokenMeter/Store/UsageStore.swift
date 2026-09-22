@@ -205,6 +205,13 @@ final class UsageStore {
         saveSubscriptions()
     }
 
+    /// 写入悬浮条上的呈现配置（是否显示、追踪哪个额度、环的颜色）。
+    func updateRailSettings(_ rail: SubscriptionRailSettings, for subscription: Subscription) {
+        guard canMutateSubscriptions, let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return }
+        subscriptions[index].rail = rail
+        saveSubscriptions()
+    }
+
     /// 刷新单个订阅。串行执行：若已有刷新在进行则忽略（与旧行为一致）。
     func refresh(_ subscription: Subscription, source: RefreshSource = .manual) {
         launchRefresh { store, refreshID in
