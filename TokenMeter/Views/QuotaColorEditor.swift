@@ -108,10 +108,18 @@ struct AppearanceEntryRow: View {
 
 /// 从订阅编辑流程进入的外观页：卡片样式与配色两类改动共用同一份
 /// `SubscriptionEditorDraft`，返回后仍在编辑页，保存订阅时才落盘。
-struct SubscriptionAppearancePage: View {
+/// 外观子页正文：卡片样式轮播 + 配色编辑。
+///
+/// 与 `SubscriptionEditorContent` 一样由两个宿主共用：面板的 TM-04/TM-05 → 外观 二级页，
+/// 与独立窗口里订阅子页的外观子页。
+struct SubscriptionAppearanceContent: View {
     @Environment(UsageStore.self) private var store
     @Bindable var draft: SubscriptionEditorDraft
-    let onBack: () -> Void
+    /// 结束这一页（面板是返回配置页，窗口是返回订阅子页）。
+    let onDone: () -> Void
+    /// 面板宿主传入要上报高度的路由；窗口宿主传 nil。
+    var heightRoute: PanelNavigationState.Route?
+    var backLabel: String = "返回概览"
 
     private var providerDefinition: any ProviderDefinition {
         ProviderRegistry.definition(for: draft.providerID) ?? UnsupportedProviderDefinition(providerID: draft.providerID)
@@ -167,7 +175,8 @@ struct SubscriptionAppearancePage: View {
                 definition: providerDefinition,
                 title: "外观",
                 subtitle: "「\(draft.cardStyle.title)」样式 · 保存订阅后生效",
-                onBack: onBack
+                onBack: onDone,
+                backLabel: backLabel
             )
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -185,12 +194,12 @@ struct SubscriptionAppearancePage: View {
                     }
                 }
                 .padding(.vertical, 18)
-                .reportsIntrinsicPanelHeight(route: .appearance, chrome: PanelLayoutMetrics.pageChrome)
+                .reportsIntrinsicPanelHeight(route: heightRoute, chrome: PanelLayoutMetrics.pageChrome)
             }
             .scrollIndicators(.hidden)
             HStack(spacing: 10) {
                 Spacer()
-                Button("完成", action: onBack)
+                Button("完成", action: onDone)
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             }

@@ -640,8 +640,8 @@ struct PanelNavigationTests {
 
         navigation.reportMeasuredHeight(420, for: .overview)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        navigation.route = .settings
-        navigation.reportMeasuredHeight(420, for: .settings)
+        navigation.route = .appearance
+        navigation.reportMeasuredHeight(420, for: .appearance)
         #expect(navigation.panelSize.height == 420)
         navigation.route = .overview
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
@@ -655,7 +655,6 @@ struct PanelNavigationTests {
 
         let routes: [(PanelNavigationState.Route, Double)] = [
             (.overview, 410),
-            (.settings, 420),
             (.migration, 430),
             (.addProvider, 440),
             (.addConfiguration, 450),
@@ -682,13 +681,13 @@ struct PanelNavigationTests {
     @Test
     func panelSizeIsRememberedPerRoute() {
         let navigation = freshPanelNavigationState()
-        navigation.route = .settings
-        navigation.reportMeasuredHeight(700, for: .settings)
+        navigation.route = .appearance
+        navigation.reportMeasuredHeight(700, for: .appearance)
         navigation.route = .addProvider
         navigation.reportMeasuredHeight(500, for: .addProvider)
 
         // 弹出/切回某个页面时取它自己的高度：借用别的页面的尺寸会让内容被居中裁掉上下两端。
-        #expect(navigation.size(for: .settings).height == 700)
+        #expect(navigation.size(for: .appearance).height == 700)
         #expect(navigation.size(for: .addProvider).height == 500)
         // 没量过的页面沿用当前尺寸，内容随后报出的测量值再校准。
         #expect(navigation.size(for: .migration).height == navigation.panelSize.height)
@@ -794,7 +793,7 @@ struct PanelNavigationTests {
         navigation.selectProvider(.kimi)
         #expect(navigation.panelSize == .compact)
         navigation.returnToOverview()
-        navigation.route = .settings
+        navigation.route = .appearance
         #expect(navigation.panelSize == .compact)
     }
 
@@ -807,9 +806,9 @@ struct PanelNavigationTests {
         #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
         navigation.reportMeasuredHeight(900, for: .addProvider)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        navigation.reportMeasuredHeight(500, for: .settings)
+        navigation.reportMeasuredHeight(500, for: .appearance)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        navigation.route = .settings
+        navigation.route = .appearance
         // 自适应路由保持当前高度直到新页面测量（不再强制回 compact）
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
         navigation.reportMeasuredHeight(400, for: .addProvider)

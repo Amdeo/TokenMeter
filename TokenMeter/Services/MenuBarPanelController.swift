@@ -239,6 +239,9 @@ final class MenuBarPanelController: NSObject {
                 },
                 onReorderModeChange: { [weak self] reordering in
                     self?.panel.isReordering = reordering
+                },
+                onOpenSettings: { [weak self] in
+                    self?.openSettings()
                 }
             )
             .environment(store)
@@ -399,10 +402,23 @@ final class MenuBarPanelController: NSObject {
         addItem.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         menu.addItem(addItem)
         menu.addItem(menuItem(title: "设置…", action: #selector(openSettings)))
+        #if DEBUG
+        // 状态预览（TM-06）原来在面板的设置页里；设置搬去独立窗口之后收进这个菜单——
+        // 它预览的是**面板**的各种状态，入口留在面板这一侧才合理。
+        menu.addItem(.separator())
+        menu.addItem(menuItem(title: "预览状态", action: #selector(previewStatus)))
+        #endif
         menu.addItem(.separator())
         menu.addItem(menuItem(title: "退出 TokenMeter", action: #selector(quit)))
         return menu
     }()
+
+    #if DEBUG
+    @objc private func previewStatus() {
+        navigation.previewMode = .normal
+        showPanel()
+    }
+    #endif
 
     private func menuItem(title: String, action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
@@ -415,14 +431,30 @@ final class MenuBarPanelController: NSObject {
         showPanel()
     }
 
+    /// 设置窗口的入口。面板控制器不认识那个窗口，由 app 委托注入——
+    /// 这里只负责「用户要设置」这件事。
+    var onOpenSettings: (() -> Void)?
+
     @objc private func openSettings() {
-        navigation.route = .settings
-        showPanel()
+        // 设置是一个独立窗口，不是面板里的一页。面板这时要收起来：
+        // 留着它盖在窗口前面没有意义。
+        hidePanel()
+        onOpenSettings?()
     }
 
     @objc private func quit() {
         store.stop()
         NSApplication.shared.terminate(nil)
+    }
+
+    /// 从外面（悬浮条的右键菜单）把管理面板显示在指定页面上。
+    ///
+    /// 只开这一个入口，`showPanel` 的显示语义（先定位、再激活、再 makeKey）
+    /// 仍然只写在它自己那一处。
+    func present(route: PanelNavigationState.Route) {
+        guard isStarted else { return }
+        navigation.route = route
+        showPanel()
     }
 
     private func showPanel() {

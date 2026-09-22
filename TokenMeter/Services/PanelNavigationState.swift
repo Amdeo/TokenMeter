@@ -37,7 +37,6 @@ struct SubscriptionRowHeightsPreferenceKey: PreferenceKey {
 final class PanelNavigationState {
     enum Route: Equatable, Hashable {
         case overview
-        case settings
         case migration
         case addProvider
         case addConfiguration
@@ -48,7 +47,6 @@ final class PanelNavigationState {
 
     enum Content {
         case overview
-        case settings
         case migration
         case addProvider
         case addConfiguration(SubscriptionEditorDraft)
@@ -56,6 +54,12 @@ final class PanelNavigationState {
         case appearance(SubscriptionEditorDraft)
         case recovery
     }
+
+    /// Debug 的状态预览（TM-06）由状态栏右键菜单触发，所以状态放在这里而不是视图的
+    /// `@State`：菜单是 `MenuBarPanelController` 建的，它够不到视图内部的状态。
+    #if DEBUG
+    var previewMode: StatusPreviewMode?
+    #endif
 
     var route: Route = .overview {
         didSet {
@@ -154,7 +158,6 @@ final class PanelNavigationState {
 
     private enum HeightRoute: String, CaseIterable {
         case overview
-        case settings
         case migration
         case addProvider
         case addConfiguration
@@ -164,7 +167,6 @@ final class PanelNavigationState {
         init(_ route: Route) {
             self = switch route {
             case .overview: .overview
-            case .settings: .settings
             case .migration: .migration
             case .addProvider: .addProvider
             case .addConfiguration: .addConfiguration
@@ -200,7 +202,6 @@ final class PanelNavigationState {
     func content(for subscriptions: [Subscription]) -> Content {
         switch route {
         case .overview: return .overview
-        case .settings: return .settings
         case .migration: return .migration
         case .addProvider: return .addProvider
         case .addConfiguration:
@@ -227,12 +228,6 @@ final class PanelNavigationState {
     func returnToEditor() {
         guard let draft else { returnToOverview(); return }
         route = draft.original.map { .editConfiguration($0.id) } ?? .addConfiguration
-    }
-
-    func returnToSettings() {
-        draft?.cancelTasks()
-        draft = nil
-        route = .settings
     }
 
     func returnToOverview() {

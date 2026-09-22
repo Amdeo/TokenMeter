@@ -20,7 +20,6 @@ enum PanelLayoutMetrics {
     static let rootVerticalChrome: CGFloat = 16
     static let pageChrome: CGFloat = 116
     static let providerChrome: CGFloat = 66
-    static let settingsChrome: CGFloat = 58
     /// 迁移页头部仍是「返回按钮 + 20pt 标题」两层结构，比设置页高。
     static let migrationChrome: CGFloat = 108
 
@@ -48,6 +47,19 @@ struct IntrinsicPanelHeightModifier: ViewModifier {
 extension View {
     func reportsIntrinsicPanelHeight(route: PanelNavigationState.Route, chrome: CGFloat) -> some View {
         modifier(IntrinsicPanelHeightModifier(route: route, chrome: chrome))
+    }
+
+    /// 上报面板高度；`route` 为 nil 时什么都不做。
+    ///
+    /// 独立设置窗口里的订阅子页与外观子页复用同一批正文视图，但窗口不参与面板的高度记账，
+    /// 所以那两个视图收一个可选路由——面板传，窗口传 nil。
+    @ViewBuilder
+    func reportsIntrinsicPanelHeight(route: PanelNavigationState.Route?, chrome: CGFloat) -> some View {
+        if let route {
+            modifier(IntrinsicPanelHeightModifier(route: route, chrome: chrome))
+        } else {
+            self
+        }
     }
 }
 

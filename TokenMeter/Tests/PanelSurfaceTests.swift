@@ -8,8 +8,8 @@ struct PanelSurfaceTests {
     @Test
     func equalHeightRoutesStillRequestGeometrySynchronization() {
         let routes: [PanelNavigationState.Route] = [
-            .overview, .settings, .migration, .addProvider, .addConfiguration,
-            .appearance, .editConfiguration(UUID()), .settings, .overview,
+            .overview, .migration, .addProvider, .addConfiguration,
+            .appearance, .editConfiguration(UUID()), .migration, .overview,
         ]
         for (previous, next) in zip(routes, routes.dropFirst()) {
             #expect(

@@ -16,12 +16,12 @@ struct PanelLayoutStabilityTests {
     @Test
     func routeSwitchAdoptsRememberedHeightBeforeThePageReportsBack() {
         let navigation = freshNavigationState()
-        navigation.route = .settings
-        navigation.reportMeasuredHeight(700, for: .settings)
+        navigation.route = .appearance
+        navigation.reportMeasuredHeight(700, for: .appearance)
         navigation.route = .addProvider
         navigation.reportMeasuredHeight(500, for: .addProvider)
 
-        navigation.route = .settings
+        navigation.route = .appearance
         #expect(navigation.panelSize.height == 700)
 
         navigation.route = .addProvider
@@ -36,11 +36,11 @@ struct PanelLayoutStabilityTests {
     @Test
     func routeSwitchAdoptsManualHeightAheadOfMeasurement() {
         let navigation = freshNavigationState()
-        navigation.route = .settings
+        navigation.route = .appearance
         navigation.setUserHeight(640, persist: false)
         navigation.route = .overview
         navigation.reportMeasuredHeight(500, for: .overview)
-        navigation.route = .settings
+        navigation.route = .appearance
         #expect(navigation.panelSize.height == 640)
     }
 

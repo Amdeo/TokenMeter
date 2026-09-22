@@ -190,19 +190,25 @@ struct MenuBarView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onPanelSizeChange: (PanelSize) -> Void
     let onReorderModeChange: (Bool) -> Void
+    /// 打开独立设置窗口。面板不认识那个窗口，只负责把这件事说出去。
+    let onOpenSettings: () -> Void
     @State private var confirmQuit = false
     @State private var isReordering = false
     @State private var subscriptionRowHeights: [UUID: CGFloat] = [:]
+    /// Debug 的状态预览（TM-06）由状态栏右键菜单触发，所以状态放在导航状态里而不是视图的
+    /// `@State`：菜单是控制器建的，它够不到视图内部的状态。
     #if DEBUG
-    @State private var previewMode: StatusPreviewMode?
+    var previewMode: StatusPreviewMode?
     #endif
 
     init(
         onPanelSizeChange: @escaping (PanelSize) -> Void = { _ in },
-        onReorderModeChange: @escaping (Bool) -> Void = { _ in }
+        onReorderModeChange: @escaping (Bool) -> Void = { _ in },
+        onOpenSettings: @escaping () -> Void = {}
     ) {
         self.onPanelSizeChange = onPanelSizeChange
         self.onReorderModeChange = onReorderModeChange
+        self.onOpenSettings = onOpenSettings
     }
 
     private func navigateForward(_ action: () -> Void) {
@@ -237,9 +243,9 @@ struct MenuBarView: View {
         .foregroundStyle(TM.textPrimary)
         #if DEBUG
         .overlay {
-            if let previewMode {
+            if let previewMode = navigation.previewMode {
                 StatusPreviewOverlay(mode: previewMode) {
-                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { self.previewMode = nil }
+                    withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { navigation.previewMode = nil }
                 }
                 .transition(.opacity)
             }
@@ -276,38 +282,42 @@ struct MenuBarView: View {
             switch navigation.content(for: store.subscriptions) {
             case .overview:
                 dashboardContent.transition(pushTransition)
-            case .settings:
-                SettingsPanel(
-                    settings: store.settings,
-                    onBack: navigateBack,
-                    onMigration: { navigateForward { navigation.route = .migration } },
-                    migrationRecoveryError: store.lastMigrationRecoveryError,
-                    persistenceError: store.lastPersistenceError,
-                    onPreview: previewEntryAction
-                )
-                .transition(pushTransition)
             case .migration:
                 MigrationPanel(store: store, onClose: closeMigration)
                     .transition(pushTransition)
             case .addProvider:
-                ProviderSelectionPage(onBack: navigateBack) { providerID in
-                    navigateForward { navigation.selectProvider(providerID) }
-                }
+                ProviderSelectionContent(
+                    onSelect: { providerID in
+                        navigateForward { navigation.selectProvider(providerID) }
+                    },
+                    heightRoute: .addProvider,
+                    onBack: navigateBack
+                )
                 .transition(pushTransition)
             case .addConfiguration(let draft):
-                SubscriptionEditorSheet(draft: draft, onClose: navigateBack, onAppearance: openAppearance)
-                    .transition(pushTransition)
+                SubscriptionEditorContent(
+                    draft: draft,
+                    heightRoute: .addConfiguration,
+                    onFinish: navigateBack,
+                    onAppearance: openAppearance
+                )
+                .transition(pushTransition)
             case .editConfiguration(let draft, let subscription):
-                SubscriptionEditorSheet(
+                SubscriptionEditorContent(
                     draft: draft,
                     subscription: subscription,
-                    onClose: navigateBack,
+                    heightRoute: .editConfiguration(subscription.id),
+                    onFinish: navigateBack,
                     onAppearance: openAppearance
                 )
                 .transition(pushTransition)
             case .appearance(let draft):
-                SubscriptionAppearancePage(draft: draft, onBack: navigateBackToEditor)
-                    .transition(pushTransition)
+                SubscriptionAppearanceContent(
+                    draft: draft,
+                    onDone: navigateBackToEditor,
+                    heightRoute: .appearance
+                )
+                .transition(pushTransition)
             case .recovery:
                 NavigationRecoveryView(onReturn: navigateBack).transition(pushTransition)
             }
@@ -321,6 +331,7 @@ struct MenuBarView: View {
                 isRefreshing: store.isRefreshing,
                 onAdd: { openAddSubscription() },
                 onRefresh: { store.refreshAll(source: .manual) },
+                onSettings: onOpenSettings,
                 onQuit: { confirmQuit = true },
                 isReordering: isReordering,
                 onToggleReorder: store.subscriptions.count > 1 ? { toggleReordering() } : nil
@@ -477,19 +488,7 @@ struct MenuBarView: View {
         }
         return ("已同步 · \(oldest.formatted(date: .omitted, time: .shortened))", TM.ok)
     }
-
-    private var previewEntryAction: () -> Void {
-        #if DEBUG
-        return {
-            withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { previewMode = .normal }
-        }
-        #else
-        return {}
-        #endif
-    }
-}
-
-/// 概览列表的单行卡片。快照在这一层读取，而不是在 `MenuBarView` 的 body 里：
+}/// 概览列表的单行卡片。快照在这一层读取，而不是在 `MenuBarView` 的 body 里：
 /// 读在父视图上时，任何一次快照写入都会让整个面板失效（列表理想高度重算、`List` 与表头
 /// 一起重建，还会带出一次行高测量 → 改 frame 的布局级联）；读在这里则只失效这一行。
 /// 注意观测粒度是 `snapshots` 这个属性本身，不是其中的单个键：别的订阅更新时本行
@@ -526,20 +525,31 @@ private extension MenuBarView {
     }
 
     func closeMigration() {
+        // 迁移页现在从独立设置窗口进入，返回就回概览——面板里已经没有设置页了。
         withAnimation(reduceMotion ? .none : .easeOut(duration: 0.2)) {
-            navigation.returnToSettings()
+            navigation.returnToOverview()
         }
     }
 }
 
-private struct ProviderSelectionPage: View {
-    let onBack: () -> Void
+/// 供应商选择正文：一列供应商卡片。
+///
+/// 与 `SubscriptionEditorContent` 一样由两个宿主共用：面板里的 TM-03，
+/// 与独立设置窗口里「添加订阅…」那一页。
+struct ProviderSelectionContent: View {
     let onSelect: (ProviderID) -> Void
+    /// 面板宿主传入要上报高度的路由；窗口宿主传 nil。
+    var heightRoute: PanelNavigationState.Route?
+    /// 面板有上一页可返回；窗口里这一页是侧边栏选中的，没有上一页。
+    var showsBackButton: Bool = true
+    var onBack: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                HeaderIconButton(systemName: "chevron.left", label: "返回概览", action: onBack)
+                if showsBackButton {
+                    HeaderIconButton(systemName: "chevron.left", label: "返回概览", action: onBack)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("选择供应商")
                         .font(.system(size: 20, weight: .semibold))
@@ -559,7 +569,7 @@ private struct ProviderSelectionPage: View {
                     }
                 }
                 .padding(.vertical, 8)
-                .reportsIntrinsicPanelHeight(route: .addProvider, chrome: PanelLayoutMetrics.providerChrome)
+                .reportsIntrinsicPanelHeight(route: heightRoute, chrome: PanelLayoutMetrics.providerChrome)
             }
             .scrollIndicators(.hidden)
         }
@@ -609,6 +619,7 @@ private struct DashboardHeader: View {
     let isRefreshing: Bool
     let onAdd: () -> Void
     let onRefresh: () -> Void
+    let onSettings: () -> Void
     let onQuit: () -> Void
     var isReordering: Bool = false
     var onToggleReorder: (() -> Void)? = nil
@@ -660,6 +671,7 @@ private struct DashboardHeader: View {
                 )
             }
 
+            HeaderIconButton(systemName: "gearshape", label: "设置", action: onSettings)
             HeaderIconButton(systemName: "power", label: "退出 TokenMeter", tint: .red, action: onQuit)
         }
     }

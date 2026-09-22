@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -12,6 +13,11 @@ struct TokenMeterApp: App {
 @MainActor
 final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: MenuBarPanelController?
+    private var railController: RailWindowController?
+    private var settingsController: SettingsWindowController?
+    /// 悬浮条右键菜单的目标。菜单项持的是 target/action 对而不是闭包，
+    /// 所以这个对象必须在菜单的生命周期之外活着。
+    private let railMenuActions = RailMenuActions()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Swift Testing loads this App target as its host process. Do not touch
@@ -28,6 +34,118 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         let controller = MenuBarPanelController(store: store, navigation: navigation)
         controller.start()
         panelController = controller
+
+        // 悬浮条的放置由窗口控制器与设置窗口共用：设置窗口里那个「位置」选择器
+        // 改的就是它。
+        let placement = RailPlacement.restored()
+        startRail(store: store, settings: settings, placement: placement, panel: controller)
+        startSettings(store: store, settings: settings, placement: placement, panel: controller)
+    }
+
+    /// 常驻悬浮条。
+    ///
+    /// 与管理面板完全独立：那是点状态栏图标弹出、点外面就收起的面板，
+    /// 这是贴在屏幕边上的条。两者共用的只有 `UsageStore` 与设置。
+    private func startRail(
+        store: UsageStore,
+        settings: SettingsStore,
+        placement: RailPlacement,
+        panel: MenuBarPanelController
+    ) {
+        let rail = RailWindowController(store: store, settings: settings, placement: placement)
+
+        railMenuActions.onOpenPanel = { [weak panel] in panel?.present(route: .overview) }
+        railMenuActions.onOpenSettings = { [weak self] in self?.settingsController?.show(pane: .general) }
+        railMenuActions.onMove = { [weak rail] dock in
+            rail?.move(to: dock)
+        }
+        railMenuActions.onQuit = {
+            store.stop()
+            NSApplication.shared.terminate(nil)
+        }
+        rail.contextMenu = { [weak self] in self?.railMenu(placement) ?? NSMenu() }
+
+        rail.start()
+        railController = rail
+
+        observeRailSettings(settings, controller: rail)
+    }
+
+    /// 独立设置窗口。
+    ///
+    /// 三个入口都通到这里：面板头部的齿轮、状态栏右键菜单的「设置…」、
+    /// 悬浮条右键菜单的「设置…」。
+    private func startSettings(
+        store: UsageStore,
+        settings: SettingsStore,
+        placement: RailPlacement,
+        panel: MenuBarPanelController
+    ) {
+        let window = SettingsWindowController(store: store, settings: settings, railPlacement: placement)
+        // 添加订阅走窗口自己那一页；迁移仍然回面板——那是一个多步流程，不是设置。
+        window.onOpenMigration = { [weak panel] in panel?.present(route: .migration) }
+        panel.onOpenSettings = { [weak window] in window?.show(pane: .general) }
+        settingsController = window
+    }
+
+    private func railMenu(_ placement: RailPlacement) -> NSMenu {
+        let menu = NSMenu()
+
+        let open = NSMenuItem(title: "打开 TokenMeter", action: #selector(RailMenuActions.openPanel), keyEquivalent: "")
+        open.target = railMenuActions
+        menu.addItem(open)
+
+        let settingsItem = NSMenuItem(title: "设置…", action: #selector(RailMenuActions.openSettings), keyEquivalent: "")
+        settingsItem.target = railMenuActions
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
+        // 位置放在菜单里而不是只放设置页里：它作用的对象就是这条条本身，
+        // 而拖动已经能做同一件事，菜单只是给一个说得清楚的做法。
+        let position = NSMenuItem(title: "位置", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        let options: [(String, RailDock, Selector)] = [
+            ("贴到屏幕左侧", .edge(.left), #selector(RailMenuActions.dockLeft)),
+            ("贴到屏幕右侧", .edge(.right), #selector(RailMenuActions.dockRight)),
+            ("贴到屏幕顶部", .edge(.top), #selector(RailMenuActions.dockTop)),
+            ("自由悬浮", .floating, #selector(RailMenuActions.float)),
+        ]
+        for (title, dock, action) in options {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = railMenuActions
+            item.state = placement.dock == dock ? .on : .off
+            submenu.addItem(item)
+        }
+        position.submenu = submenu
+        menu.addItem(position)
+
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: "退出 TokenMeter", action: #selector(RailMenuActions.quit), keyEquivalent: "")
+        quit.target = railMenuActions
+        menu.addItem(quit)
+
+        return menu
+    }
+
+    /// 设置一变就让悬浮条跟上：开关它、换层级、换空间策略、起停跨屏跟随。
+    ///
+    /// `withObservationTracking` 的 onChange 只报**一次**，所以每次回调都要重新注册。
+    /// 它在 willSet 时机触发，此时新值还没落进属性，所以真正读值要放到下一轮主线程队列。
+    private func observeRailSettings(_ settings: SettingsStore, controller: RailWindowController) {
+        withObservationTracking {
+            _ = settings.railEnabled
+            _ = settings.railAutoCollapse
+            _ = settings.railFollowsActiveDisplay
+            _ = settings.railHidesInFullScreen
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                controller.settingsChanged()
+                self.observeRailSettings(settings, controller: controller)
+            }
+        }
     }
 
     static var isRunningTests: Bool {
@@ -38,6 +156,7 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        railController?.stop()
         panelController?.stop()
     }
 }
