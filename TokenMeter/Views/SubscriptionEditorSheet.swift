@@ -100,6 +100,7 @@ struct SubscriptionEditorContent: View {
                             action: onAppearance
                         )
                     }
+                    SubscriptionRailSection(draft: draft)
                     SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
                         AuthMethodSelection(
                             authMethods: providerDefinition.authMethods,
@@ -208,7 +209,8 @@ struct SubscriptionEditorContent: View {
             name: trimmedName.isEmpty ? providerDefinition.metadata.displayName : trimmedName,
             authMethodID: draft.authMethodID,
             quotaColors: draft.quotaColors,
-            cardStyle: draft.cardStyle
+            cardStyle: draft.cardStyle,
+            rail: draft.rail
         )
         do {
             try saveCredential(for: subscription.id)
@@ -268,6 +270,15 @@ struct SubscriptionEditorContent: View {
             }
             updated.cardStyle = draft.cardStyle
         }
+        if draft.rail != subscription.rail {
+            store.updateRailSettings(draft.rail, for: subscription)
+            if let persistenceError = store.lastPersistenceError {
+                draft.message = persistenceError
+                return
+            }
+            updated.rail = draft.rail
+        }
+
         onFinish()
         store.refresh(updated)
     }
@@ -473,7 +484,8 @@ private struct OfficialSiteLink: View {
 
 // MARK: - 通用组件
 
-/// 编辑页里的一节：小标题 + 说明 + 内容。
+/// 编辑页里的一节：小标题 + 说明 + 内容。`SubscriptionEditorContent` 与
+/// `SubscriptionRailSection`（在 `Rail/` 里）共用它。
 struct SheetSection<Content: View>: View {
     let title: String
     let subtitle: String
