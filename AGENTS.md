@@ -122,6 +122,12 @@ TM-03 / TM-04 / TM-05 的正文视图（`ProviderSelectionContent`、`Subscripti
 `RailEntryBuilder.railSubscriptions(from:)`——「谁在条上」只有这一个判断处，
 不要在别处再按 `store.subscriptions` 算环数或索引。
 
+条本身的呈现分两层：**尺寸预算**（环间距、是否画百分比、数字在环上方、圆角端）由
+`RailMetrics` 承载，窗口 frame、命中区与绘制必须读同一份（`SettingsStore.railMetrics`）；
+**环上画什么**（倒数、第二圈、窗口时钟外弧、活动动画、细条告警色）由 `RailRingOptions`
+承载（`SettingsStore.railRingOptions`）。不要把这两层的成员再拆回散落的常量——
+窗口按 A 算、绘制按 B 画就是这个仓库反复修过的错位。
+
 When a request names a page ID, first inspect the corresponding entry point above. `SubscriptionUsageView`, `PlatformLogo`, `StatusBadge`, and other smaller `View` types are shared components, not separate pages.
 
 完成需求，构建一下项目，并重新启动APP。
