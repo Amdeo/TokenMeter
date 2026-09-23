@@ -45,7 +45,8 @@ struct RailView: View {
                     notchSize: placement.notch?.size,
                     alert: alertTint,
                     selectedID: selectedID,
-                    glassEnabled: settings.glassEffectEnabled
+                    glassEnabled: settings.glassEffectEnabled,
+                    metrics: metrics
                 )
                 .fixedSize()
                 .overlay(alignment: placement.edge.cardAlignment) {
@@ -157,17 +158,21 @@ struct RailView: View {
 
     // MARK: - 几何
 
+    /// 条的尺寸预算。窗口按同一份算——两处必须一致，否则命中区会与绘制错位。
+    private var metrics: RailMetrics { settings.railMetrics }
+
     /// 条当前的尺寸。窗口一直按最大尺寸留着，所以卡片摆放与指针判定量的都是它，
     /// 不是窗口。
     private var railSize: CGSize {
-        RailLayout.size(for: entries.count, on: placement.edge.axis, docked: placement.isDocked)
+        metrics.size(for: entries.count, on: placement.edge.axis, docked: placement.isDocked)
     }
 
     private var panelSize: CGSize {
         RailHitArea.panelSize(
             for: placement.edge,
             railLength: max(railSize.width, railSize.height),
-            notchSize: placement.notch?.size
+            notchSize: placement.notch?.size,
+            metrics: metrics
         )
     }
 
@@ -188,7 +193,12 @@ struct RailView: View {
 
     /// 一个环心**沿**条的位置，用的是条与卡片共享的坐标空间。
     private func ringCentre(for index: Int) -> CGFloat {
-        RailGeometry.ringCentre(forIndex: index, on: placement.edge.axis, docked: placement.isDocked)
+        RailGeometry.ringCentre(
+            forIndex: index,
+            on: placement.edge.axis,
+            docked: placement.isDocked,
+            metrics: metrics
+        )
     }
 
     /// 卡片自己在同一根轴上的尺寸：在条旁边是它的高，在条下面是它的宽。
@@ -268,7 +278,8 @@ struct RailView: View {
             panelSize: panelSize,
             railTop: placement.railTop,
             railLeading: placement.railLeading,
-            docked: placement.isDocked
+            docked: placement.isDocked,
+            metrics: metrics
         ), index < entries.count else { return }
 
         select(entries[index])

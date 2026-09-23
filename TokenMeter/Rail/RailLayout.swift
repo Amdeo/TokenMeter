@@ -33,7 +33,7 @@ enum RailLayout {
     static let percentTextHeight: CGFloat = 16
     static let percentTextWidth: CGFloat = 40
 
-    /// 环与它相邻项之间的间距。
+    /// 环与它相邻项之间的间距。**基准值**：`RailMetrics` 按档位乘它。
     static let itemSpacing: CGFloat = 30
 
     /// 条身内侧面两个凸角的半径。
@@ -55,65 +55,10 @@ enum RailLayout {
     /// 一个环 + 它下方百分比文字的高度。
     static var itemHeight: CGFloat { ringDiameter + ringToTextSpacing + percentTextHeight }
 
-    /// 这一轴上带不带百分比文字。
-    ///
-    /// 贴左右边时带：文字在环下方，不额外占横向空间。贴顶时不带——横放的条就在
-    /// 菜单栏底下，再加一行字会把一条紧凑的胶囊变成一条横幅。
-    static func showsPercentages(on axis: RailEdge.Axis) -> Bool { axis == .vertical }
-
-    /// 单项**沿**条方向的长度。
-    static func itemLength(on axis: RailEdge.Axis) -> CGFloat {
-        guard showsPercentages(on: axis) else { return ringDiameter }
-        return axis == .vertical ? itemHeight : max(ringDiameter, percentTextWidth)
-    }
-
-    /// 条**横跨**自身走向的尺寸。
-    ///
-    /// 贴左右边时恒为 `width`：外扩与圆角共享这个量（`cornerRadius + flareWidth <= width`），
-    /// 不显示文字时把条收窄会让形状自己折进去。只有条的长度会变。
-    static func thickness(on axis: RailEdge.Axis) -> CGFloat {
-        guard axis == .horizontal, showsPercentages(on: .horizontal) else { return width }
-        return itemHeight + horizontalPadding * 2
-    }
-
     /// 条两端各留的余量。悬浮时少一个 `flareHeight`：贴边时外扩啃掉了两端这么多，
     /// 减掉它两种状态**看得见**的呼吸感才一致。
     static func endPadding(docked: Bool) -> CGFloat {
         docked ? verticalPadding : verticalPadding - flareHeight
-    }
-
-    /// 给定环数时条的长度：两端余量 + 各项 + 项间距。
-    static func length(for itemCount: Int, on axis: RailEdge.Axis, docked: Bool = true) -> CGFloat {
-        let count = CGFloat(max(itemCount, 1))
-        return endPadding(docked: docked) * 2 + itemLength(on: axis) * count + itemSpacing * (count - 1)
-    }
-
-    /// 条的完整尺寸，按 `axis` 摆放。
-    static func size(for itemCount: Int, on axis: RailEdge.Axis, docked: Bool = true) -> CGSize {
-        let along = length(for: itemCount, on: axis, docked: docked)
-        let across = thickness(on: axis)
-        return axis == .vertical
-            ? CGSize(width: across, height: along)
-            : CGSize(width: along, height: across)
-    }
-
-    /// 环心**横跨**条的位置。
-    ///
-    /// 项在条的厚度方向居中，而项在这一方向上恒等于环（百分比文字在环下方、
-    /// 沿条方向排布，横跨方向只占环的宽度），所以这不是简单的「一半条宽」时也无妨：
-    /// `thickness` 比环大是刻意的，条一直画得比内容宽。
-    static func ringCentreAcross(on axis: RailEdge.Axis) -> CGFloat {
-        (thickness(on: axis) - ringDiameter) / 2 + ringDiameter / 2
-    }
-
-    /// 第一个环心沿条方向的位置，以及相邻两环的步长。
-    static func firstRingAlong(docked: Bool = true, on axis: RailEdge.Axis = .vertical) -> CGFloat {
-        let intoItem = axis == .vertical ? ringDiameter / 2 : itemLength(on: axis) / 2
-        return endPadding(docked: docked) + intoItem
-    }
-
-    static func ringStep(on axis: RailEdge.Axis) -> CGFloat {
-        itemLength(on: axis) + itemSpacing
     }
 
     /// 细条的尺寸，按 `axis` 摆放：`collapsedWidth` 贴着屏幕边缘。
@@ -128,6 +73,120 @@ enum RailLayout {
         axis == .vertical
             ? CGSize(width: collapsedHitWidth, height: collapsedHeight)
             : CGSize(width: collapsedHeight, height: collapsedHitWidth)
+    }
+}
+
+/// 环与环之间的间距档位。
+///
+/// 只乘在 `itemSpacing` 上：环本身保持原尺寸——一个更松的条是同样的环摆得更开，
+/// 不是把环拉大。
+enum RailSpacing: String, CaseIterable, Identifiable, Sendable {
+    case compact
+    case standard
+    case roomy
+
+    static let `default` = RailSpacing.standard
+
+    var id: String { rawValue }
+
+    var scale: CGFloat {
+        switch self {
+        case .compact: 0.6
+        case .standard: 1
+        case .roomy: 1.4
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .compact: "紧凑"
+        case .standard: "标准"
+        case .roomy: "宽松"
+        }
+    }
+}
+
+/// 悬浮条的尺寸预算：**由设置推出来的那一部分**。
+///
+/// 这些数字以前是常量，因为 TokenMeter 只有一种条。能改之后它们必须**一起**走：
+/// 窗口 frame 在 SwiftUI 布局之前就要算出来，所以「几个环、间距多大、画不画百分比」
+/// 决定了条多大，而命中区、环心、卡片摆放读的必须是同一份预算。
+/// 散落成各算各的，就会出现「窗口按 A 算、绘制按 B 画」的错位——
+/// 而预算给少了不是近似，是挤压：环会被裁、命中区会和绘制错位。
+struct RailMetrics: Equatable, Sendable {
+    var spacing: RailSpacing = .default
+    /// 贴左右边时画不画环下方那行百分比。
+    var sideShowsPercentages = true
+    /// 贴顶时画不画。默认不画：横放的条就在菜单栏底下，再加一行字会把一条紧凑的胶囊变成一条横幅。
+    var topShowsPercentages = false
+    /// 数字画在环上方而不是下方。
+    ///
+    /// 只挪**位置**，不改这一项的总高——所以它影响的是环心落在项里的哪里（命中区读它），
+    /// 不是条的长度。
+    var labelAboveRing = false
+
+    var itemSpacing: CGFloat { RailLayout.itemSpacing * spacing.scale }
+
+    /// 这一轴上带不带百分比文字。
+    func showsPercentages(on axis: RailEdge.Axis) -> Bool {
+        axis == .vertical ? sideShowsPercentages : topShowsPercentages
+    }
+
+    /// 一个环 + 它下方百分比文字的高度。
+    var itemHeight: CGFloat { RailLayout.itemHeight }
+
+    /// 单项**沿**条方向的长度。
+    func itemLength(on axis: RailEdge.Axis) -> CGFloat {
+        guard showsPercentages(on: axis) else { return RailLayout.ringDiameter }
+        return axis == .vertical ? itemHeight : max(RailLayout.ringDiameter, RailLayout.percentTextWidth)
+    }
+
+    /// 条**横跨**自身走向的尺寸。
+    ///
+    /// 贴左右边时恒为 `width`：外扩与圆角共享这个量（`cornerRadius + flareWidth <= width`），
+    /// 不显示文字时把条收窄会让形状自己折进去。只有条的长度会变。
+    func thickness(on axis: RailEdge.Axis) -> CGFloat {
+        guard axis == .horizontal, showsPercentages(on: .horizontal) else { return RailLayout.width }
+        return itemHeight + RailLayout.horizontalPadding * 2
+    }
+
+    /// 给定环数时条的长度：两端余量 + 各项 + 项间距。
+    func length(for itemCount: Int, on axis: RailEdge.Axis, docked: Bool = true) -> CGFloat {
+        let count = CGFloat(max(itemCount, 1))
+        return RailLayout.endPadding(docked: docked) * 2 + itemLength(on: axis) * count + itemSpacing * (count - 1)
+    }
+
+    /// 条的完整尺寸，按 `axis` 摆放。
+    func size(for itemCount: Int, on axis: RailEdge.Axis, docked: Bool = true) -> CGSize {
+        let along = length(for: itemCount, on: axis, docked: docked)
+        let across = thickness(on: axis)
+        return axis == .vertical
+            ? CGSize(width: across, height: along)
+            : CGSize(width: along, height: across)
+    }
+
+    /// 环心**横跨**条的位置。
+    ///
+    /// 项在条的厚度方向居中，而项在这一方向上恒等于环（百分比文字在环下方、
+    /// 沿条方向排布，横跨方向只占环的宽度），所以这不是简单的「一半条宽」时也无妨：
+    /// `thickness` 比环大是刻意的，条一直画得比内容宽。
+    func ringCentreAcross(on axis: RailEdge.Axis) -> CGFloat {
+        (thickness(on: axis) - RailLayout.ringDiameter) / 2 + RailLayout.ringDiameter / 2
+    }
+
+    /// 第一个环心沿条方向的位置，以及相邻两环的步长。
+    func firstRingAlong(docked: Bool = true, on axis: RailEdge.Axis = .vertical) -> CGFloat {
+        // 数字在上时，环心要从那一行字的下沿再往下量。
+        let labelThenRing = RailLayout.percentTextHeight + RailLayout.ringToTextSpacing
+        let intoVertical = labelAboveRing
+            ? labelThenRing + RailLayout.ringDiameter / 2
+            : RailLayout.ringDiameter / 2
+        let intoItem = axis == .vertical ? intoVertical : itemLength(on: axis) / 2
+        return RailLayout.endPadding(docked: docked) + intoItem
+    }
+
+    func ringStep(on axis: RailEdge.Axis) -> CGFloat {
+        itemLength(on: axis) + itemSpacing
     }
 }
 
@@ -190,7 +249,12 @@ enum RailPanelLayout {
         RailCardLayout.width + RailCardLayout.pointerWidth + RailCardLayout.horizontalGap
     }
 
-    static func size(for edge: RailEdge, railLength: CGFloat, notchSize: CGSize? = nil) -> CGSize {
+    static func size(
+        for edge: RailEdge,
+        railLength: CGFloat,
+        notchSize: CGSize? = nil,
+        metrics: RailMetrics
+    ) -> CGSize {
         switch edge.axis {
         case .vertical:
             return CGSize(
@@ -201,7 +265,7 @@ enum RailPanelLayout {
         case .horizontal:
             return CGSize(
                 width: max(railLength, RailCardLayout.width, notchSize?.width ?? 0),
-                height: RailLayout.thickness(on: .horizontal)
+                height: metrics.thickness(on: .horizontal)
                     + (notchSize?.height ?? 0)
                     + RailCardLayout.horizontalGap
                     + RailCardLayout.pointerWidth

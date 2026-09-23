@@ -12,8 +12,13 @@ import Foundation
 /// 每一条边断言这个包含关系，并且作为测试在每次跑测试时执行。
 enum RailHitArea {
     /// 某个环数下窗口的尺寸。窗口尺寸由条长推出来，两处必须用同一个来源。
-    static func panelSize(for edge: RailEdge, railLength: CGFloat, notchSize: CGSize? = nil) -> CGSize {
-        RailPanelLayout.size(for: edge, railLength: railLength, notchSize: notchSize)
+    static func panelSize(
+        for edge: RailEdge,
+        railLength: CGFloat,
+        notchSize: CGSize? = nil,
+        metrics: RailMetrics
+    ) -> CGSize {
+        RailPanelLayout.size(for: edge, railLength: railLength, notchSize: notchSize, metrics: metrics)
     }
 
     /// 贴住物理刘海时，条向上延伸到屏幕物理顶端、宽度至少与外壳同宽。
@@ -57,7 +62,8 @@ enum RailHitArea {
         panelSize: CGSize,
         railTop: CGFloat,
         railLeading: CGFloat,
-        docked: Bool
+        docked: Bool,
+        metrics: RailMetrics
     ) -> Int? {
         let rail = rail(
             edge: edge,
@@ -70,11 +76,11 @@ enum RailHitArea {
 
         // 含选中环的放大与一点指针宽容，但不至于够到它下面的百分比文字。
         let radius = RailLayout.ringDiameter / 2 * 1.08
-        let across = RailLayout.ringCentreAcross(on: edge.axis)
+        let across = metrics.ringCentreAcross(on: edge.axis)
 
         for index in 0..<max(entryCount, 0) {
-            let along = RailLayout.firstRingAlong(docked: docked, on: edge.axis)
-                + CGFloat(index) * RailLayout.ringStep(on: edge.axis)
+            let along = metrics.firstRingAlong(docked: docked, on: edge.axis)
+                + CGFloat(index) * metrics.ringStep(on: edge.axis)
             let centre = edge.isVertical
                 ? CGPoint(x: rail.minX + across, y: rail.minY + along)
                 : CGPoint(x: rail.minX + along, y: rail.minY + across)
@@ -127,11 +133,11 @@ enum RailHitArea {
     /// 细条根本不会出现，去断言它是在断言一个不存在的约束。
     ///
     /// 条内的偏移量也一起遍历：条不再钉在窗口中央，所以每个偏移都要成立。
-    static func stripIsContainedInRail(maxEntries: Int) -> Bool {
+    static func stripIsContainedInRail(maxEntries: Int, metrics: RailMetrics = RailMetrics()) -> Bool {
         for edge in RailEdge.allCases {
             for count in 1...max(maxEntries, 1) {
-                let size = RailLayout.size(for: count, on: edge.axis, docked: true)
-                let panel = panelSize(for: edge, railLength: max(size.width, size.height))
+                let size = metrics.size(for: count, on: edge.axis, docked: true)
+                let panel = panelSize(for: edge, railLength: max(size.width, size.height), metrics: metrics)
                 let travel = edge.isVertical
                     ? max(panel.height - size.height, 0)
                     : max(panel.width - size.width, 0)

@@ -20,9 +20,11 @@ struct RailDockView: View {
     var alert: Color?
     let selectedID: UUID?
     let glassEnabled: Bool
+    /// 条的尺寸预算。窗口按同一份算，两处必须一致。
+    var metrics = RailMetrics()
 
     private var railSize: CGSize {
-        RailLayout.size(for: entries.count, on: edge.axis, docked: isDocked)
+        metrics.size(for: entries.count, on: edge.axis, docked: isDocked)
     }
 
     private var currentSize: CGSize {
@@ -101,8 +103,8 @@ struct RailDockView: View {
         // 同一批项，按条的走向叠放。`AnyLayout` 让它们在换轴时仍是同一组视图，
         // 而不是两组被替换——从侧边重新贴到顶边的条会把环带过去，而不是重建它们。
         let stack = edge.isVertical
-            ? AnyLayout(VStackLayout(spacing: RailLayout.itemSpacing))
-            : AnyLayout(HStackLayout(spacing: RailLayout.itemSpacing))
+            ? AnyLayout(VStackLayout(spacing: metrics.itemSpacing))
+            : AnyLayout(HStackLayout(spacing: metrics.itemSpacing))
 
         return stack {
             ForEach(entries) { entry in
@@ -132,14 +134,14 @@ struct RailDockView: View {
                 RailRingView(entry: entry, isSelected: selected)
                 RailRingLabel(entry: entry)
             }
-            .frame(height: RailLayout.itemLength(on: .vertical))
+            .frame(height: metrics.itemLength(on: .vertical))
             .contentShape(.rect)
             .accessibilityAddTraits(.isButton)
 
         case .horizontal:
             // 贴顶的条不画百分比文字，所以一项就是一个环。
             RailRingView(entry: entry, isSelected: selected)
-                .frame(width: RailLayout.itemLength(on: .horizontal))
+                .frame(width: metrics.itemLength(on: .horizontal))
                 .contentShape(.rect)
                 .accessibilityAddTraits(.isButton)
         }

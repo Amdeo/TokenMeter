@@ -247,9 +247,14 @@ enum RailGeometry {
     ///
     /// 环心从条的第一个环偏移开始，每项前进「一项 + 一个间隙」。
     /// 这条与 `RailHitArea.slot` 必须同源：命中判定走的就是这些数。
-    static func ringCentre(forIndex index: Int, on axis: RailEdge.Axis, docked: Bool) -> CGFloat {
-        RailLayout.firstRingAlong(docked: docked, on: axis)
-            + CGFloat(index) * RailLayout.ringStep(on: axis)
+    static func ringCentre(
+        forIndex index: Int,
+        on axis: RailEdge.Axis,
+        docked: Bool,
+        metrics: RailMetrics
+    ) -> CGFloat {
+        metrics.firstRingAlong(docked: docked, on: axis)
+            + CGFloat(index) * metrics.ringStep(on: axis)
     }
 
     /// 卡片沿条从哪儿开始，从条自己的前缘量起。

@@ -30,7 +30,8 @@ final class RailWindowController {
             for: placement.edge,
             entryCount: RailEntryBuilder.railSubscriptions(from: store.subscriptions).count,
             docked: placement.isDocked,
-            notch: nil
+            notch: nil,
+            metrics: settings.railMetrics
         )
         panel = RailWindow(
             contentRect: NSRect(origin: .zero, size: initialSize),
@@ -280,7 +281,23 @@ final class RailWindowController {
         // 少掉了外扩的那段留白，按旧状态量会在改轴的那一帧把放置算错那么多。
         panel.railSize = { [weak self] edge, docked in
             guard let self else { return .zero }
-            return Self.railSize(for: edge, entryCount: self.railSubscriptions.count, docked: docked)
+            return Self.railSize(
+                for: edge,
+                entryCount: self.railSubscriptions.count,
+                docked: docked,
+                metrics: self.settings.railMetrics
+            )
+        }
+
+        // 拖动换边时窗口该多大。控制器提供而不是窗口自己算：尺寸预算只有一处。
+        panel.panelSize = { [weak self] edge, rail, notch in
+            guard let self else { return .zero }
+            return RailHitArea.panelSize(
+                for: edge,
+                railLength: max(rail.width, rail.height),
+                notchSize: notch,
+                metrics: self.settings.railMetrics
+            )
         }
 
         // 一次短按（没有移动过）落在某个环上就刷新那条订阅。条身上的空白仍然只用于拖动。
@@ -296,7 +313,8 @@ final class RailWindowController {
                 panelSize: self.currentPanelSize,
                 railTop: self.placement.railTop,
                 railLeading: self.placement.railLeading,
-                docked: self.placement.isDocked
+                docked: self.placement.isDocked,
+                metrics: self.settings.railMetrics
             ) else { return }
             guard index < entries.count else { return }
             // 环的顺序就是条上订阅的顺序，所以索引直接对应。
@@ -315,7 +333,8 @@ final class RailWindowController {
         Self.railSize(
             for: placement.edge,
             entryCount: railSubscriptions.count,
-            docked: placement.isDocked
+            docked: placement.isDocked,
+            metrics: settings.railMetrics
         )
     }
 
@@ -323,22 +342,34 @@ final class RailWindowController {
         RailHitArea.panelSize(
             for: placement.edge,
             railLength: max(currentRailSize.width, currentRailSize.height),
-            notchSize: placement.notch?.size
+            notchSize: placement.notch?.size,
+            metrics: settings.railMetrics
         )
     }
 
-    private static func railSize(for edge: RailEdge, entryCount: Int, docked: Bool) -> CGSize {
-        RailLayout.size(for: entryCount, on: edge.axis, docked: docked)
+    private static func railSize(
+        for edge: RailEdge,
+        entryCount: Int,
+        docked: Bool,
+        metrics: RailMetrics
+    ) -> CGSize {
+        metrics.size(for: entryCount, on: edge.axis, docked: docked)
     }
 
     private static func panelSize(
         for edge: RailEdge,
         entryCount: Int,
         docked: Bool,
-        notch: CGRect?
+        notch: CGRect?,
+        metrics: RailMetrics
     ) -> CGSize {
-        let rail = railSize(for: edge, entryCount: entryCount, docked: docked)
-        return RailHitArea.panelSize(for: edge, railLength: max(rail.width, rail.height), notchSize: notch?.size)
+        let rail = railSize(for: edge, entryCount: entryCount, docked: docked, metrics: metrics)
+        return RailHitArea.panelSize(
+            for: edge,
+            railLength: max(rail.width, rail.height),
+            notchSize: notch?.size,
+            metrics: metrics
+        )
     }
 
     /// 把条停在它上次被留下的地方。
@@ -360,12 +391,14 @@ final class RailWindowController {
         let railSize = Self.railSize(
             for: edge,
             entryCount: railSubscriptions.count,
-            docked: placement.isDocked
+            docked: placement.isDocked,
+            metrics: settings.railMetrics
         )
         let panelSize = RailHitArea.panelSize(
             for: edge,
             railLength: max(railSize.width, railSize.height),
-            notchSize: placement.notch?.size
+            notchSize: placement.notch?.size,
+            metrics: settings.railMetrics
         )
         let layout = RailGeometry.layout(
             dock: placement.dock,

@@ -134,6 +134,59 @@ final class SettingsStore {
     var railHidesInFullScreen: Bool {
         didSet { defaults.set(railHidesInFullScreen, forKey: Keys.railHidesInFullScreen) }
     }
+
+    /// 环与环之间的间距档位。
+    var railSpacing: RailSpacing {
+        didSet { defaults.set(railSpacing.rawValue, forKey: Keys.railSpacing) }
+    }
+    /// 贴左右边时画不画环下方那行百分比。
+    var railSideShowsPercentages: Bool {
+        didSet { defaults.set(railSideShowsPercentages, forKey: Keys.railSideShowsPercentages) }
+    }
+    /// 贴顶时画不画。
+    var railTopShowsPercentages: Bool {
+        didSet { defaults.set(railTopShowsPercentages, forKey: Keys.railTopShowsPercentages) }
+    }
+    /// 数字画在环上方而不是下方。
+    var railLabelAboveRing: Bool {
+        didSet { defaults.set(railLabelAboveRing, forKey: Keys.railLabelAboveRing) }
+    }
+    /// 弧与数字都倒数（显示还剩多少），而不是正数（已用多少）。
+    var railShowsRemaining: Bool {
+        didSet { defaults.set(railShowsRemaining, forKey: Keys.railShowsRemaining) }
+    }
+    /// 环里再画一圈细弧，给次满的那个额度。
+    var railShowsSecondRing: Bool {
+        didSet { defaults.set(railShowsSecondRing, forKey: Keys.railShowsSecondRing) }
+    }
+    /// 环外再画一道细弧，表示额度窗口已经过去了多少。
+    var railShowsWindowClock: Bool {
+        didSet { defaults.set(railShowsWindowClock, forKey: Keys.railShowsWindowClock) }
+    }
+    /// 某个额度快到临界时，细条染上它的颜色。关掉则细条始终中性。
+    var railDockShowsAlertColor: Bool {
+        didSet { defaults.set(railDockShowsAlertColor, forKey: Keys.railDockShowsAlertColor) }
+    }
+    /// 取数时环上跑一段弧。默认关：TokenMeter 的条一直是不动的，
+    /// 这个动画是照着参考项目补的，不该在用户没要求时自己动起来。
+    var railAnimatesActivity: Bool {
+        didSet { defaults.set(railAnimatesActivity, forKey: Keys.railAnimatesActivity) }
+    }
+    /// 条的收尾用整圆的端头，而不是柔化的超椭圆角。
+    var railUsesRoundEnds: Bool {
+        didSet { defaults.set(railUsesRoundEnds, forKey: Keys.railUsesRoundEnds) }
+    }
+
+    /// 悬浮条当前的尺寸预算。窗口与视图都必须读它，不能各自算。
+    var railMetrics: RailMetrics {
+        RailMetrics(
+            spacing: railSpacing,
+            sideShowsPercentages: railSideShowsPercentages,
+            topShowsPercentages: railTopShowsPercentages,
+            labelAboveRing: railLabelAboveRing
+        )
+    }
+
     private var cnyThresholdStorage = 0.0
     private var usdThresholdStorage = 0.0
 
@@ -187,6 +240,16 @@ final class SettingsStore {
         railAutoCollapse = defaults.object(forKey: Keys.railAutoCollapse) as? Bool ?? true
         railFollowsActiveDisplay = defaults.object(forKey: Keys.railFollowsActiveDisplay) as? Bool ?? false
         railHidesInFullScreen = defaults.object(forKey: Keys.railHidesInFullScreen) as? Bool ?? true
+        railSpacing = RailSpacing(rawValue: defaults.string(forKey: Keys.railSpacing) ?? "") ?? .default
+        railSideShowsPercentages = defaults.object(forKey: Keys.railSideShowsPercentages) as? Bool ?? true
+        railTopShowsPercentages = defaults.object(forKey: Keys.railTopShowsPercentages) as? Bool ?? false
+        railLabelAboveRing = defaults.object(forKey: Keys.railLabelAboveRing) as? Bool ?? false
+        railShowsRemaining = defaults.object(forKey: Keys.railShowsRemaining) as? Bool ?? false
+        railShowsSecondRing = defaults.object(forKey: Keys.railShowsSecondRing) as? Bool ?? false
+        railShowsWindowClock = defaults.object(forKey: Keys.railShowsWindowClock) as? Bool ?? false
+        railDockShowsAlertColor = defaults.object(forKey: Keys.railDockShowsAlertColor) as? Bool ?? true
+        railAnimatesActivity = defaults.object(forKey: Keys.railAnimatesActivity) as? Bool ?? false
+        railUsesRoundEnds = defaults.object(forKey: Keys.railUsesRoundEnds) as? Bool ?? false
         cnyBalanceThreshold = max(0, defaults.object(forKey: Keys.cnyThreshold) as? Double ?? 5)
         usdBalanceThreshold = max(0, defaults.object(forKey: Keys.usdThreshold) as? Double ?? 1)
         refreshLoginItemStatus()
@@ -280,5 +343,15 @@ final class SettingsStore {
         static let railAutoCollapse = "settings.railAutoCollapse"
         static let railFollowsActiveDisplay = "settings.railFollowsActiveDisplay"
         static let railHidesInFullScreen = "settings.railHidesInFullScreen"
+        static let railSpacing = "settings.railSpacing"
+        static let railSideShowsPercentages = "settings.railSideShowsPercentages"
+        static let railTopShowsPercentages = "settings.railTopShowsPercentages"
+        static let railLabelAboveRing = "settings.railLabelAboveRing"
+        static let railShowsRemaining = "settings.railShowsRemaining"
+        static let railShowsSecondRing = "settings.railShowsSecondRing"
+        static let railShowsWindowClock = "settings.railShowsWindowClock"
+        static let railDockShowsAlertColor = "settings.railDockShowsAlertColor"
+        static let railAnimatesActivity = "settings.railAnimatesActivity"
+        static let railUsesRoundEnds = "settings.railUsesRoundEnds"
     }
 }

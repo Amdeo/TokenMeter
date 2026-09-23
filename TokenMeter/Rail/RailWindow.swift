@@ -28,6 +28,9 @@ final class RailWindow: NSPanel {
     var railFrame: (() -> CGRect)?
     /// 条在某条边上的尺寸。拖动需要它来算条还没到的那条边。
     var railSize: ((RailEdge, Bool) -> CGSize)?
+    /// 条在某条边上时窗口该多大。与 `railSize` 同源：只有控制器知道当前的尺寸预算，
+    /// 这里再算一遍就会算出另一个数。
+    var panelSize: ((RailEdge, CGSize, CGSize?) -> CGSize)?
 
     /// 一次没有移动的短按。控制器把它映射到某个环上；条身上的空白仍然只用于拖动。
     var onClick: ((CGPoint) -> Void)?
@@ -157,11 +160,13 @@ final class RailWindow: NSPanel {
         }
         let landingRail = railSize?(landing, dock.isDocked) ?? rail
         let landingNotch = dock.edge == .top ? RailScreen.notch(of: screen) : nil
-        let landingPanel = RailHitArea.panelSize(
-            for: landing,
-            railLength: max(landingRail.width, landingRail.height),
-            notchSize: landingNotch?.size
-        )
+        let landingPanel = panelSize?(landing, landingRail, landingNotch?.size)
+            ?? RailHitArea.panelSize(
+                for: landing,
+                railLength: max(landingRail.width, landingRail.height),
+                notchSize: landingNotch?.size,
+                metrics: RailMetrics()
+            )
 
         // 换到新朝向后，位置要在指针底下。
         //
