@@ -36,13 +36,6 @@ enum RailLayout {
     /// 环与它相邻项之间的间距。**基准值**：`RailMetrics` 按档位乘它。
     static let itemSpacing: CGFloat = 30
 
-    /// 条身内侧面两个凸角的半径。
-    static let cornerRadius: CGFloat = 26
-    /// 凹形外扩高出条身平直上沿的距离。
-    static let flareHeight: CGFloat = 24
-    /// 外扩从离屏幕边缘多远开始扫。
-    static let flareWidth: CGFloat = 38
-
     /// 指针离开内容多远才算「走了」，以及细条命中区的额外宽容。
     static let pointerSlack: CGFloat = 8
 
@@ -54,12 +47,6 @@ enum RailLayout {
 
     /// 一个环 + 它下方百分比文字的高度。
     static var itemHeight: CGFloat { ringDiameter + ringToTextSpacing + percentTextHeight }
-
-    /// 条两端各留的余量。悬浮时少一个 `flareHeight`：贴边时外扩啃掉了两端这么多，
-    /// 减掉它两种状态**看得见**的呼吸感才一致。
-    static func endPadding(docked: Bool) -> CGFloat {
-        docked ? verticalPadding : verticalPadding - flareHeight
-    }
 
     /// 细条的尺寸，按 `axis` 摆放：`collapsedWidth` 贴着屏幕边缘。
     static func collapsedSize(on axis: RailEdge.Axis) -> CGSize {
@@ -124,8 +111,47 @@ struct RailMetrics: Equatable, Sendable {
     /// 只挪**位置**，不改这一项的总高——所以它影响的是环心落在项里的哪里（命中区读它），
     /// 不是条的长度。
     var labelAboveRing = false
+    /// 条的收尾用整圆的端头，而不是柔化的超椭圆角。
+    ///
+    /// 不是「喜欢圆的东西」：环是横跨条居中的，这么圆的端头与离它最近的那个环同一条中心线，
+    /// 沿着那个环绕过去——条、环、卡片于是读成同一族的曲线。整圆还有一个理由与悬浮胶囊一样：
+    /// 在这个半径上圆角与凹形外扩之间没有直边，超椭圆没有东西可以缓和。
+    var usesRoundEnds = false
 
     var itemSpacing: CGFloat { RailLayout.itemSpacing * spacing.scale }
+
+    /// 条身内侧面两个凸角的半径。
+    ///
+    /// 圆端是条宽的一半（两端各一个半圆）；柔化端是 26pt，画成四阶超椭圆，
+    /// 所以读起来比它的半径更紧——大约 14pt 的圆角，比它包住的 20pt 环更方。
+    /// 这是 TokenMeter 一直以来的收尾样式。
+    var cornerRadius: CGFloat { usesRoundEnds ? RailLayout.width / 2 : Self.softenedCornerRadius }
+    /// 凹形外扩高出条身平直上沿的距离。
+    ///
+    /// 圆端时它等于端头自己的半径：与端头一样高、一样宽，两者在条的中线上以一个切线相遇，
+    /// 于是端头是**一条** S 形曲线扫进屏幕边，而不是一个圆角接一个肩。柔化端保持 24，
+    /// 比它旁边的圆角更平。
+    var flareHeight: CGFloat { usesRoundEnds ? cornerRadius : Self.softenedFlareHeight }
+    /// 外扩从离屏幕边缘多远开始扫。
+    ///
+    /// 圆端时是圆角没占掉的那整段：`cornerRadius + flareWidth` 正好等于条宽。
+    /// 两种样式都落在**恰好** `width` 上——圆角与外扩共享条的上沿，这是硬约束。
+    var flareWidth: CGFloat { usesRoundEnds ? RailLayout.width - cornerRadius : Self.softenedFlareWidth }
+    /// 圆角的形状指数：圆端是真圆，柔化端是四阶超椭圆。
+    var cornerExponent: CGFloat { usesRoundEnds ? 2 : Self.softenedExponent }
+
+    /// 柔化端的三个数。它们与条宽互相约束（`cornerRadius + flareWidth <= width`）。
+    private static let softenedCornerRadius: CGFloat = 26
+    private static let softenedFlareHeight: CGFloat = 24
+    private static let softenedFlareWidth: CGFloat = 38
+    /// 四阶超椭圆：既让圆角保持饱满，又把它缓和进两侧的直边。
+    private static let softenedExponent: CGFloat = 4
+
+    /// 条两端各留的余量。悬浮时少一个 `flareHeight`：贴边时外扩啃掉了两端这么多，
+    /// 减掉它两种状态**看得见**的呼吸感才一致。
+    func endPadding(docked: Bool) -> CGFloat {
+        docked ? RailLayout.verticalPadding : RailLayout.verticalPadding - flareHeight
+    }
 
     /// 这一轴上带不带百分比文字。
     func showsPercentages(on axis: RailEdge.Axis) -> Bool {
@@ -153,7 +179,7 @@ struct RailMetrics: Equatable, Sendable {
     /// 给定环数时条的长度：两端余量 + 各项 + 项间距。
     func length(for itemCount: Int, on axis: RailEdge.Axis, docked: Bool = true) -> CGFloat {
         let count = CGFloat(max(itemCount, 1))
-        return RailLayout.endPadding(docked: docked) * 2 + itemLength(on: axis) * count + itemSpacing * (count - 1)
+        return endPadding(docked: docked) * 2 + itemLength(on: axis) * count + itemSpacing * (count - 1)
     }
 
     /// 条的完整尺寸，按 `axis` 摆放。
@@ -182,7 +208,7 @@ struct RailMetrics: Equatable, Sendable {
             ? labelThenRing + RailLayout.ringDiameter / 2
             : RailLayout.ringDiameter / 2
         let intoItem = axis == .vertical ? intoVertical : itemLength(on: axis) / 2
-        return RailLayout.endPadding(docked: docked) + intoItem
+        return endPadding(docked: docked) + intoItem
     }
 
     func ringStep(on axis: RailEdge.Axis) -> CGFloat {

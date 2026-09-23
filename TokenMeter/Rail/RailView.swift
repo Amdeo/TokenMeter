@@ -46,7 +46,9 @@ struct RailView: View {
                     alert: alertTint,
                     selectedID: selectedID,
                     glassEnabled: settings.glassEffectEnabled,
-                    metrics: metrics
+                    metrics: metrics,
+                    options: settings.railRingOptions,
+                    isRefreshing: store.isRefreshing
                 )
                 .fixedSize()
                 .overlay(alignment: placement.edge.cardAlignment) {
@@ -140,6 +142,7 @@ struct RailView: View {
     /// 取的是**状态色**而不是环色：用户给某个环选的颜色是身份，细条的染色说的是状态，
     /// 一个被选中的颜色不该让一条一切都正常的条看起来像在报警。
     private var alertTint: Color? {
+        guard settings.railDockShowsAlertColor else { return nil }
         let worst = entries
             .filter { $0.state == .realtime }
             .max { ($0.fraction ?? 0) < ($1.fraction ?? 0) }
@@ -353,8 +356,8 @@ struct RailView: View {
         )
         if let notch = placement.notch {
             let surface = RailHitArea.notchSurface(rail: rail, notchSize: notch.size)
-            if RailNotchBerthShape(notchSize: notch.size)
-                .path(in: surface.insetBy(dx: -RailLayout.flareWidth, dy: 0)).contains(point) { return true }
+            if RailNotchBerthShape(notchSize: notch.size, metrics: metrics)
+                .path(in: surface.insetBy(dx: -metrics.flareWidth, dy: 0)).contains(point) { return true }
         }
         if rail.contains(point) { return true }
 

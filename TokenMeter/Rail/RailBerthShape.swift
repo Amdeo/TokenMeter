@@ -28,6 +28,8 @@ struct RailBerthShape: Shape {
     /// 是同一个物体在改变尺寸，而不是一个被换成另一个。收到 0 时外扩消失、
     /// 圆角等于整个宽度，留下的正好是一侧圆的细条。
     var openness: CGFloat = 1
+    /// 尺寸预算：圆角与外扩的取值由它决定（圆端与柔化端是两套数）。
+    var metrics = RailMetrics()
 
     /// 让轮廓本身可插值，于是动画的每一步都是重画出来的剪影，而不是把一个形状淡入另一个。
     var animatableData: CGFloat {
@@ -35,10 +37,10 @@ struct RailBerthShape: Shape {
         set { openness = newValue }
     }
 
-    private var flareHeight: CGFloat { RailLayout.flareHeight * openness }
-    private var flareWidth: CGFloat { RailLayout.flareWidth * openness }
+    private var flareHeight: CGFloat { metrics.flareHeight * openness }
+    private var flareWidth: CGFloat { metrics.flareWidth * openness }
     private var cornerRadius: CGFloat {
-        RailLayout.collapsedWidth + (RailLayout.cornerRadius - RailLayout.collapsedWidth) * openness
+        RailLayout.collapsedWidth + (metrics.cornerRadius - RailLayout.collapsedWidth) * openness
     }
 
     func path(in rect: CGRect) -> Path {
@@ -162,8 +164,8 @@ struct RailBerthShape: Shape {
         for step in 1...Self.cornerSampleCount {
             let t = CGFloat(step) / CGFloat(Self.cornerSampleCount) * (.pi / 2)
             // |x/r|^n + |y/r|^n = 1 的参数形式。
-            let along = pow(cos(t), 2 / Self.squircleExponent)
-            let across = pow(sin(t), 2 / Self.squircleExponent)
+            let along = pow(cos(t), 2 / squircleExponent)
+            let across = pow(sin(t), 2 / squircleExponent)
 
             path.addLine(to: CGPoint(
                 x: center.x + radius * (start.dx * along + end.dx * across),
@@ -173,8 +175,8 @@ struct RailBerthShape: Shape {
     }
 
     /// 超椭圆指数。2 是正圆；4 接近 Apple 用的 squircle，
-    /// 既让圆角保持饱满，又把它缓和进两侧的直边。
-    private static let squircleExponent: CGFloat = 4
+    /// 既让圆角保持饱满，又把它缓和进两侧的直边。圆端用 2——见 `RailMetrics.usesRoundEnds`。
+    private var squircleExponent: CGFloat { metrics.cornerExponent }
     /// 分段足够多，采样出来的曲线在条的实际尺寸下保持亚像素平滑。
     private static let cornerSampleCount = 48
 }
@@ -189,6 +191,7 @@ struct RailBerthShape: Shape {
 struct RailNotchBerthShape: Shape {
     var notchSize: CGSize
     var openness: CGFloat = 1
+    var metrics = RailMetrics()
 
     /// 把每个圆角的控制点从端点上拉开，与 `RailBerthShape` 用同一个 0.55 圆弧近似。
     /// 两者保持一致比这个数字本身更重要：有刘海的 Mac 和没有的，看到的应该是同一条条。
@@ -199,16 +202,16 @@ struct RailNotchBerthShape: Shape {
         set { openness = newValue }
     }
 
-    /// `rect` 是条身**加上**两侧各 `RailLayout.flareWidth`，那是圆角扫进去的空间。
+    /// `rect` 是条身**加上**两侧各 `metrics.flareWidth`，那是圆角扫进去的空间。
     /// 调用方按它给 frame；`RailHitArea.notchSurface` 仍然只是条身本身，
     /// 所以可抓区域永远不会多过条画出来的部分。
     func path(in rect: CGRect) -> Path {
         let progress = min(max(openness, 0), 1)
         guard progress > 0 else { return Path() }
 
-        let flareWidth = RailLayout.flareWidth * progress
-        let flareHeight = min(RailLayout.flareHeight * progress, rect.height)
-        let body = rect.insetBy(dx: RailLayout.flareWidth, dy: 0)
+        let flareWidth = metrics.flareWidth * progress
+        let flareHeight = min(metrics.flareHeight * progress, rect.height)
+        let body = rect.insetBy(dx: metrics.flareWidth, dy: 0)
 
         let width = notchSize.width + (body.width - notchSize.width) * progress
         let height = notchSize.height + (body.height - notchSize.height) * progress
@@ -218,7 +221,7 @@ struct RailNotchBerthShape: Shape {
         let bottom = top + height
 
         // 下边两个角不能拿走超过表面在圆角之下剩下的高度，否则两条曲线会相交、轮廓会折起来。
-        let radius = min(RailLayout.cornerRadius, width / 2, max(height - flareHeight, 0))
+        let radius = min(metrics.cornerRadius, width / 2, max(height - flareHeight, 0))
         let k = Self.fillet
 
         var path = Path()

@@ -236,15 +236,103 @@ struct RailSettingsTests {
         #expect(reloaded.subscriptions.first?.rail == rail)
     }
 
+    // MARK: - 第二圈与窗口时钟
+
+    @Test
+    func theSecondRingFollowsTheNextFullestLimitAndSkipsBalances() {
+        let entry = Self.entry(quotas: [
+            Quota(name: "5 小时额度", used: 20, limit: 100, resetAt: nil, kind: .fiveHour),
+            Quota(name: "每周额度", used: 70, limit: 100, resetAt: nil, kind: .weekly),
+            Quota(name: "余额", used: 900, limit: 1000, resetAt: nil,
+                  unit: .currency(code: "CNY", scale: 1), kind: .balance)
+        ])
+
+        // 主弧是最满的那个；第二圈是**剩下里**最满的那个。
+        #expect(entry.fraction == 0.7)
+        #expect(entry.secondFraction == 0.2)
+        #expect(entry.secondStatus == .normal)
+    }
+
+    @Test
+    func aSingleLimitDrawsNoSecondRing() {
+        // 空着一圈细弧读起来像一个坏掉的读数，而不是「只有一个额度」。
+        let entry = Self.entry(quotas: [
+            Quota(name: "每周额度", used: 70, limit: 100, resetAt: nil, kind: .weekly)
+        ])
+
+        #expect(entry.secondFraction == nil)
+        #expect(entry.secondStatus == nil)
+    }
+
+    @Test
+    func theSecondRingTakesItsOwnColour() {
+        // 主弧已经用尽、次弧还很宽松：那圈细弧该是绿的，而不是跟着主弧变红。
+        // 次满的那个不可能比主弧更严重（它就是剩下的里最满的），所以这一侧才是真实情形。
+        let entry = Self.entry(quotas: [
+            Quota(name: "每周额度", used: 100, limit: 100, resetAt: nil, kind: .weekly),
+            Quota(name: "5 小时额度", used: 20, limit: 100, resetAt: nil, kind: .fiveHour)
+        ])
+
+        #expect(entry.status == .exhausted)
+        #expect(entry.secondStatus == .normal)
+        #expect(entry.tint == TM.danger)
+        #expect(entry.secondTint == TM.ok)
+    }
+
+    @Test
+    func theWindowClockCountsDownFromTheResetTime() {
+        let now = Date()
+        let fiveHour = Quota(
+            name: "5 小时额度", used: 0, limit: 100,
+            resetAt: now.addingTimeInterval(2.5 * 3600), kind: .fiveHour
+        )
+        let elapsed = try? #require(RailEntryBuilder.windowElapsed(of: fiveHour, now: now))
+        #expect(elapsed == 0.5)
+
+        // 已经过重置时间的额度算「刚好走完」，而不是负数。
+        let overdue = Quota(name: "5 小时额度", used: 0, limit: 100,
+                            resetAt: now.addingTimeInterval(-60), kind: .fiveHour)
+        #expect(RailEntryBuilder.windowElapsed(of: overdue, now: now) == 1)
+    }
+
+    @Test
+    func aLimitWithoutAWindowLengthDrawsNoClock() {
+        // 通用额度推不出长度，画一个长度靠猜的弧比不画更糟。
+        let generic = Quota(name: "每日额度", used: 10, limit: 100, resetAt: .now.addingTimeInterval(3600))
+        #expect(RailEntryBuilder.windowElapsed(of: generic) == nil)
+
+        let noReset = Quota(name: "每周额度", used: 10, limit: 100, resetAt: nil, kind: .weekly)
+        #expect(RailEntryBuilder.windowElapsed(of: noReset) == nil)
+    }
+
+    @Test
+    func theRingCarriesTheTrackedWindowsClock() {
+        // 时钟跟的是**环画的那个**额度，不是碰巧最满的那个：
+        // 钉住 5 小时（刚过一半），环画的就是它，时钟也是它的一半。
+        let now = Date()
+        let entry = Self.entry(
+            quotas: Self.windows(
+                fiveHour: 0.2,
+                weekly: 0.7,
+                resetAt: now.addingTimeInterval(2.5 * 3600)
+            ),
+            tracked: "5 小时额度"
+        )
+
+        #expect(entry.fraction == 0.2)
+        let elapsed = entry.windowElapsed ?? -1
+        #expect(abs(elapsed - 0.5) < 0.01)
+    }
+
     // MARK: - 夹具
 
     private static func subscription(rail: SubscriptionRailSettings = SubscriptionRailSettings()) -> Subscription {
         Subscription(providerID: .kimi, name: "Kimi", rail: rail)
     }
 
-    private static func windows(fiveHour: Double, weekly: Double) -> [Quota] {
+    private static func windows(fiveHour: Double, weekly: Double, resetAt: Date? = nil) -> [Quota] {
         [
-            Quota(name: "5 小时额度", used: fiveHour * 100, limit: 100, resetAt: nil, kind: .fiveHour),
+            Quota(name: "5 小时额度", used: fiveHour * 100, limit: 100, resetAt: resetAt, kind: .fiveHour),
             Quota(name: "每周额度", used: weekly * 100, limit: 100, resetAt: nil, kind: .weekly)
         ]
     }

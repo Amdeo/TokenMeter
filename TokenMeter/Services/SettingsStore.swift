@@ -183,7 +183,18 @@ final class SettingsStore {
             spacing: railSpacing,
             sideShowsPercentages: railSideShowsPercentages,
             topShowsPercentages: railTopShowsPercentages,
-            labelAboveRing: railLabelAboveRing
+            labelAboveRing: railLabelAboveRing,
+            usesRoundEnds: railUsesRoundEnds
+        )
+    }
+
+    /// 环怎么画。与尺寸预算分开：这些不改条的大小，只改环上画什么。
+    var railRingOptions: RailRingOptions {
+        RailRingOptions(
+            showsRemaining: railShowsRemaining,
+            showsSecondRing: railShowsSecondRing,
+            showsWindowClock: railShowsWindowClock,
+            animatesActivity: railAnimatesActivity
         )
     }
 

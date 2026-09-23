@@ -22,6 +22,10 @@ struct RailDockView: View {
     let glassEnabled: Bool
     /// 条的尺寸预算。窗口按同一份算，两处必须一致。
     var metrics = RailMetrics()
+    /// 环上画什么（倒数、第二圈、窗口时钟、活动动画）。
+    var options = RailRingOptions()
+    /// 正在取数：开着活动动画时环上会跑一段弧。
+    var isRefreshing = false
 
     private var railSize: CGSize {
         metrics.size(for: entries.count, on: edge.axis, docked: isDocked)
@@ -72,12 +76,12 @@ struct RailDockView: View {
                 notchSize: notchSize
             )
             RailSurface(
-                shape: RailNotchBerthShape(notchSize: notchSize, openness: isExpanded ? 1 : 0),
+                shape: RailNotchBerthShape(notchSize: notchSize, openness: isExpanded ? 1 : 0, metrics: metrics),
                 glassEnabled: glassEnabled
             )
             // 比表面更宽，宽出的是圆角在屏幕边扫进去的那段空间；
             // 形状自己会把条身那部分缩回来。
-            .frame(width: surface.width + RailLayout.flareWidth * 2, height: surface.height)
+            .frame(width: surface.width + metrics.flareWidth * 2, height: surface.height)
             .offset(y: surface.minY)
             .frame(width: railSize.width, height: railSize.height, alignment: .top)
         } else {
@@ -87,7 +91,12 @@ struct RailDockView: View {
 
     private var ordinaryBerth: some View {
         RailSurface(
-            shape: RailBerthShape(edge: edge, isDocked: isDocked, openness: isExpanded ? 1 : 0),
+            shape: RailBerthShape(
+                edge: edge,
+                isDocked: isDocked,
+                openness: isExpanded ? 1 : 0,
+                metrics: metrics
+            ),
             glassEnabled: glassEnabled,
             // 只有细条带告警色：展开时环自己已经说了哪个额度在哪里。
             tint: isExpanded ? nil : alert,
@@ -116,7 +125,16 @@ struct RailDockView: View {
         // 两处必须同源。
         .padding(
             edge.isVertical ? .vertical : .horizontal,
-            RailLayout.endPadding(docked: isDocked)
+            metrics.endPadding(docked: isDocked)
+        )
+    }
+
+    private func ring(for entry: RailEntry, selected: Bool) -> some View {
+        RailRingView(
+            entry: entry,
+            isSelected: selected,
+            options: options,
+            isRefreshing: isRefreshing
         )
     }
 
@@ -128,22 +146,43 @@ struct RailDockView: View {
         // 所以这里不需要跟踪区。`contentShape` 只为了让整项成为可访问的按钮区域。
         switch edge.axis {
         case .vertical:
-            // 环在上、百分比在下。这个总高必须等于 `RailLayout.itemHeight`，
-            // 否则环心会与命中区算出来的位置错开。
-            VStack(spacing: RailLayout.ringToTextSpacing) {
-                RailRingView(entry: entry, isSelected: selected)
-                RailRingLabel(entry: entry)
+            if metrics.showsPercentages(on: .vertical) {
+                // 环与数字。这个总高必须等于 `metrics.itemLength(on: .vertical)`，
+                // 否则环心会与命中区算出来的位置错开。
+                VStack(spacing: RailLayout.ringToTextSpacing) {
+                    if metrics.labelAboveRing {
+                        RailRingLabel(entry: entry, showsRemaining: options.showsRemaining)
+                        ring(for: entry, selected: selected)
+                    } else {
+                        ring(for: entry, selected: selected)
+                        RailRingLabel(entry: entry, showsRemaining: options.showsRemaining)
+                    }
+                }
+                .frame(height: metrics.itemLength(on: .vertical))
+                .contentShape(.rect)
+                .accessibilityAddTraits(.isButton)
+            } else {
+                ring(for: entry, selected: selected)
+                    .contentShape(.rect)
+                    .accessibilityAddTraits(.isButton)
             }
-            .frame(height: metrics.itemLength(on: .vertical))
-            .contentShape(.rect)
-            .accessibilityAddTraits(.isButton)
 
         case .horizontal:
-            // 贴顶的条不画百分比文字，所以一项就是一个环。
-            RailRingView(entry: entry, isSelected: selected)
+            if metrics.showsPercentages(on: .horizontal) {
+                // 贴顶的条把数字放在环**下方**：一行字落在条的横跨方向，占的是厚度。
+                VStack(spacing: RailLayout.ringToTextSpacing) {
+                    ring(for: entry, selected: selected)
+                    RailRingLabel(entry: entry, showsRemaining: options.showsRemaining)
+                }
                 .frame(width: metrics.itemLength(on: .horizontal))
                 .contentShape(.rect)
                 .accessibilityAddTraits(.isButton)
+            } else {
+                ring(for: entry, selected: selected)
+                    .frame(width: metrics.itemLength(on: .horizontal))
+                    .contentShape(.rect)
+                    .accessibilityAddTraits(.isButton)
+            }
         }
     }
 }

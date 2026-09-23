@@ -12,8 +12,14 @@ struct RailPlacementTests {
     private static let visibleFrame = CGRect(x: 0, y: 60, width: 1440, height: 815)
 
     private static func panelSize(_ edge: RailEdge, entries: Int = 3, notch: CGSize? = nil) -> CGSize {
-        let rail = RailLayout.size(for: entries, on: edge.axis, docked: true)
-        return RailHitArea.panelSize(for: edge, railLength: max(rail.width, rail.height), notchSize: notch)
+        let metrics = RailMetrics()
+        let rail = metrics.size(for: entries, on: edge.axis, docked: true)
+        return RailHitArea.panelSize(
+            for: edge,
+            railLength: max(rail.width, rail.height),
+            notchSize: notch,
+            metrics: metrics
+        )
     }
 
     // MARK: - 细条的包含关系
@@ -28,7 +34,7 @@ struct RailPlacementTests {
 
     @Test
     func throwingThePointerAtTheTopDocksTheRailToTheTop() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         let dock = RailGeometry.dockedEdge(
             forPointer: CGPoint(x: 700, y: Self.visibleFrame.maxY - 4),
             railOrigin: CGPoint(x: 1376, y: 400),
@@ -42,7 +48,7 @@ struct RailPlacementTests {
     func theTopIsJudgedByThePointerNotByTheRail() {
         // 把条顶到屏幕上沿：它的上沿已经在屏幕顶端，但指针还在屏幕中间。
         // 按条判会让条一被拿起就翻倒，所以这里必须**不**贴顶。
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         let origin = CGPoint(x: 700, y: Self.visibleFrame.maxY - rail.height)
 
         let dock = RailGeometry.dockedEdge(
@@ -56,7 +62,7 @@ struct RailPlacementTests {
 
     @Test
     func railNearTheLeftEdgeDocksLeftAndNearTheRightEdgeDocksRight() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
 
         #expect(
             RailGeometry.dockedEdge(
@@ -78,7 +84,7 @@ struct RailPlacementTests {
 
     @Test
     func aRailParkedNearButNotAtAnEdgeKeepsFloating() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         let dock = RailGeometry.dockedEdge(
             forPointer: CGPoint(x: 900, y: 400),
             railOrigin: CGPoint(x: Self.visibleFrame.minX + RailGeometry.dockDistance + 40, y: 300),
@@ -90,7 +96,7 @@ struct RailPlacementTests {
 
     @Test
     func railOriginIsClampedInsideTheUsableArea() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         let clamped = RailGeometry.clampedRailOrigin(
             CGPoint(x: 5000, y: -500),
             railSize: rail,
@@ -104,7 +110,7 @@ struct RailPlacementTests {
 
     @Test
     func aRightDockedRailSitsFlushAgainstTheVisibleEdge() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         let panel = Self.panelSize(.right)
         let layout = RailGeometry.layout(
             dock: .edge(.right),
@@ -121,7 +127,7 @@ struct RailPlacementTests {
 
     @Test
     func aFloatingRailNeverTouchesTheEdge() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: false)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: false)
         let panel = Self.panelSize(.right)
 
         // 存储的比例仍然是贴边时的 1，切到悬浮不能因此让条贴着屏幕边站。
@@ -154,7 +160,7 @@ struct RailPlacementTests {
     func aTopDockedRailStopsAtTheNotchLineRatherThanUnderTheMenuBar() {
         let notchHeight: CGFloat = 38
         let notch = CGRect(x: 640, y: Self.screenFrame.maxY - notchHeight, width: 160, height: notchHeight)
-        let rail = RailLayout.size(for: 3, on: .horizontal, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .horizontal, docked: true)
         let panel = Self.panelSize(.top, notch: notch.size)
 
         let layout = RailGeometry.layout(
@@ -191,7 +197,7 @@ struct RailPlacementTests {
 
     @Test
     func offsetsAreMeasuredAgainstTheFrameTheWindowActuallyGot() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         // AppKit 把一个放不下的窗口往下拉：请求 1133pt，拿到的是可用区那么高。
         let granted = CGRect(x: 100, y: 60, width: 342, height: 815)
         // 条的上沿在屏幕上 700 处，横向贴着屏幕右边。
@@ -207,7 +213,7 @@ struct RailPlacementTests {
 
     @Test
     func offsetsClampRatherThanPlacingTheRailOutsideItsWindow() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         let granted = CGRect(x: 100, y: 60, width: 342, height: 815)
 
         // 条在窗口右侧之外，横向偏移量必须被钳到窗口右沿。
@@ -247,7 +253,7 @@ struct RailPlacementTests {
 
     @Test
     func ratiosRoundTripThroughTheRailOrigin() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         // 悬浮时条被要求离屏幕边至少 dockDistance，所以贴边的比例会被钳掉一点；
         // 往返只在这条带子之内是恒等的。
         for h in [0.1, 0.5, 0.9] {
@@ -275,7 +281,7 @@ struct RailPlacementTests {
 
     @Test
     func aRatioAtTheVeryEdgeIsPushedBackByTheDockDistanceWhenFloating() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         let layout = RailGeometry.layout(
             dock: .floating,
             horizontalRatio: 1,
@@ -400,26 +406,27 @@ struct RailPlacementTests {
 
     @Test
     func theRailGrowsWithTheEntryCountAndKeepsItsThickness() {
-        let one = RailLayout.size(for: 1, on: .vertical, docked: true)
-        let three = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let metrics = RailMetrics()
+        let one = metrics.size(for: 1, on: .vertical, docked: true)
+        let three = metrics.size(for: 3, on: .vertical, docked: true)
 
         #expect(one.width == three.width)
         #expect(three.height > one.height)
-        #expect(three.height - one.height == 2 * RailLayout.ringStep(on: .vertical))
+        #expect(three.height - one.height == 2 * metrics.ringStep(on: .vertical))
     }
 
     @Test
     func aFloatingRailIsShorterThanADockedOneByItsFlares() {
-        let docked = RailLayout.length(for: 3, on: .vertical, docked: true)
-        let floating = RailLayout.length(for: 3, on: .vertical, docked: false)
+        let docked = RailMetrics().length(for: 3, on: .vertical, docked: true)
+        let floating = RailMetrics().length(for: 3, on: .vertical, docked: false)
         // 外扩在两端各啃掉一个 flareHeight，悬浮时整段留白都看得见。
-        #expect(docked - floating == RailLayout.flareHeight * 2)
+        #expect(docked - floating == RailMetrics().flareHeight * 2)
     }
 
     @Test
     func theWindowIsAlwaysWideEnoughForTheCard() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
-        let panel = RailPanelLayout.size(for: .right, railLength: rail.height)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
+        let panel = RailPanelLayout.size(for: .right, railLength: rail.height, metrics: RailMetrics())
         // 窗口比条宽得多：多出来的部分是卡片展开的空间，它是透明的。
         #expect(panel.width == RailLayout.width + RailPanelLayout.cardReach)
         #expect(panel.height >= RailCardLayout.maximumHeight)
@@ -427,8 +434,8 @@ struct RailPlacementTests {
 
     @Test
     func theRailRunsTheOtherWayWhenItIsDockedToTheTop() {
-        let vertical = RailLayout.size(for: 3, on: .vertical, docked: true)
-        let horizontal = RailLayout.size(for: 3, on: .horizontal, docked: true)
+        let vertical = RailMetrics().size(for: 3, on: .vertical, docked: true)
+        let horizontal = RailMetrics().size(for: 3, on: .horizontal, docked: true)
 
         // 横跨方向的尺寸不变，只是换了轴。
         #expect(vertical.width == horizontal.height)
@@ -436,8 +443,8 @@ struct RailPlacementTests {
 
         // 沿条方向的长度不同，而且是有原因的：贴顶的条不画百分比文字，
         // 所以它的一项只有环那么长——菜单栏底下多一行字会把胶囊变成横幅。
-        #expect(RailLayout.showsPercentages(on: .vertical))
-        #expect(!RailLayout.showsPercentages(on: .horizontal))
+        #expect(RailMetrics().showsPercentages(on: .vertical))
+        #expect(!RailMetrics().showsPercentages(on: .horizontal))
         #expect(horizontal.width < vertical.height)
     }
 
@@ -460,7 +467,8 @@ struct RailPlacementTests {
                         railTop: placed.railTop,
                         railLeading: placed.railLeading,
                         docked: true
-                    )
+                    ,
+                    metrics: RailMetrics())
                     #expect(hit == index, "\(edge) 上第 \(index) 个环心没被认出来")
                 }
             }
@@ -471,12 +479,14 @@ struct RailPlacementTests {
     func theGapBetweenTwoRingsBelongsToNeither() {
         let placed = Self.placedRail(edge: .right, entries: 4, docked: true)
         let axis = RailEdge.Axis.vertical
-        let first = RailGeometry.ringCentre(forIndex: 0, on: axis, docked: true)
-        let second = RailGeometry.ringCentre(forIndex: 1, on: axis, docked: true)
+        let first = RailGeometry.ringCentre(forIndex: 0, on: axis, docked: true,
+                                                                               metrics: RailMetrics())
+        let second = RailGeometry.ringCentre(forIndex: 1, on: axis, docked: true,
+                                                                                metrics: RailMetrics())
         let between = (first + second) / 2
 
         let point = CGPoint(
-            x: placed.railLeading + RailLayout.ringCentreAcross(on: axis),
+            x: placed.railLeading + RailMetrics().ringCentreAcross(on: axis),
             y: placed.railTop + between
         )
         #expect(
@@ -489,7 +499,8 @@ struct RailPlacementTests {
                 railTop: placed.railTop,
                 railLeading: placed.railLeading,
                 docked: true
-            ) == nil
+            ,
+            metrics: RailMetrics()) == nil
         )
     }
 
@@ -508,7 +519,8 @@ struct RailPlacementTests {
                 railTop: placed.railTop,
                 railLeading: placed.railLeading,
                 docked: true
-            ) == nil
+            ,
+            metrics: RailMetrics()) == nil
         )
     }
 
@@ -518,13 +530,14 @@ struct RailPlacementTests {
         // 但不至于够到它下面的百分比文字——那样点击会落在数字上而不是环上。
         let placed = Self.placedRail(edge: .right, entries: 3, docked: true)
         let axis = RailEdge.Axis.vertical
-        let centre = RailGeometry.ringCentre(forIndex: 0, on: axis, docked: true)
+        let centre = RailGeometry.ringCentre(forIndex: 0, on: axis, docked: true,
+                                                                                metrics: RailMetrics())
 
         // 标签的中心在环心下方 `ringDiameter/2 + ringToTextSpacing + textHeight/2`。
         let labelCentre = centre + RailLayout.ringDiameter / 2
             + RailLayout.ringToTextSpacing + RailLayout.percentTextHeight / 2
         let point = CGPoint(
-            x: placed.railLeading + RailLayout.ringCentreAcross(on: axis),
+            x: placed.railLeading + RailMetrics().ringCentreAcross(on: axis),
             y: placed.railTop + labelCentre
         )
         #expect(
@@ -537,7 +550,8 @@ struct RailPlacementTests {
                 railTop: placed.railTop,
                 railLeading: placed.railLeading,
                 docked: true
-            ) == nil
+            ,
+            metrics: RailMetrics()) == nil
         )
     }
 
@@ -553,7 +567,8 @@ struct RailPlacementTests {
         for index in 0..<8 {
             for cardHeight in [RailCardLayout.estimatedHeight, RailCardLayout.maximumHeight] {
                 let padding = RailGeometry.cardPadding(
-                    ringCentre: RailGeometry.ringCentre(forIndex: index, on: edge.axis, docked: true),
+                    ringCentre: RailGeometry.ringCentre(forIndex: index, on: edge.axis, docked: true,
+                                                                                                    metrics: RailMetrics()),
                     cardAlong: cardHeight,
                     railAlong: railAlong,
                     panelAlong: panelAlong
@@ -576,7 +591,8 @@ struct RailPlacementTests {
 
         // 中间的环不会被钳制，所以指针应当正好指着环心。
         let index = 4
-        let centre = RailGeometry.ringCentre(forIndex: index, on: edge.axis, docked: true)
+        let centre = RailGeometry.ringCentre(forIndex: index, on: edge.axis, docked: true,
+                                                                                         metrics: RailMetrics())
         let padding = RailGeometry.cardPadding(
             ringCentre: centre,
             cardAlong: cardHeight,
@@ -598,7 +614,8 @@ struct RailPlacementTests {
         let cardHeight = RailCardLayout.estimatedHeight
 
         // 第一个环的卡片会被钳到窗口上沿，此时指针不能跟着跑到圆角上。
-        let centre = RailGeometry.ringCentre(forIndex: 0, on: edge.axis, docked: true)
+        let centre = RailGeometry.ringCentre(forIndex: 0, on: edge.axis, docked: true,
+                                                                                     metrics: RailMetrics())
         let padding = RailGeometry.cardPadding(
             ringCentre: centre,
             cardAlong: cardHeight,
@@ -617,7 +634,7 @@ struct RailPlacementTests {
 
     @Test
     func theCardSitsClearOfTheRailByItsOwnWidthAndGap() {
-        let rail = RailLayout.size(for: 3, on: .vertical, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .vertical, docked: true)
         for edge in [RailEdge.right, .left] {
             let offset = RailGeometry.cardOffset(edge: edge, railSize: rail, notchSize: nil)
             // 卡片要退开「自己的宽 + 指针 + 间隙」，否则会压在条上。
@@ -630,7 +647,7 @@ struct RailPlacementTests {
 
     @Test
     func aTopDockedCardHangsBelowTheNotch() {
-        let rail = RailLayout.size(for: 3, on: .horizontal, docked: true)
+        let rail = RailMetrics().size(for: 3, on: .horizontal, docked: true)
         let notch = CGSize(width: 160, height: 38)
         let offset = RailGeometry.cardOffset(edge: .top, railSize: rail, notchSize: notch)
 
@@ -656,8 +673,12 @@ struct RailPlacementTests {
     /// 走与控制器完全相同的那条路径摆一次条：先算 frame，再按**实际拿到的** frame
     /// 求条在窗口里的偏移量。命中判定与绘制都吃这两个偏移量。
     private static func placedRail(edge: RailEdge, entries: Int, docked: Bool) -> PlacedRail {
-        let rail = RailLayout.size(for: entries, on: edge.axis, docked: docked)
-        let panel = RailHitArea.panelSize(for: edge, railLength: max(rail.width, rail.height))
+        let rail = RailMetrics().size(for: entries, on: edge.axis, docked: docked)
+        let panel = RailHitArea.panelSize(
+            for: edge,
+            railLength: max(rail.width, rail.height),
+            metrics: RailMetrics()
+        )
         let layout = RailGeometry.layout(
             dock: .edge(edge),
             horizontalRatio: 1,
@@ -678,8 +699,9 @@ struct RailPlacementTests {
     }
 
     private static func pointOnRing(_ index: Int, edge: RailEdge, placed: PlacedRail) -> CGPoint {
-        let along = RailGeometry.ringCentre(forIndex: index, on: edge.axis, docked: true)
-        let across = RailLayout.ringCentreAcross(on: edge.axis)
+        let along = RailGeometry.ringCentre(forIndex: index, on: edge.axis, docked: true,
+                                                                                        metrics: RailMetrics())
+        let across = RailMetrics().ringCentreAcross(on: edge.axis)
         return edge.isVertical
             ? CGPoint(x: placed.railLeading + across, y: placed.railTop + along)
             : CGPoint(x: placed.railLeading + along, y: placed.railTop + across)

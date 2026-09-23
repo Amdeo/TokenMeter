@@ -30,6 +30,13 @@ struct RailEntry: Identifiable, Equatable {
     /// 用户为这个环选的颜色；nil 表示按用量状态取色。
     let chosenTint: Color?
 
+    /// 次满的那个额度的比例，画成环里那圈细弧。nil 表示没有第二个额度可画。
+    let secondFraction: Double?
+    /// 次满额度的状态：那圈细弧按它自己取色，而不是跟着主弧。
+    let secondStatus: QuotaStatus?
+    /// 环画的这个额度，它的窗口已经过去了多少。nil 表示推不出窗口长度。
+    let windowElapsed: Double?
+
     /// 详情卡片里逐条列出的额度。
     let rows: [Row]
 
@@ -52,7 +59,16 @@ struct RailEntry: Identifiable, Equatable {
     /// 不是「这是哪个窗口」。逐条的颜色留给卡片里的进度条。
     ///
     /// 与 `tint` 分开是因为它还要供**条在收起时的染色**使用——那也是状态，不是身份。
-    var statusTint: Color {
+    var statusTint: Color { Self.tint(for: status) }
+
+    /// 次满额度那圈细弧的颜色。它按自己的状态取色：主弧还剩得很多、
+    /// 次弧已经用尽时，那圈细弧仍然该是红的。
+    var secondTint: Color? {
+        secondStatus.map(Self.tint(for:))
+    }
+
+    /// 某个用量状态对应的语义色。环、细弧与细条染色都从这一处取。
+    static func tint(for status: QuotaStatus) -> Color {
         switch status {
         case .normal: TM.ok
         case .warning: TM.warn
@@ -99,12 +115,14 @@ enum RailEntryBuilder {
     static func entry(for subscription: Subscription, snapshot: UsageSnapshot?) -> RailEntry {
         let metadata = ProviderRegistry.definition(for: subscription.providerID)?.metadata
         let quotaRows = snapshot.map { rows(for: $0, subscription: subscription) } ?? []
-        let headline = snapshot.flatMap { headlineFraction(of: $0, tracked: subscription.rail.trackedWindow) }
-        let status = snapshot.map { reading in
+        let reading = snapshot.flatMap { headlineReading(of: $0, tracked: subscription.rail.trackedWindow) }
+        let fraction = reading?.fraction
+        let second = snapshot.flatMap { secondQuota(of: $0, after: reading?.quota) }
+        let status = snapshot.map { snapshot in
             // 拿不到读数时状态由快照自己的错误/状态决定，而不是由「比例是 0」决定。
-            reading.state == .realtime
-                ? SubscriptionCardPresentation.ratioStatus(for: headline ?? 0)
-                : reading.overallStatus
+            snapshot.state == .realtime
+                ? SubscriptionCardPresentation.ratioStatus(for: fraction ?? 0)
+                : snapshot.overallStatus
         } ?? .normal
 
         return RailEntry(
@@ -112,40 +130,78 @@ enum RailEntryBuilder {
             title: subscription.name,
             markResource: metadata?.railMarkResource,
             fallbackSystemImage: metadata?.fallbackSystemImage ?? "questionmark",
-            fraction: headline,
-            figure: headline == nil ? balanceFigure(of: snapshot) : nil,
+            fraction: fraction,
+            figure: fraction == nil ? balanceFigure(of: snapshot) : nil,
             status: status,
             state: snapshot?.state ?? .notConfigured,
             errorMessage: snapshot?.errorMessage,
             updatedAt: snapshot?.updatedAt,
             chosenTint: subscription.rail.tintRGB.map { Color(hex: $0) },
+            secondFraction: second?.fraction,
+            secondStatus: second?.status,
+            windowElapsed: reading?.quota.flatMap { windowElapsed(of: $0) },
             rows: quotaRows
         )
     }
 
-    /// 弧画哪个窗口：默认**最接近用尽的那一个**。
+    /// 环画哪个数：默认**最接近用尽的那一个窗口**。
     ///
     /// 额度窗口（5 小时 / 每周 / 通用）比余额更值得占住环——它们是会到期的速率限制，
     /// 而余额只是花掉多少。一个窗口都没有时才回落到「总使用量」聚合比例。
     ///
     /// 用户在编辑页钉住某个额度时画它。钉住的那个在这次读数里不存在——供应商换了窗口名、
     /// 或者钉的是「总使用量」而这次没上报——就退回上面那条规则，而不是画一个空环。
-    private static func headlineFraction(of snapshot: UsageSnapshot, tracked: String?) -> Double? {
+    ///
+    /// 额度本身也返回：窗口时钟那圈弧要知道它属于哪个额度。
+    private static func headlineReading(
+        of snapshot: UsageSnapshot,
+        tracked: String?
+    ) -> (quota: Quota?, fraction: Double?)? {
         guard snapshot.state == .realtime else { return nil }
         if let tracked {
             if tracked == SubscriptionRailSettings.overallKey, let overall = snapshot.overallUsageRatio {
-                return overall
+                // 「总使用量」不是额度窗口，没有窗口长度可算，所以额度是 nil。
+                return (nil, overall)
             }
             // 余额不是比例，钉不住它：它画的是数字，不是弧。
             if let pinned = snapshot.quotas.first(where: { $0.kind != .balance && $0.name == tracked }) {
-                return pinned.fraction
+                return (pinned, pinned.fraction)
             }
         }
         let windows = snapshot.quotas.filter { $0.kind != .balance }
         if let worst = windows.max(by: { $0.fraction < $1.fraction }) {
-            return worst.fraction
+            return (worst, worst.fraction)
         }
-        return snapshot.overallUsageRatio
+        return (nil, snapshot.overallUsageRatio)
+    }
+
+    /// 次满的那个额度：环里那圈细弧画它。
+    ///
+    /// 与主弧同一个池子里挑，余额不算——它没有比例可画。只有一个额度时返回 nil，
+    /// 空着一圈细弧读起来像一个坏掉的读数，而不是「只有一个额度」。
+    private static func secondQuota(of snapshot: UsageSnapshot, after headline: Quota?) -> Quota? {
+        guard snapshot.state == .realtime else { return nil }
+        let rest = snapshot.quotas.filter { $0.kind != .balance && $0.id != headline?.id }
+        return rest.max { $0.fraction < $1.fraction }
+    }
+
+    /// 这个额度的窗口已经过去了多少。
+    ///
+    /// 只知道**什么时候重置**和窗口的**类型**，所以长度由类型推：5 小时 / 每周。
+    /// 通用额度没有可推的长度，返回 nil——画一个长度靠猜的弧比不画更糟。
+    static func windowElapsed(of quota: Quota, now: Date = .now) -> Double? {
+        guard let resetAt = quota.resetAt, let length = windowLength(of: quota.kind) else { return nil }
+        let remaining = resetAt.timeIntervalSince(now)
+        guard remaining > 0 else { return 1 }
+        return min(max(1 - remaining / length, 0), 1)
+    }
+
+    private static func windowLength(of kind: Quota.Kind) -> TimeInterval? {
+        switch kind {
+        case .fiveHour: 5 * 3600
+        case .weekly: 7 * 24 * 3600
+        case .generic, .balance: nil
+        }
     }
 
     /// 一个窗口都没有时，环里画那个余额数字。

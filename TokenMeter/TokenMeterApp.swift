@@ -132,7 +132,10 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    /// 设置一变就让悬浮条跟上：开关它、换层级、换空间策略、起停跨屏跟随。
+    /// 设置一变就让悬浮条跟上：开关它、换层级、换空间策略、起停跨屏跟随、按新的尺寸预算重摆。
+    ///
+    /// **改尺寸的那几项必须在这里**：间距、百分比开关、圆角端都改变条的长宽，
+    /// 而窗口 frame 是按条算出来的——不重新摆放，条就会从它被放下的地方漂走。
     ///
     /// `withObservationTracking` 的 onChange 只报**一次**，所以每次回调都要重新注册。
     /// 它在 willSet 时机触发，此时新值还没落进属性，所以真正读值要放到下一轮主线程队列。
@@ -142,6 +145,11 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
             _ = settings.railAutoCollapse
             _ = settings.railFollowsActiveDisplay
             _ = settings.railHidesInFullScreen
+            _ = settings.railSpacing
+            _ = settings.railSideShowsPercentages
+            _ = settings.railTopShowsPercentages
+            _ = settings.railLabelAboveRing
+            _ = settings.railUsesRoundEnds
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }

@@ -237,8 +237,76 @@ struct SettingsWindowView: View {
                 }
             }
 
+            SettingsGroup("形状") {
+                picker(
+                    "环间距",
+                    subtitle: "环本身大小不变，只是摆得更开或更紧。",
+                    selection: $settings.railSpacing
+                ) {
+                    ForEach(RailSpacing.allCases) { spacing in
+                        Text(spacing.title).tag(spacing)
+                    }
+                }
+                SettingsRowDivider()
+                toggle(
+                    "圆角端",
+                    subtitle: "条的端头用整圆，与它包住的环同一条中心线，跟着那个环绕过去。",
+                    isOn: $settings.railUsesRoundEnds
+                )
+            }
+
+            SettingsGroup("环上画什么") {
+                toggle(
+                    "显示剩余",
+                    subtitle: "弧与数字一起倒数。颜色照旧按已用比例取——还剩多少不改变离用尽还有多远。",
+                    isOn: $settings.railShowsRemaining
+                )
+                SettingsRowDivider()
+                toggle(
+                    "数字在环上方",
+                    subtitle: "把环与数字换个位置，贴哪条边都一样。",
+                    isOn: $settings.railLabelAboveRing
+                )
+                SettingsRowDivider()
+                toggle(
+                    "侧边显示百分比",
+                    subtitle: "贴左右边时，环下方那行数字。",
+                    isOn: $settings.railSideShowsPercentages
+                )
+                SettingsRowDivider()
+                toggle(
+                    "顶部显示百分比",
+                    subtitle: "贴顶时也画那行数字；条会因此变粗一些。",
+                    isOn: $settings.railTopShowsPercentages
+                )
+                SettingsRowDivider()
+                toggle(
+                    "环内第二圈",
+                    subtitle: "再画一圈细弧，给次满的那个额度。只有一个额度时不画。",
+                    isOn: $settings.railShowsSecondRing
+                )
+                SettingsRowDivider()
+                toggle(
+                    "距重置时间的外弧",
+                    subtitle: "环外一道细弧，表示这个额度窗口已经过去了多少。只有 5 小时与每周额度算得出长度。",
+                    isOn: $settings.railShowsWindowClock
+                )
+                SettingsRowDivider()
+                toggle(
+                    "取数时环上跑一段弧",
+                    subtitle: "刷新期间环上有一段弧在转。",
+                    isOn: $settings.railAnimatesActivity
+                )
+                SettingsRowDivider()
+                toggle(
+                    "收起时给细条染色",
+                    subtitle: "某个额度快到临界时，卷起来的那道细条染上它的颜色。关掉则细条始终中性。",
+                    isOn: $settings.railDockShowsAlertColor
+                )
+            }
+
             SettingsGroup {
-                Text("悬浮条一整天停在屏幕边上：鼠标划过展开，悬停某个图标看详情，点击刷新该订阅，右键切换位置。")
+                Text("悬浮条一整天停在屏幕边上：鼠标划过展开，悬停某个图标看详情，点击刷新该订阅，右键切换位置。每条订阅自己那一份（是否上条、环追哪个额度、环什么颜色）在它的订阅设置里。")
                     .font(.system(size: 11))
                     .foregroundStyle(TM.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
