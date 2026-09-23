@@ -19,9 +19,6 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private var hasBeenPlaced = false
 
-    /// 窗口里「导入或导出凭据迁移包」的入口：打开面板的迁移页。
-    var onOpenMigration: (() -> Void)?
-
     init(store: UsageStore, settings: SettingsStore, railPlacement: RailPlacement) {
         self.store = store
         self.settings = settings
@@ -108,8 +105,7 @@ final class SettingsWindowController {
                 store: store,
                 settings: settings,
                 railPlacement: railPlacement,
-                navigation: navigation,
-                onOpenMigration: { [weak self] in self?.onOpenMigration?() }
+                navigation: navigation
             )
             // 订阅子页复用的 `SubscriptionEditorContent` / `SubscriptionAppearanceContent`
             // 是通过环境拿 `UsageStore` 的（面板那边也是这么给它的），窗口这一侧必须同样注入，

@@ -1,48 +1,35 @@
 import SwiftUI
 import AppKit
 
-/// 订阅编辑器正文：订阅信息 / 外观入口 / 认证方式 + 底栏 + 全部认证与保存逻辑。
+/// 订阅编辑器正文：订阅信息 / 外观入口 / 悬浮条 / 认证方式 + 底栏 + 全部认证与保存逻辑。
 ///
-/// **两个宿主共用它**：面板里的 TM-04 / TM-05 页，与独立设置窗口里的订阅子页。
-/// 两处真正不同的只有三件事，都做成了旋钮：
-/// - `heightRoute`：面板要上报高度参与面板的尺寸记账，窗口不要
-/// - `showsBackButton` / `showsCancel`：面板有「上一页」可返回，窗口的子页是被选中的、没有
+/// 只在独立设置窗口里用（订阅子页与「添加订阅…」页）。它曾经也由菜单面板的 TM-04 / TM-05
+/// 宿主，那两页已经删掉了，所以当时为两个宿主准备的两个旋钮（`heightRoute`、
+/// `showsBackButton` / `showsCancel`）也一并消失——窗口里的子页是被选中的，没有上一页。
 struct SubscriptionEditorContent: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let subscription: Subscription?
-    /// 编辑结束（保存成功 / 删除 / 放弃更改）时调用。宿主决定「结束」意味着什么：
-    /// 面板是返回概览，窗口是重建草稿或清掉选中。
+    /// 编辑结束（保存成功 / 删除 / 放弃更改）时调用。窗口宿主据此重建草稿或清掉选中。
     let onFinish: () -> Void
     let onAppearance: () -> Void
     /// 新建订阅保存成功时回调，带上刚建出来的订阅 id。
     ///
-    /// 面板宿主不用它（它返回概览，新卡片自己会出现在列表里）；窗口宿主用它把
-    /// 侧边栏选中切到刚建的这条订阅上。
+    /// 窗口宿主用它把侧边栏选中切到刚建的这条订阅上。
     var onCreated: ((UUID) -> Void)?
     @Bindable var draft: SubscriptionEditorDraft
-    /// 面板宿主传入要上报高度的路由；窗口宿主传 nil。
-    var heightRoute: PanelNavigationState.Route?
-    var showsBackButton: Bool = true
-    var showsCancel: Bool = true
     @State private var showDeleteConfirmation = false
     @State private var showDiscardConfirmation = false
 
     init(
         draft: SubscriptionEditorDraft,
         subscription: Subscription? = nil,
-        heightRoute: PanelNavigationState.Route? = nil,
-        showsBackButton: Bool = true,
-        showsCancel: Bool = true,
         onFinish: @escaping () -> Void = {},
         onAppearance: @escaping () -> Void = {},
         onCreated: ((UUID) -> Void)? = nil
     ) {
         self.subscription = subscription
-        self.heightRoute = heightRoute
-        self.showsBackButton = showsBackButton
-        self.showsCancel = showsCancel
         self.onFinish = onFinish
         self.onAppearance = onAppearance
         self.onCreated = onCreated
@@ -67,15 +54,8 @@ struct SubscriptionEditorContent: View {
         selectedAuthMethod?.flowID ?? .apiKey
     }
 
-    /// 页头的返回动作。宿主不要返回按钮时为 nil。
-    ///
-    /// 写成 `guard` + 闭包而不是 `showsBackButton ? attemptFinish : nil`：
-    /// 方法引用配 nil 的三元表达式编译器推不出类型（报的是
-    /// "failed to produce diagnostic for expression"），显式闭包没有这个问题。
-    private var backAction: (() -> Void)? {
-        guard showsBackButton else { return nil }
-        return { attemptFinish() }
-    }
+    /// 页头的返回动作。窗口里的订阅子页是被侧边栏选中的，没有上一页，所以恒为 nil。
+    private var backAction: (() -> Void)? { nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -132,10 +112,6 @@ struct SubscriptionEditorContent: View {
                     }
                 }
                 .padding(.vertical, 18)
-                .reportsIntrinsicPanelHeight(
-                    route: heightRoute,
-                    chrome: PanelLayoutMetrics.pageChrome
-                )
             }
             .scrollIndicators(.hidden)
             HStack(spacing: 10) {
@@ -144,9 +120,10 @@ struct SubscriptionEditorContent: View {
                         .buttonStyle(.plain).foregroundStyle(TM.danger)
                 }
                 Spacer()
-                if showsCancel {
-                    Button("取消", action: attemptFinish).keyboardShortcut(.cancelAction)
-                }
+                // 「取消」是**放弃未保存的改动**，不是关掉这一页：确认后宿主按已保存的订阅
+                // 重建草稿，页面停在原地显示保存过的状态。面板时代它是 TM-04/TM-05 的返回路径，
+                // 面板的二级页删掉之后，这里是 app 里唯一能放弃改动的地方。
+                Button("取消", action: attemptFinish).keyboardShortcut(.cancelAction)
                 Button(isEditing ? "保存修改" : "添加订阅", action: save)
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                     .disabled(!canSave || draft.isAuthenticating)

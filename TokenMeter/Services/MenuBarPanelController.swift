@@ -242,6 +242,12 @@ final class MenuBarPanelController: NSObject {
                 },
                 onOpenSettings: { [weak self] in
                     self?.openSettings()
+                },
+                onAddSubscription: { [weak self] in
+                    self?.addSubscription()
+                },
+                onEditSubscription: { [weak self] id in
+                    self?.editSubscription(id)
                 }
             )
             .environment(store)
@@ -427,13 +433,22 @@ final class MenuBarPanelController: NSObject {
     }
 
     @objc private func addSubscription() {
-        navigation.beginAdding()
-        showPanel()
+        // 添加订阅是独立设置窗口里的一页，不是面板里的二级页。
+        hidePanel()
+        onAddSubscription?()
     }
 
-    /// 设置窗口的入口。面板控制器不认识那个窗口，由 app 委托注入——
-    /// 这里只负责「用户要设置」这件事。
+    /// 点订阅卡片：编辑也发生在设置窗口里，所以这里同样先把面板收起来。
+    private func editSubscription(_ id: UUID) {
+        hidePanel()
+        onEditSubscription?(id)
+    }
+
+    /// 独立设置窗口的入口。面板控制器不认识那个窗口，由 app 委托注入——
+    /// 这里只负责把「用户要设置 / 要添加订阅 / 要改哪条订阅」说出去。
     var onOpenSettings: (() -> Void)?
+    var onAddSubscription: (() -> Void)?
+    var onEditSubscription: ((UUID) -> Void)?
 
     @objc private func openSettings() {
         // 设置是一个独立窗口，不是面板里的一页。面板这时要收起来：
@@ -447,13 +462,12 @@ final class MenuBarPanelController: NSObject {
         NSApplication.shared.terminate(nil)
     }
 
-    /// 从外面（悬浮条的右键菜单）把管理面板显示在指定页面上。
+    /// 从外面（悬浮条的右键菜单）把管理面板叫出来。
     ///
     /// 只开这一个入口，`showPanel` 的显示语义（先定位、再激活、再 makeKey）
     /// 仍然只写在它自己那一处。
-    func present(route: PanelNavigationState.Route) {
+    func present() {
         guard isStarted else { return }
-        navigation.route = route
         showPanel()
     }
 

@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+/// 凭据迁移页：导出 / 导入迁移包。
+///
+/// 只在独立设置窗口里用（「数据迁移」那一页的二级页）。它曾经是菜单面板里的一页，
+/// 由设置页的「打开…」按钮把面板叫出来；面板的二级页删掉之后，它直接住在窗口里。
 @MainActor
 struct MigrationPanel: View {
     let store: UsageStore
@@ -17,11 +21,14 @@ struct MigrationPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HeaderIconButton(systemName: "chevron.left", label: "返回设置", action: onClose)
-            Text(title)
-                .font(.system(size: 20, weight: .semibold))
-                .padding(.top, 10)
-                .padding(.bottom, 8)
+            HStack(spacing: 10) {
+                HeaderIconButton(systemName: "chevron.left", label: "返回数据迁移", action: onClose)
+                Text(title)
+                    .font(.system(size: 20, weight: .semibold))
+                    .tracking(-0.5)
+                Spacer()
+            }
+            .padding(.bottom, 14)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -38,7 +45,6 @@ struct MigrationPanel: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .reportsIntrinsicPanelHeight(route: .migration, chrome: PanelLayoutMetrics.migrationChrome)
             }
             .scrollIndicators(.hidden)
         }

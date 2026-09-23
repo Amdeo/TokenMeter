@@ -255,55 +255,6 @@ struct ProgressColorSettingsTests {
         )
     }
 
-    // MARK: - 二级页面导航
-
-    @Test
-    func appearancePageReturnsToTheEditorItCameFrom() {
-        let navigation = makeNavigation()
-        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
-        navigation.beginEditingConfiguration(subscription)
-
-        navigation.showAppearanceSettings()
-        #expect(navigation.route == .appearance)
-        guard case .appearance(let draft) = navigation.content(for: [subscription]) else {
-            Issue.record("外观页应携带当前草稿")
-            return
-        }
-        #expect(draft.original?.id == subscription.id)
-
-        // 在外观页改色后返回：仍回到同一个编辑页，草稿带着未保存的颜色。
-        draft.currentQuotaColors[SubscriptionQuotaColors.overallKey] = 0x3366AA
-        navigation.returnToEditor()
-        #expect(navigation.route == .editConfiguration(subscription.id))
-        #expect(navigation.draft?.currentQuotaColors[SubscriptionQuotaColors.overallKey] == 0x3366AA)
-        #expect(navigation.draft?.isDirty == true)
-    }
-
-    @Test
-    func appearancePageReturnsToTheAddFlowDraft() {
-        let navigation = makeNavigation()
-        navigation.beginAdding()
-        navigation.selectProvider(.zhipu)
-
-        navigation.showAppearanceSettings()
-        #expect(navigation.route == .appearance)
-
-        navigation.returnToEditor()
-        #expect(navigation.route == .addConfiguration)
-        #expect(navigation.draft?.original == nil)
-        #expect(navigation.draft?.providerID == .zhipu)
-    }
-
-    @Test
-    func appearanceRouteWithoutDraftFallsBackToRecovery() {
-        let navigation = makeNavigation()
-        navigation.route = .appearance
-
-        if case .recovery = navigation.content(for: []) {} else {
-            Issue.record("没有草稿时外观页应回落到恢复页")
-        }
-    }
-
     // MARK: - 旧数据兼容与保存
 
     @Test
@@ -470,13 +421,6 @@ struct ProgressColorSettingsTests {
 
     private func anchorOf(_ subscription: Subscription, _ snapshot: UsageSnapshot) -> CardSummary? {
         SubscriptionCardPresentation.anchor(subscription: subscription, snapshot: snapshot)
-    }
-
-    private func makeNavigation() -> PanelNavigationState {
-        let suite = "TokenMeterTests.QuotaColorNavigation.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return PanelNavigationState(defaults: defaults)
     }
 }
 

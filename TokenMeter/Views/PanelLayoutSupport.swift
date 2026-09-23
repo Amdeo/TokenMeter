@@ -18,18 +18,17 @@ enum PanelLayoutMetrics {
     /// 面板窗口圆角；由 contentView（`PanelContainerView`）的图层遮罩实现。
     static let cornerRadius: CGFloat = 14
     static let rootVerticalChrome: CGFloat = 16
-    static let pageChrome: CGFloat = 116
-    static let providerChrome: CGFloat = 66
-    /// 迁移页头部仍是「返回按钮 + 20pt 标题」两层结构，比设置页高。
-    static let migrationChrome: CGFloat = 108
 
     /// 概览订阅列表的最大可视高度：内容超过后列表内部滚动，
     /// 面板高度仍随内容自适应，但整体不超过默认面板高度量级。
     static let subscriptionListMaxHeight: CGFloat = 480
 }
 
+/// 把内容的自适应高度报给面板。
+///
+/// **只有概览报**：面板只剩这一页，独立设置窗口里的订阅、外观、迁移子页复用面板时代的
+/// 正文视图，但它们不参与面板的高度记账，所以那里根本不上报。
 struct IntrinsicPanelHeightModifier: ViewModifier {
-    let route: PanelNavigationState.Route
     let chrome: CGFloat
 
     func body(content: Content) -> some View {
@@ -37,7 +36,7 @@ struct IntrinsicPanelHeightModifier: ViewModifier {
             GeometryReader { geometry in
                 Color.clear.preference(
                     key: PanelHeightPreferenceKey.self,
-                    value: PanelHeightMeasurement(route: route, height: geometry.size.height + chrome)
+                    value: geometry.size.height + chrome
                 )
             }
         }
@@ -45,21 +44,8 @@ struct IntrinsicPanelHeightModifier: ViewModifier {
 }
 
 extension View {
-    func reportsIntrinsicPanelHeight(route: PanelNavigationState.Route, chrome: CGFloat) -> some View {
-        modifier(IntrinsicPanelHeightModifier(route: route, chrome: chrome))
-    }
-
-    /// 上报面板高度；`route` 为 nil 时什么都不做。
-    ///
-    /// 独立设置窗口里的订阅子页与外观子页复用同一批正文视图，但窗口不参与面板的高度记账，
-    /// 所以那两个视图收一个可选路由——面板传，窗口传 nil。
-    @ViewBuilder
-    func reportsIntrinsicPanelHeight(route: PanelNavigationState.Route?, chrome: CGFloat) -> some View {
-        if let route {
-            modifier(IntrinsicPanelHeightModifier(route: route, chrome: chrome))
-        } else {
-            self
-        }
+    func reportsIntrinsicPanelHeight(chrome: CGFloat) -> some View {
+        modifier(IntrinsicPanelHeightModifier(chrome: chrome))
     }
 }
 

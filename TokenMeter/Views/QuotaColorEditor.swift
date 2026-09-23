@@ -110,16 +110,13 @@ struct AppearanceEntryRow: View {
 /// `SubscriptionEditorDraft`，返回后仍在编辑页，保存订阅时才落盘。
 /// 外观子页正文：卡片样式轮播 + 配色编辑。
 ///
-/// 与 `SubscriptionEditorContent` 一样由两个宿主共用：面板的 TM-04/TM-05 → 外观 二级页，
-/// 与独立窗口里订阅子页的外观子页。
+/// 只在独立设置窗口里用（订阅子页的外观子页，以及「添加订阅…」的外观子页）。
 struct SubscriptionAppearanceContent: View {
     @Environment(UsageStore.self) private var store
     @Bindable var draft: SubscriptionEditorDraft
-    /// 结束这一页（面板是返回配置页，窗口是返回订阅子页）。
+    /// 结束这一页（回到订阅子页）。
     let onDone: () -> Void
-    /// 面板宿主传入要上报高度的路由；窗口宿主传 nil。
-    var heightRoute: PanelNavigationState.Route?
-    var backLabel: String = "返回概览"
+    var backLabel: String = "返回订阅设置"
 
     private var providerDefinition: any ProviderDefinition {
         ProviderRegistry.definition(for: draft.providerID) ?? UnsupportedProviderDefinition(providerID: draft.providerID)
@@ -194,7 +191,6 @@ struct SubscriptionAppearanceContent: View {
                     }
                 }
                 .padding(.vertical, 18)
-                .reportsIntrinsicPanelHeight(route: heightRoute, chrome: PanelLayoutMetrics.pageChrome)
             }
             .scrollIndicators(.hidden)
             HStack(spacing: 10) {

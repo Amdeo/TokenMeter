@@ -76,6 +76,9 @@ final class SettingsNavigation {
     /// 订阅子页里正停在外观子页上。外观是订阅的子页，不占侧边栏一行。
     var showsAppearance = false
 
+    /// 数据迁移页里正停在迁移子页上。与外观同理：迁移是数据迁移的子页，不占侧边栏一行。
+    var showsMigration = false
+
     /// 选中一页。
     ///
     /// 订阅页要顺带准备草稿；选中的订阅已经不存在（在别处被删掉）时退回通用页，
@@ -87,6 +90,7 @@ final class SettingsNavigation {
         if self.pane == .addSubscription { discardNewDraft() }
 
         showsAppearance = false
+        showsMigration = false
         requestID = UUID()
 
         switch pane {
@@ -104,11 +108,23 @@ final class SettingsNavigation {
         }
     }
 
+    /// 从数据迁移页进入迁移子页。
+    func openMigration() {
+        guard pane == .data else { return }
+        showsMigration = true
+    }
+
+    /// 从迁移子页返回数据迁移页。
+    func closeMigration() {
+        showsMigration = false
+    }
+
     /// 新增流程里选定了供应商：为它建一条新订阅的草稿。
     func chooseProvider(_ providerID: ProviderID) {
         newSubscriptionDraft?.cancelTasks()
         newSubscriptionDraft = SubscriptionEditorDraft(providerID: providerID)
         showsAppearance = false
+        showsMigration = false
     }
 
     /// 新订阅保存成功：把选中切到刚建出来的那条上。

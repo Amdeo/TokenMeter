@@ -54,7 +54,7 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
     ) {
         let rail = RailWindowController(store: store, settings: settings, placement: placement)
 
-        railMenuActions.onOpenPanel = { [weak panel] in panel?.present(route: .overview) }
+        railMenuActions.onOpenPanel = { [weak panel] in panel?.present() }
         railMenuActions.onOpenSettings = { [weak self] in self?.settingsController?.show(pane: .general) }
         railMenuActions.onMove = { [weak rail] dock in
             rail?.move(to: dock)
@@ -73,8 +73,9 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
 
     /// 独立设置窗口。
     ///
-    /// 三个入口都通到这里：面板头部的齿轮、状态栏右键菜单的「设置…」、
-    /// 悬浮条右键菜单的「设置…」。
+    /// 所有入口都通到这里：面板头部的齿轮、面板里的「添加订阅」与订阅卡片、
+    /// 状态栏右键菜单的「设置…」与「添加订阅」、悬浮条右键菜单的「设置…」。
+    /// 面板自己只剩概览一页，别的事都由窗口承担。
     private func startSettings(
         store: UsageStore,
         settings: SettingsStore,
@@ -82,9 +83,11 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         panel: MenuBarPanelController
     ) {
         let window = SettingsWindowController(store: store, settings: settings, railPlacement: placement)
-        // 添加订阅走窗口自己那一页；迁移仍然回面板——那是一个多步流程，不是设置。
-        window.onOpenMigration = { [weak panel] in panel?.present(route: .migration) }
         panel.onOpenSettings = { [weak window] in window?.show(pane: .general) }
+        panel.onAddSubscription = { [weak window] in window?.show(pane: .addSubscription) }
+        panel.onEditSubscription = { [weak window] id in
+            window?.show(pane: .subscription(id))
+        }
         settingsController = window
     }
 

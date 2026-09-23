@@ -11,7 +11,6 @@ struct SettingsWindowView: View {
     @Bindable var settings: SettingsStore
     let railPlacement: RailPlacement
     @Bindable var navigation: SettingsNavigation
-    let onOpenMigration: () -> Void
 
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
@@ -25,7 +24,8 @@ struct SettingsWindowView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     // 订阅子页与新增页自带页头（`PageHeader` / 供应商选择的标题行），
                     // 不再叠一个通用标题。
-                    if navigation.pane.subscriptionID == nil, navigation.pane != .addSubscription {
+                    if navigation.pane.subscriptionID == nil, navigation.pane != .addSubscription,
+                       !navigation.showsMigration {
                         heading
                     }
                     paneContent
@@ -312,22 +312,31 @@ struct SettingsWindowView: View {
 
     // MARK: - 数据迁移
 
+    /// 数据迁移：一张卡片加迁移子页。
+    ///
+    /// 迁移页原来住在菜单面板里，由这里的「打开…」把面板叫出来；面板的二级页删掉之后，
+    /// 它成了这一页的子页，和外观是订阅的子页一样。
+    @ViewBuilder
     private var data: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            SettingsGroup("凭据迁移") {
-                SettingsRow(
-                    "导入或导出凭据迁移包",
-                    subtitle: "把订阅配置与私有凭据打包迁移到另一台 Mac。"
-                ) {
-                    Button("打开…", action: onOpenMigration)
+        if navigation.showsMigration {
+            MigrationPanel(store: store) { navigation.closeMigration() }
+        } else {
+            VStack(alignment: .leading, spacing: 22) {
+                SettingsGroup("凭据迁移") {
+                    SettingsRow(
+                        "导入或导出凭据迁移包",
+                        subtitle: "把订阅配置与私有凭据打包迁移到另一台 Mac。"
+                    ) {
+                        Button("打开…") { navigation.openMigration() }
+                    }
                 }
-            }
 
-            if let persistenceError = store.lastPersistenceError {
-                errorNote(persistenceError)
-            }
-            if let recoveryError = store.lastMigrationRecoveryError {
-                errorNote(recoveryError)
+                if let persistenceError = store.lastPersistenceError {
+                    errorNote(persistenceError)
+                }
+                if let recoveryError = store.lastMigrationRecoveryError {
+                    errorNote(recoveryError)
+                }
             }
         }
     }
@@ -371,17 +380,12 @@ struct SettingsWindowView: View {
             if navigation.showsAppearance {
                 SubscriptionAppearanceContent(
                     draft: draft,
-                    onDone: { navigation.showsAppearance = false },
-                    heightRoute: nil,
-                    backLabel: "返回订阅设置"
+                    onDone: { navigation.showsAppearance = false }
                 )
             } else {
                 SubscriptionEditorContent(
                     draft: draft,
                     subscription: draft.original,
-                    heightRoute: nil,
-                    showsBackButton: false,
-                    showsCancel: false,
                     onFinish: { navigation.finishEditing(subscriptions: store.subscriptions) },
                     onAppearance: { navigation.showsAppearance = true }
                 )
@@ -405,16 +409,11 @@ struct SettingsWindowView: View {
             if navigation.showsAppearance {
                 SubscriptionAppearanceContent(
                     draft: draft,
-                    onDone: { navigation.showsAppearance = false },
-                    heightRoute: nil,
-                    backLabel: "返回订阅设置"
+                    onDone: { navigation.showsAppearance = false }
                 )
             } else {
                 SubscriptionEditorContent(
                     draft: draft,
-                    heightRoute: nil,
-                    showsBackButton: false,
-                    showsCancel: false,
                     onFinish: { navigation.select(.general, subscriptions: store.subscriptions) },
                     onAppearance: { navigation.showsAppearance = true },
                     onCreated: { id in
@@ -424,9 +423,7 @@ struct SettingsWindowView: View {
             }
         } else {
             ProviderSelectionContent(
-                onSelect: { navigation.chooseProvider($0) },
-                heightRoute: nil,
-                showsBackButton: false
+                onSelect: { navigation.chooseProvider($0) }
             )
         }
     }
