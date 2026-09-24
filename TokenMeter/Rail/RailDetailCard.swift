@@ -167,14 +167,15 @@ struct RailDetailCard: View {
     }
 }
 
-/// 详情卡片的轮廓：圆角卡身与指针是**一条**路径。
+/// 详情卡片的轮廓：圆角卡身与指针是**一条**连续的路径。
 ///
-/// 移植自 Pulse 的 `UsageBubbleShape`。
+/// 移植自 Pulse 的 `UsageBubbleShape`，但做了关键改动：Pulse 用两个子路径叠着画——
+/// 圆角矩形加一条往卡身里咬一点的尾巴，接缝靠填充盖住。**填充**时没问题，
+/// **描边**却把两条子路径都描出来：卡身边线在根部被描一道、尾巴自己的底边往里偏一点
+/// 再描一道，重叠处是位差明显的两道竖缝。
 ///
-/// 这两者以前是并排的两个视图——一个圆角矩形和一个用内边距推到位的小三角。
-/// 换一个订阅会同时改变卡片高度与指针目标，而两个各自做动画的视图不会同步：
-/// 过渡中途尾巴会明显从卡片上掉下来。画成一条路径就不可能发生，
-/// 因为已经没有任何东西可以走散了。
+/// 所以这里画一条轮廓：沿圆角卡身走到指针根部就拐出去、绕尖角一圈回来，
+/// 再继续走完剩下的卡身。填充与描边读的都是同一条线，根部没有接缝也没有位差。
 struct RailBubbleShape: Shape {
     /// 指针从哪一侧伸出去——朝向条的那一侧。
     let edge: RailEdge
@@ -193,79 +194,88 @@ struct RailBubbleShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         // 挂在条下面的卡片是同一条剪影转了四分之一圈。在这个横过来的矩形里画、
-        // 再转回去，于是几何只有一份——而且因为旋转不是镜像，卡身与尾巴必须共享的
-        // 绕向得以保持。镜像会反转尾巴的方向，在两者之间打出一个缺口，
-        // 贴左边的那次就是这样。
+        // 再转回去，于是几何只有一份。
         guard edge.isVertical else {
             let canonical = CGRect(x: 0, y: 0, width: rect.height, height: rect.width)
-            return facingSideways(in: canonical).applying(
+            return facingRight(in: canonical).applying(
                 CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: rect.height)
             )
         }
 
-        return facingSideways(in: rect)
-    }
-
-    private func facingSideways(in rect: CGRect) -> Path {
-        // 指针住在朝条那一侧的一条带子里；卡身占掉剩下的部分。
-        let body = CGRect(
-            x: edge.isLeft ? pointerWidth : 0,
-            y: 0,
-            width: max(rect.width - pointerWidth, 0),
-            height: rect.height
-        )
-
-        var path = Path(
-            roundedRect: body,
-            cornerSize: CGSize(width: cornerRadius, height: cornerRadius),
-            style: .continuous
-        )
-
-        path.addPath(pointerPath(in: rect, body: body))
+        var path = facingRight(in: rect)
+        if edge == .left {
+            // 单个子路径没有绕向这回事，镜像不会在两段重叠处打出缺口——直接镜像就行。
+            path = path.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: rect.width, ty: 0))
+        }
         return path
     }
 
-    /// 尾巴，作为一个与卡身边缘重叠的子路径，填充之后两者读起来是一条剪影。
-    private func pointerPath(in rect: CGRect, body: CGRect) -> Path {
+    /// 朝右的剪影：卡身占左边，指针伸进右边的带子里。
+    ///
+    /// 走法：从指针上根出发，拐出去绕尖角一圈回到下根，顺着右缘往下走完右下角、
+    /// 底边、左下角、左边、左上角、顶边、右上角，最后回到指针上根收尾。
+    private func facingRight(in rect: CGRect) -> Path {
         let half = pointerHeight / 2
-        // 让尾巴避开圆角，而且即使调用方给了超范围的值也留在卡片之内。
+        // 让指针避开圆角，而且即使调用方给了超范围的值也留在卡片之内。
         let centre = min(
             max(pointerCenter, cornerRadius + half),
             max(rect.height - cornerRadius - half, cornerRadius + half)
         )
 
-        let baseX = edge.isLeft ? body.minX : body.maxX
-        let tipX = edge.isLeft ? rect.minX : rect.maxX
-        let reach = tipX - baseX
-
-        // 按与卡身圆角矩形**同向**的方向遍历这条尾巴。两者是分别填充为一个形状的
-        // 独立子路径，在非零填充规则下反向的绕向会在重叠处**相消**——
-        // 贴左边那次正是这样：镜像几何反转了尾巴的方向，与卡身的重叠打出了一个缺口。
-        let sweep = edge.isLeft ? -half : half
-
-        // 两条侧边的两个控制点各自的位置，作为 `reach` 与 `sweep` 的比例。
-        // 起点贴着卡片的边，让侧边沿着那条边离开卡片再弯向尖端；
-        // 第二个决定两条侧边怎么相遇：约 50°，足够尖，能明确指向一个环。
-        let nearAlong: CGFloat = 0.24
-        let nearAcross: CGFloat = 0.44
-        let farAlong: CGFloat = 0.55
-        let farAcross: CGFloat = 0.24
+        let left = rect.minX
+        let side = rect.maxX - pointerWidth
+        let tip = rect.maxX
+        let top = rect.minY
+        let bottom = rect.maxY
+        let radius = cornerRadius
+        // 四分之一圆的贝塞尔近似。
+        let arc = radius * 0.5523
 
         var path = Path()
-        path.move(to: CGPoint(x: baseX, y: centre - sweep))
+        path.move(to: CGPoint(x: side, y: centre - half))
+
+        // 指针两侧：根部切线落在卡片边上（先沿边走一小段再弯出去），像气泡一样长出来；
+        // 尖端约 50°，足够尖，能明确指向一个环。
+        let reach = tip - side
+        let farAlong: CGFloat = 0.55
+        let farAcross: CGFloat = 0.22
         path.addCurve(
-            to: CGPoint(x: tipX, y: centre),
-            control1: CGPoint(x: baseX + reach * nearAlong, y: centre - sweep * nearAcross),
-            control2: CGPoint(x: baseX + reach * farAlong, y: centre - sweep * farAcross)
+            to: CGPoint(x: tip, y: centre),
+            control1: CGPoint(x: side, y: centre - half * 0.5),
+            control2: CGPoint(x: side + reach * farAlong, y: centre - half * farAcross)
         )
         path.addCurve(
-            to: CGPoint(x: baseX, y: centre + sweep),
-            control1: CGPoint(x: baseX + reach * farAlong, y: centre + sweep * farAcross),
-            control2: CGPoint(x: baseX + reach * nearAlong, y: centre + sweep * nearAcross)
+            to: CGPoint(x: side, y: centre + half),
+            control1: CGPoint(x: side + reach * farAlong, y: centre + half * farAcross),
+            control2: CGPoint(x: side, y: centre + half * 0.5)
         )
-        // 咬回卡身一点，让接缝被填充盖住，而不是沿着边缘留下一条缝。
-        path.addLine(to: CGPoint(x: baseX - reach * 0.08, y: centre + sweep))
-        path.addLine(to: CGPoint(x: baseX - reach * 0.08, y: centre - sweep))
+
+        // 右下角 → 底边 → 左下角 → 左边 → 左上角 → 顶边 → 右上角。
+        path.addLine(to: CGPoint(x: side, y: bottom - radius))
+        path.addCurve(
+            to: CGPoint(x: side - radius, y: bottom),
+            control1: CGPoint(x: side, y: bottom - radius + arc),
+            control2: CGPoint(x: side - radius + arc, y: bottom)
+        )
+        path.addLine(to: CGPoint(x: left + radius, y: bottom))
+        path.addCurve(
+            to: CGPoint(x: left, y: bottom - radius),
+            control1: CGPoint(x: left + radius - arc, y: bottom),
+            control2: CGPoint(x: left, y: bottom - radius + arc)
+        )
+        path.addLine(to: CGPoint(x: left, y: top + radius))
+        path.addCurve(
+            to: CGPoint(x: left + radius, y: top),
+            control1: CGPoint(x: left, y: top + radius - arc),
+            control2: CGPoint(x: left + radius - arc, y: top)
+        )
+        path.addLine(to: CGPoint(x: side - radius, y: top))
+        path.addCurve(
+            to: CGPoint(x: side, y: top + radius),
+            control1: CGPoint(x: side - radius + arc, y: top),
+            control2: CGPoint(x: side, y: top + radius - arc)
+        )
+        path.addLine(to: CGPoint(x: side, y: centre - half))
         path.closeSubpath()
         return path
     }
