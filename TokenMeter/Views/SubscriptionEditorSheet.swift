@@ -11,7 +11,7 @@ struct SubscriptionEditorContent: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let subscription: Subscription?
-    /// 编辑结束（保存成功 / 删除 / 放弃更改）时调用。窗口宿主据此重建草稿或清掉选中。
+    /// 编辑结束（保存成功 / 删除）时调用。窗口宿主据此重建草稿或清掉选中。
     let onFinish: () -> Void
     let onAppearance: () -> Void
     /// 新建订阅保存成功时回调，带上刚建出来的订阅 id。
@@ -20,7 +20,6 @@ struct SubscriptionEditorContent: View {
     var onCreated: ((UUID) -> Void)?
     @Bindable var draft: SubscriptionEditorDraft
     @State private var showDeleteConfirmation = false
-    @State private var showDiscardConfirmation = false
 
     init(
         draft: SubscriptionEditorDraft,
@@ -114,42 +113,14 @@ struct SubscriptionEditorContent: View {
                 .padding(.vertical, 18)
             }
             .scrollIndicators(.hidden)
-            HStack(spacing: 10) {
-                if isEditing {
-                    Button("删除订阅", role: .destructive) { showDeleteConfirmation = true }
-                        .buttonStyle(.plain).foregroundStyle(TM.danger)
-                }
-                Spacer()
-                // 「取消」是**放弃未保存的改动**，不是关掉这一页：确认后宿主按已保存的订阅
-                // 重建草稿，页面停在原地显示保存过的状态。面板时代它是 TM-04/TM-05 的返回路径，
-                // 面板的二级页删掉之后，这里是 app 里唯一能放弃改动的地方。
-                Button("取消", action: attemptFinish).keyboardShortcut(.cancelAction)
-                Button(isEditing ? "保存修改" : "添加订阅", action: save)
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                    .disabled(!canSave || draft.isAuthenticating)
-            }
-            .font(.system(size: 12)).padding(.top, 10).padding(.bottom, 8)
+            footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: draft.authMethodID) { _, _ in
             draft.clearAuthenticationState()
         }
         .overlay {
-            if showDiscardConfirmation {
-                ConfirmDialog(
-                    title: "放弃更改？",
-                    message: "未保存的内容将丢失，正在进行的认证流程也会被取消。",
-                    confirmTitle: "放弃更改",
-                    onConfirm: {
-                        showDiscardConfirmation = false
-                        onFinish()
-                    },
-                    onCancel: {
-                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { showDiscardConfirmation = false }
-                    }
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            } else if showDeleteConfirmation {
+            if showDeleteConfirmation {
                 ConfirmDialog(
                     title: "删除订阅",
                     message: "将删除「\(subscription?.name ?? "")」的订阅与本地凭证，此操作不可撤销。",
@@ -167,6 +138,32 @@ struct SubscriptionEditorContent: View {
         }
     }
 
+    /// 底栏：一条细线把它与滚上去的内容分开，自己钉在页面底部。
+    ///
+    /// 只有「保存」一个主按钮，永远在同一个位置够得着；删除在另一头，隔开一整行，
+    /// 它还会再问一次，所以不怕点错。省略号是 macOS 的规矩：这个按钮会先弹一个确认框。
+    private var footer: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(TM.divider)
+                .frame(height: 1)
+
+            HStack(spacing: 10) {
+                if isEditing {
+                    Button("删除订阅…", role: .destructive) { showDeleteConfirmation = true }
+                        .buttonStyle(.plain).foregroundStyle(TM.danger)
+                }
+                Spacer()
+                Button("保存", action: save)
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .disabled(!canSave || draft.isAuthenticating)
+            }
+            .font(.system(size: 12))
+            .padding(.top, 12)
+            .padding(.bottom, 6)
+        }
+    }
+
     private var canSave: Bool {
         AuthFlowRegistry.canSave(
             originalAuthMethodID: subscription?.authMethodID,
@@ -176,7 +173,6 @@ struct SubscriptionEditorContent: View {
         )
     }
 
-    private func attemptFinish() { if draft.isDirty { showDiscardConfirmation = true } else { onFinish() } }
     private func save() { subscription.map { saveEditing($0) } ?? saveNew() }
 
     private func saveNew() {

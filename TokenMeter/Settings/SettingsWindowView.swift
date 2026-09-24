@@ -23,6 +23,31 @@ struct SettingsWindowView: View {
         NavigationSplitView {
             sidebar
         } detail: {
+            paneSurface
+        }
+        // 不设 `navigationTitle`：每一页自己打印标题，工具栏再重复一遍没有意义。
+        .frame(minWidth: 720, minHeight: 460)
+        // 订阅在别处被删掉时，选中的那一页要退回通用页，而不是留一个空子页。
+        .onChange(of: store.subscriptions.map(\.id)) { _, _ in
+            navigation.finishEditingIfMissing(subscriptions: store.subscriptions)
+        }
+    }
+
+    // MARK: - 侧边栏
+
+    /// 详情区的两种外壳。
+    ///
+    /// 订阅编辑器自带滚动，底栏钉在它自己底部：外面再套一层 ScrollView 会让那条底栏
+    /// 跟着内容一起滚走——两层 ScrollView 里层拿不到高度约束，索性不滚，整页变成一长条。
+    /// 其余页面是一叠卡片，交给外层滚动，标题也跟着滚。
+    @ViewBuilder
+    private var paneSurface: some View {
+        if paneScrollsItself {
+            paneContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(24)
+                .background(.windowBackground)
+        } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     // 订阅子页与新增页自带页头（`PageHeader` / 供应商选择的标题行），
@@ -38,15 +63,13 @@ struct SettingsWindowView: View {
             }
             .background(.windowBackground)
         }
-        // 不设 `navigationTitle`：每一页自己打印标题，工具栏再重复一遍没有意义。
-        .frame(minWidth: 720, minHeight: 460)
-        // 订阅在别处被删掉时，选中的那一页要退回通用页，而不是留一个空子页。
-        .onChange(of: store.subscriptions.map(\.id)) { _, _ in
-            navigation.finishEditingIfMissing(subscriptions: store.subscriptions)
-        }
     }
 
-    // MARK: - 侧边栏
+    /// 这一页自己滚：订阅编辑器，也就是编辑已有订阅、以及选完供应商之后的新建页。
+    private var paneScrollsItself: Bool {
+        navigation.pane.subscriptionID != nil
+            || (navigation.pane == .addSubscription && navigation.newSubscriptionDraft != nil)
+    }
 
     private var sidebar: some View {
         List(selection: paneSelection) {
