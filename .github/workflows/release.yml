@@ -2,7 +2,8 @@ name: Release
 
 # Tag-driven release: push an annotated `v*` tag and this workflow runs the test
 # suite, builds the universal app, ad-hoc signs it, writes the ZIP and its
-# SHA-256 checksum, cuts a DMG, and publishes the GitHub Release for that tag.
+# SHA-256 checksum, cuts a DMG, publishes the GitHub Release for that tag, and
+# finally offers the ZIP to Sparkle by committing its entry into appcast.xml.
 #
 # There is no Developer ID and no notarization (the maintainer is not an Apple
 # developer): the signature is ad-hoc, which is all Sparkle needs — its XPC
@@ -217,3 +218,75 @@ jobs:
           } > dist/notes.md
           gh release create "$RELEASE_TAG" dist/*.zip dist/*.sha256 dist/*.dmg \
             --title "TokenMeter $VERSION" --notes-file dist/notes.md $prerelease
+      # After publishing, because the feed points at the release's own asset —
+      # committing it first would advertise a download that 404s.
+      #
+      # This is what makes updates install themselves. Sparkle refuses an
+      # archive that is not signed by the private half of the key whose public
+      # half is baked into the app, so the signature written into the feed here
+      # is the whole trust story: it holds even though the app carries only an
+      # ad-hoc signature and Apple has vouched for nothing.
+      - name: Offer it to Sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::SPARKLE_PRIVATE_KEY is not set — installed copies would never see this release."
+            exit 1
+          fi
+
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$ARCHIVE_NAME.zip"
+
+          # The build fetched Sparkle into this DerivedData, and the path is
+          # spelled out here rather than left to the search inside
+          # scripts/appcast.py: Xcode files the artifact under the package's
+          # identity, and the archive is signed by the tool that came with the
+          # Sparkle version this app was built against.
+          if [ -z "${SIGN_UPDATE:-}" ]; then
+            # No `-type f`: Xcode has placed this file both ways, and a symlink
+            # resolves to the same tool.
+            found="$(find build -path '*SourcePackages/artifacts/*/Sparkle/bin/sign_update' -print -quit || true)"
+            if [ -z "$found" ] || [ ! -f "$found" ]; then
+              echo "::error::Sparkle's sign_update is not under build/ — the ZIP cannot be signed."
+              exit 1
+            fi
+            export SIGN_UPDATE="$PWD/$found"
+          fi
+
+          # The tag was checked out detached; the feed lives on main.
+          git fetch origin main
+          git checkout -B main origin/main
+
+          scripts/appcast.py "$VERSION" "dist/$ARCHIVE_NAME.zip" "$url"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+
+          # Staged first, and compared against the index rather than the working
+          # tree: `git diff` only looks at *tracked* files, so on the very first
+          # release — when the feed is brand new — it reported no change, the
+          # step exited green, and nothing was ever committed. A step that
+          # succeeds without doing its job is the worst kind.
+          if git diff --cached --quiet -- appcast.xml; then
+            echo "Feed already offers $VERSION."
+          else
+            git commit -m "Offer $VERSION to Sparkle"
+            # The checkout deliberately keeps no credentials, so `origin` cannot
+            # push. The token goes into the URL of this one command, where it is
+            # masked in the log and never lands in .git/config.
+            git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" main:main
+          fi
+
+          # Read it back off the remote rather than trusting this step's own
+          # exit code: what matters is the feed installed copies will fetch, and
+          # a push that reported success is not the same thing as the version
+          # being on it.
+          git fetch origin main
+          if ! git show FETCH_HEAD:appcast.xml | grep -qF "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>"; then
+            echo "::error::main's appcast.xml does not offer $VERSION — installed copies would never see it."
+            exit 1
+          fi
+          echo "main's appcast.xml offers $VERSION."

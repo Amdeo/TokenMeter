@@ -36,6 +36,10 @@ kimi-export-session*.md
 # playwright-cli 的页面快照 / 控制台日志（可能含登录页数据）
 .playwright-cli/
 
+# Python 脚本的字节码缓存（scripts/ 下的 .py 运行时生成）
+__pycache__/
+*.pyc
+
 # xcode-build-server（SourceKit 编译数据库，含本机绝对路径，每台机器自行生成）
 buildServer.json
 .pi
