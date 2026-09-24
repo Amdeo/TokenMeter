@@ -69,6 +69,14 @@ xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
   -configuration Debug test CODE_SIGNING_ALLOWED=NO
 ```
 
+The release version lives in `VERSION` at the repository root and nowhere else.
+`python3 scripts/version.py` copies it into the Debug and Release
+`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` build settings, and CI runs
+`python3 scripts/version.py --check`, which fails when the project drifts from
+`VERSION` or when `TokenMeter/Info.plist` stops referencing
+`$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`. Never hand-edit those
+build settings; see `docs/releasing.md` for the release procedure.
+
 ## Coding Style & Naming Conventions
 
 Follow existing Swift style: four-space indentation, one type per logical

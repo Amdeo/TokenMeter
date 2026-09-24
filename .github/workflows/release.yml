@@ -6,6 +6,10 @@ name: Release
 # produced locally with `scripts/package-release.sh` (maintainer credentials,
 # see CONTRIBUTING.md). Re-run or repair a release with workflow_dispatch.
 #
+# VERSION is the single source of the version: the gates below reject a tag
+# that disagrees with it and a version with no CHANGELOG entry, and
+# `scripts/version.py` keeps the Xcode project in step with it.
+#
 #   git tag -a v0.2.0 -m "TokenMeter 0.2.0" && git push origin v0.2.0
 
 on:
@@ -34,6 +38,56 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           persist-credentials: false
+      # Everything downstream — the project file, the built bundle's
+      # CFBundleShortVersionString, the release title and its notes — is read
+      # from VERSION, so the tag has to agree with it before anything runs. The
+      # version is exported to later steps here.
+      - name: Tag and VERSION must agree
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          declared="$(tr -d '[:space:]' < VERSION)"
+          echo "tag=$RELEASE_TAG  VERSION=$declared"
+          if [ "$version" != "$declared" ]; then
+            echo "::error::Tag $RELEASE_TAG does not match VERSION ($declared). Bump VERSION, commit, then re-tag."
+            exit 1
+          fi
+          case "$declared" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::VERSION ($declared) is not a MAJOR.MINOR.PATCH version."; exit 1 ;;
+          esac
+          echo "VERSION=$declared" >> "$GITHUB_ENV"
+      # Before anything is built or published, so a missing entry costs a re-tag
+      # rather than a release whose notes went out wrong. The heading is
+      # `## <version>` with an optional ` — <date>`; the version is matched
+      # literally, not as a pattern. Entries are bilingual, so both language
+      # markers have to be there — a release page missing one of them is wrong
+      # in a way nobody notices until it is published.
+      - name: The changelog has an entry for this version
+        run: |
+          set -euo pipefail
+          escaped="$(printf '%s' "$VERSION" | sed 's/[.[\*^$]/\\&/g')"
+          if ! grep -Eq "^## ${escaped}([[:space:]]|\$)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $VERSION' entry. Write it, commit, then re-tag."
+            exit 1
+          fi
+          entry="$(awk -v heading="## $VERSION" '
+            index($0, heading) == 1 && ($0 == heading || substr($0, length(heading) + 1) ~ /^[[:space:]]/) { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md)"
+          for marker in '**中文**' '**English**'; do
+            if ! printf '%s\n' "$entry" | grep -qxF "$marker"; then
+              echo "::error::The $VERSION entry has no '$marker' section. Both are needed."
+              exit 1
+            fi
+          done
+      # The project file carries the version Xcode builds with; drift between it
+      # and VERSION is caught here rather than shipped.
+      - name: The project file agrees with VERSION
+        run: python3 scripts/version.py --check
       - name: Select Xcode 26
         run: |
           sudo xcode-select --switch "$DEVELOPER_DIR"
@@ -53,29 +107,21 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          case "$version" in
-            [0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "unexpected release tag: $RELEASE_TAG" >&2; exit 1 ;;
-          esac
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
           xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
             -configuration Release -destination 'generic/platform=macOS' \
             -derivedDataPath build/release-derived-data \
             ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
-            MARKETING_VERSION="$version" \
+            MARKETING_VERSION="$VERSION" \
             build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-
           app=build/release-derived-data/Build/Products/Release/TokenMeter.app
           built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
-          if [ "$built" != "$version" ]; then
-            echo "built version $built does not match tag $version" >&2
+          if [ "$built" != "$VERSION" ]; then
+            echo "built version $built does not match VERSION ($VERSION)" >&2
             exit 1
           fi
           lipo -archs "$app/Contents/MacOS/TokenMeter"
       - name: Package the ZIP and checksum
-        env:
-          VERSION: ${{ steps.build.outputs.version }}
         run: |
           set -euo pipefail
           app=build/release-derived-data/Build/Products/Release/TokenMeter.app
@@ -88,9 +134,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.build.outputs.tag }}
-          VERSION: ${{ steps.build.outputs.version }}
         run: |
           set -euo pipefail
+          # A version like 0.4.0-beta.1 is published as a pre-release, which
+          # GitHub's "latest release" excludes.
+          prerelease=""
+          case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release $RELEASE_TAG exists; replacing its assets."
             gh release upload "$RELEASE_TAG" dist/*.zip dist/*.sha256 --clobber
@@ -99,10 +148,12 @@ jobs:
           {
             echo "未签名 universal 构建（arm64 + x86_64）。首次打开会被 Gatekeeper 拦截，步骤见 README 的「安装 → 已发布版本」；下载后用同名 .sha256 文件校验。"
             echo
-            # Release notes come from the CHANGELOG section for this tag; fall back
-            # to commit-generated notes when the section is missing.
-            awk -v version="$VERSION" '
-              index($0, "## [v" version "]") == 1 { found = 1; next }
+            # Release notes come from the CHANGELOG entry for this version — the
+            # heading (`## <version>`, optionally with ` — <date>`) up to the next
+            # `## ` heading. The entry's presence was checked before the build;
+            # commit-generated notes are the fallback when it is missing anyway.
+            awk -v heading="## $VERSION" '
+              index($0, heading) == 1 && ($0 == heading || substr($0, length(heading) + 1) ~ /^[[:space:]]/) { found = 1; next }
               found && /^## / { exit }
               found { print }
             ' CHANGELOG.md > dist/changelog.md
@@ -113,4 +164,4 @@ jobs:
             fi
           } > dist/notes.md
           gh release create "$RELEASE_TAG" dist/*.zip dist/*.sha256 \
-            --title "TokenMeter $VERSION" --notes-file dist/notes.md
+            --title "TokenMeter $VERSION" --notes-file dist/notes.md $prerelease

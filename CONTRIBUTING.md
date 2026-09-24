@@ -46,20 +46,20 @@ Submitting a contribution does not grant a promise of review, merge, support, or
 
 ## Packaging a release
 
-Releases are tag-driven. Bump `MARKETING_VERSION` (and `CURRENT_PROJECT_VERSION`)
-in `TokenMeter.xcodeproj`, update `CHANGELOG.md`, land everything on `main`, then
-push an annotated tag:
+The version lives in `VERSION` at the repository root and nowhere else: the
+Xcode project's `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` are derived from
+it by `python3 scripts/version.py`, and the tag must be `v$(cat VERSION)`.
+Releases are tag-driven — write the `CHANGELOG.md` entry first, bump `VERSION`,
+sync the project, land everything on `main` as `TokenMeter <version>`, then push
+an annotated `v<version>` tag.
 
-```bash
-git tag -a v0.2.0 -m "TokenMeter 0.2.0" && git push origin v0.2.0
-```
-
-The `Release` workflow runs the test suite, builds the universal (arm64 + x86_64)
-unsigned archive, writes `TokenMeter-<version>-macos-universal.zip` plus its
-SHA-256 checksum, and attaches both to the GitHub Release for that tag. Tag a
-commit whose CI is green; use `workflow_dispatch` to rebuild or repair a tag that
-already exists. The workflow owns the release assets — do not upload a second
-archive by hand.
+Full procedure, workflow gates, pre-release versions and repair steps:
+[docs/releasing.md](docs/releasing.md). In short, the `Release` workflow runs the
+test suite, builds the universal (arm64 + x86_64) unsigned archive, writes
+`TokenMeter-<version>-macos-universal.zip` plus its SHA-256 checksum, and
+attaches both to the GitHub Release for that tag. Tag a commit whose CI is green;
+use `workflow_dispatch` to rebuild or repair a tag that already exists. The
+workflow owns the release assets — do not upload a second archive by hand.
 
 To reproduce the same archive locally (offline checks, or signed distribution),
 run `bash scripts/package-release.sh` from a checkout with Xcode 26+. It builds
@@ -80,7 +80,8 @@ display before uploading artifacts to a GitHub Release. Keep release notes tied
 to the exact tag rather than describing unreleased `main` features.
 
 The archive name comes from `CFBundleShortVersionString`, which the target build
-settings define as `$(MARKETING_VERSION)`. Bump it before tagging: the local
+settings define as `$(MARKETING_VERSION)`, which in turn comes from `VERSION`.
+Bump `VERSION` (and run `python3 scripts/version.py`) before tagging: the local
 script refuses to overwrite an existing archive for that version, and the release
 workflow fails when the built version does not match the tag.
 
