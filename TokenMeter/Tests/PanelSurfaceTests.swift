@@ -5,27 +5,9 @@ import Testing
 
 @MainActor
 struct PanelSurfaceTests {
+    /// 面板高度变化只改变窗口底边，顶部始终贴住菜单栏锚点。
     @Test
-    func equalHeightRoutesStillRequestGeometrySynchronization() {
-        let routes: [PanelNavigationState.Route] = [
-            .overview, .settings, .migration, .addProvider, .addConfiguration,
-            .appearance, .editConfiguration(UUID()), .settings, .overview,
-        ]
-        for (previous, next) in zip(routes, routes.dropFirst()) {
-            #expect(
-                PanelGeometryRequest(route: previous, size: .compact)
-                    != PanelGeometryRequest(route: next, size: .compact)
-            )
-        }
-        #expect(
-            PanelGeometryRequest(route: .overview, size: .compact)
-                != PanelGeometryRequest(route: .overview, size: PanelSize(width: 340, height: 724))
-        )
-    }
-
-    /// 不同页面的高度只改变窗口底边，等高页面也校正宿主；顶部始终贴住菜单栏锚点。
-    @Test
-    func changingPageHeightsKeepsTheMenuBarAnchor() {
+    func changingPanelHeightsKeepsTheMenuBarAnchor() {
         let screen = NSRect(x: -1440, y: -120, width: 1440, height: 900)
         let anchorTop = screen.maxY
         let container = PanelContainerView(frame: NSRect(x: 0, y: 0, width: 340, height: 724))

@@ -115,6 +115,104 @@ final class SettingsStore {
             if serviceErrorAlerts && !oldValue { requestNotificationsIfNeeded() }
         }
     }
+
+    /// 点菜单栏图标是否弹出概览面板。
+    ///
+    /// 关掉之后图标还在，只是左键不再弹面板——与右键一样弹那个菜单（添加订阅 / 设置 / 退出）。
+    /// 面板本身仍然可以从悬浮条的右键菜单打开。默认打开：图标的主要用途就是弹面板。
+    var menuBarItemOpensPanel: Bool {
+        didSet { defaults.set(menuBarItemOpensPanel, forKey: Keys.menuBarItemOpensPanel) }
+    }
+
+    /// 是否显示贴边/悬浮的常驻悬浮条。
+    ///
+    /// 默认关闭：它是一个常驻在屏幕上的元素，不该在用户没要求的时候出现。
+    var railEnabled: Bool { didSet { defaults.set(railEnabled, forKey: Keys.railEnabled) } }
+    /// 悬浮条是否在指针离开时卷成细条。只对贴边的条生效——悬浮着的条保持展开，
+    /// 它就在用户刻意放的地方，收起来反而找不回来。
+    var railAutoCollapse: Bool { didSet { defaults.set(railAutoCollapse, forKey: Keys.railAutoCollapse) } }
+    /// 悬浮条是否跟着指针所在的显示器走。
+    ///
+    /// 默认关闭：只有一块屏时它什么也做不了，两块屏时它会覆盖用户把条拖到某块屏上的选择。
+    var railFollowsActiveDisplay: Bool {
+        didSet { defaults.set(railFollowsActiveDisplay, forKey: Keys.railFollowsActiveDisplay) }
+    }
+    /// 悬浮条是否躲开别的 app 的全屏空间。用公开的 collectionBehavior 实现，
+    /// 不需要辅助功能权限。
+    var railHidesInFullScreen: Bool {
+        didSet { defaults.set(railHidesInFullScreen, forKey: Keys.railHidesInFullScreen) }
+    }
+
+    /// 环与环之间的间距档位。
+    var railSpacing: RailSpacing {
+        didSet { defaults.set(railSpacing.rawValue, forKey: Keys.railSpacing) }
+    }
+    /// 贴左右边时画不画环下方那行百分比。
+    var railSideShowsPercentages: Bool {
+        didSet { defaults.set(railSideShowsPercentages, forKey: Keys.railSideShowsPercentages) }
+    }
+    /// 贴顶时画不画。
+    var railTopShowsPercentages: Bool {
+        didSet { defaults.set(railTopShowsPercentages, forKey: Keys.railTopShowsPercentages) }
+    }
+    /// 数字画在环上方而不是下方。
+    var railLabelAboveRing: Bool {
+        didSet { defaults.set(railLabelAboveRing, forKey: Keys.railLabelAboveRing) }
+    }
+    /// 弧与数字都倒数（显示还剩多少），而不是正数（已用多少）。
+    var railShowsRemaining: Bool {
+        didSet { defaults.set(railShowsRemaining, forKey: Keys.railShowsRemaining) }
+    }
+    /// 环里再画一圈细弧，给次满的那个额度。
+    var railShowsSecondRing: Bool {
+        didSet { defaults.set(railShowsSecondRing, forKey: Keys.railShowsSecondRing) }
+    }
+    /// 环外再画一道细弧，表示额度窗口已经过去了多少。
+    var railShowsWindowClock: Bool {
+        didSet { defaults.set(railShowsWindowClock, forKey: Keys.railShowsWindowClock) }
+    }
+    /// 某个额度快到临界时，细条染上它的颜色。关掉则细条始终中性。
+    var railDockShowsAlertColor: Bool {
+        didSet { defaults.set(railDockShowsAlertColor, forKey: Keys.railDockShowsAlertColor) }
+    }
+    /// 取数时环上跑一段弧。默认关：TokenMeter 的条一直是不动的，
+    /// 这个动画是照着参考项目补的，不该在用户没要求时自己动起来。
+    var railAnimatesActivity: Bool {
+        didSet { defaults.set(railAnimatesActivity, forKey: Keys.railAnimatesActivity) }
+    }
+    /// 条的收尾用整圆的端头，而不是柔化的超椭圆角。
+    var railUsesRoundEnds: Bool {
+        didSet { defaults.set(railUsesRoundEnds, forKey: Keys.railUsesRoundEnds) }
+    }
+    /// 悬浮条的配色：深色 / 浅色 / 跟随主题。
+    ///
+    /// 与 app 主题无关——主题只管面板与设置窗口。条一整天悬在任意内容之上，
+    /// 配色由用户自己定；默认深色。
+    var railColorScheme: RailColorScheme {
+        didSet { defaults.set(railColorScheme.rawValue, forKey: Keys.railColorScheme) }
+    }
+
+    /// 悬浮条当前的尺寸预算。窗口与视图都必须读它，不能各自算。
+    var railMetrics: RailMetrics {
+        RailMetrics(
+            spacing: railSpacing,
+            sideShowsPercentages: railSideShowsPercentages,
+            topShowsPercentages: railTopShowsPercentages,
+            labelAboveRing: railLabelAboveRing,
+            usesRoundEnds: railUsesRoundEnds
+        )
+    }
+
+    /// 环怎么画。与尺寸预算分开：这些不改条的大小，只改环上画什么。
+    var railRingOptions: RailRingOptions {
+        RailRingOptions(
+            showsRemaining: railShowsRemaining,
+            showsSecondRing: railShowsSecondRing,
+            showsWindowClock: railShowsWindowClock,
+            animatesActivity: railAnimatesActivity
+        )
+    }
+
     private var cnyThresholdStorage = 0.0
     private var usdThresholdStorage = 0.0
 
@@ -164,6 +262,22 @@ final class SettingsStore {
         lowBalanceAlerts = defaults.object(forKey: Keys.lowBalanceAlerts) as? Bool ?? true
         authenticationAlerts = defaults.object(forKey: Keys.authenticationAlerts) as? Bool ?? true
         serviceErrorAlerts = defaults.object(forKey: Keys.serviceErrorAlerts) as? Bool ?? false
+        menuBarItemOpensPanel = defaults.object(forKey: Keys.menuBarItemOpensPanel) as? Bool ?? true
+        railEnabled = defaults.object(forKey: Keys.railEnabled) as? Bool ?? false
+        railAutoCollapse = defaults.object(forKey: Keys.railAutoCollapse) as? Bool ?? true
+        railFollowsActiveDisplay = defaults.object(forKey: Keys.railFollowsActiveDisplay) as? Bool ?? false
+        railHidesInFullScreen = defaults.object(forKey: Keys.railHidesInFullScreen) as? Bool ?? true
+        railSpacing = RailSpacing(rawValue: defaults.string(forKey: Keys.railSpacing) ?? "") ?? .default
+        railSideShowsPercentages = defaults.object(forKey: Keys.railSideShowsPercentages) as? Bool ?? true
+        railTopShowsPercentages = defaults.object(forKey: Keys.railTopShowsPercentages) as? Bool ?? false
+        railLabelAboveRing = defaults.object(forKey: Keys.railLabelAboveRing) as? Bool ?? false
+        railShowsRemaining = defaults.object(forKey: Keys.railShowsRemaining) as? Bool ?? false
+        railShowsSecondRing = defaults.object(forKey: Keys.railShowsSecondRing) as? Bool ?? false
+        railShowsWindowClock = defaults.object(forKey: Keys.railShowsWindowClock) as? Bool ?? false
+        railDockShowsAlertColor = defaults.object(forKey: Keys.railDockShowsAlertColor) as? Bool ?? true
+        railAnimatesActivity = defaults.object(forKey: Keys.railAnimatesActivity) as? Bool ?? false
+        railUsesRoundEnds = defaults.object(forKey: Keys.railUsesRoundEnds) as? Bool ?? false
+        railColorScheme = RailColorScheme(rawValue: defaults.string(forKey: Keys.railColorScheme) ?? "") ?? .default
         cnyBalanceThreshold = max(0, defaults.object(forKey: Keys.cnyThreshold) as? Double ?? 5)
         usdBalanceThreshold = max(0, defaults.object(forKey: Keys.usdThreshold) as? Double ?? 1)
         refreshLoginItemStatus()
@@ -253,5 +367,21 @@ final class SettingsStore {
         static let serviceErrorAlerts = "settings.serviceErrorAlerts"
         static let cnyThreshold = "settings.cnyBalanceThreshold"
         static let usdThreshold = "settings.usdBalanceThreshold"
+        static let menuBarItemOpensPanel = "settings.menuBarItemOpensPanel"
+        static let railEnabled = "settings.railEnabled"
+        static let railAutoCollapse = "settings.railAutoCollapse"
+        static let railFollowsActiveDisplay = "settings.railFollowsActiveDisplay"
+        static let railHidesInFullScreen = "settings.railHidesInFullScreen"
+        static let railSpacing = "settings.railSpacing"
+        static let railSideShowsPercentages = "settings.railSideShowsPercentages"
+        static let railTopShowsPercentages = "settings.railTopShowsPercentages"
+        static let railLabelAboveRing = "settings.railLabelAboveRing"
+        static let railShowsRemaining = "settings.railShowsRemaining"
+        static let railShowsSecondRing = "settings.railShowsSecondRing"
+        static let railShowsWindowClock = "settings.railShowsWindowClock"
+        static let railDockShowsAlertColor = "settings.railDockShowsAlertColor"
+        static let railAnimatesActivity = "settings.railAnimatesActivity"
+        static let railUsesRoundEnds = "settings.railUsesRoundEnds"
+        static let railColorScheme = "settings.railColorScheme"
     }
 }

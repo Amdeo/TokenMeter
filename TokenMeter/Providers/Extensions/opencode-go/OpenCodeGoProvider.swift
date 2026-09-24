@@ -20,6 +20,7 @@ struct OpenCodeGoProviderDefinition: ProviderDefinition {
             iconResourceName: "icon-opencodego",
             fallbackSystemImage: "chevron.left.forwardslash.chevron.right",
             tintRGB: 0x32D74B,
+            railMarkResource: "opencode",
             capabilityDescription: "支持用量窗口接口，可使用 API Key。",
             authPageURL: URL(string: "https://opencode.ai/zen"),
             homepageURL: URL(string: "https://opencode.ai"),

@@ -14,6 +14,12 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
     /// Bundle 内图标资源名；nil 时使用 `fallbackSystemImage`。
     let iconResourceName: String?
     let fallbackSystemImage: String
+    /// 悬浮条与设置窗口侧边栏用的**单色**标记资源名；nil 时回落到 `fallbackSystemImage`。
+    ///
+    /// `var` 而不是 `let`：给它一个默认值，中转站里只有真拿到了像样标记的那几个才需要写。
+    /// 中转站通常只有一张彩色应用图标，从里面剥出来的单色剪影只能是位图，
+    /// 所以这个资源可以是 `.svg`，也可以是单色 `.png`（见 `RailMarkStore`）。
+    var railMarkResource: String? = nil
     let tintRGB: UInt32
     let homepageURL: URL
     let authMethod: AuthMethodDefinition
@@ -24,6 +30,7 @@ struct RelayBalanceProviderDefinition: ProviderDefinition {
             iconResourceName: iconResourceName,
             fallbackSystemImage: fallbackSystemImage,
             tintRGB: tintRGB,
+            railMarkResource: railMarkResource,
             capabilityDescription: "支持账户余额，可通过网页登录态获取。",
             authPageURL: refresher.tokenSite.loginPageURL,
             homepageURL: homepageURL,

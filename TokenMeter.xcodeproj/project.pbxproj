@@ -14,7 +14,6 @@
 		A10000010000000000000006 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* UsageStore.swift */; };
 		A10000010000000000000007 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* MenuBarView.swift */; };
 		A10000010000000000000028 /* PanelLayoutSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000028 /* PanelLayoutSupport.swift */; };
-		A10000010000000000000031 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000031 /* SettingsPanel.swift */; };
 
 		A10000010000000000000014 /* PlatformLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000014 /* PlatformLogo.swift */; };
 		A10000010000000000000023 /* SubscriptionUsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000023 /* SubscriptionUsageView.swift */; };
@@ -41,7 +40,6 @@
 		A20000010000000000000006 /* UsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStore.swift; sourceTree = "<group>"; };
 		A20000010000000000000007 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		A20000010000000000000028 /* PanelLayoutSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelLayoutSupport.swift; sourceTree = "<group>"; };
-		A20000010000000000000031 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 			A20000010000000000000023 /* SubscriptionUsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionUsageView.swift; sourceTree = "<group>"; };
 			A20000010000000000000024 /* SubscriptionEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionEditorSheet.swift; sourceTree = "<group>"; };
 			A20000010000000000000025 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
@@ -65,21 +63,23 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AF0000010000000000000001 /* Providers */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Providers; sourceTree = "<group>"; };
 		AF0000010000000000000002 /* Tests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Tests; sourceTree = "<group>"; };
+		AF0000010000000000000003 /* Rail */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Rail; sourceTree = "<group>"; };
+		AF0000010000000000000004 /* Settings */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Settings; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXGroup section */
-		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A20000010000000000000009, A20000010000000000000001, AF0000010000000000000001, AF0000010000000000000002, ); path = TokenMeter; sourceTree = "<group>"; };
+		A30000010000000000000001 = {isa = PBXGroup; children = (A30000010000000000000002, A30000010000000000000004, A30000010000000000000005, A30000010000000000000006, A30000010000000000000010, A30000010000000000000007, A20000010000000000000009, A20000010000000000000001, AF0000010000000000000001, AF0000010000000000000002, AF0000010000000000000003, AF0000010000000000000004, ); path = TokenMeter; sourceTree = "<group>"; };
 		A30000010000000000000002 = {isa = PBXGroup; children = (A20000010000000000000002, A20000010000000000000033, A20000010000000000000034, A20000010000000000000064, ); name = Models; path = Models; sourceTree = "<group>"; };
 		A30000010000000000000004 = {isa = PBXGroup; children = (A20000010000000000000005, A20000010000000000000025, A20000010000000000000026, A20000010000000000000027, A20000010000000000000032, A20000010000000000000065, ); name = Services; path = Services; sourceTree = "<group>"; };
 		A30000010000000000000005 = {isa = PBXGroup; children = (A20000010000000000000006, ); name = Store; path = Store; sourceTree = "<group>"; };
-		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000028, A20000010000000000000023, A20000010000000000000024, A20000010000000000000014, A20000010000000000000031, A20000010000000000000046, A20000010000000000000082, A20000010000000000000066, A30000010000000000000014, ); name = Views; path = Views; sourceTree = "<group>"; };
+		A30000010000000000000006 = {isa = PBXGroup; children = (A20000010000000000000007, A20000010000000000000028, A20000010000000000000023, A20000010000000000000024, A20000010000000000000014, A20000010000000000000046, A20000010000000000000082, A20000010000000000000066, A30000010000000000000014, ); name = Views; path = Views; sourceTree = "<group>"; };
 		A30000010000000000000014 = {isa = PBXGroup; children = (A20000010000000000000044, ); name = ProviderCards; path = ProviderCards; sourceTree = "<group>"; };
 			A30000010000000000000010 = {isa = PBXGroup; children = (A20000010000000000000076, ); name = Resources; path = Resources; sourceTree = "<group>"; };
 		A30000010000000000000007 = {isa = PBXGroup; children = (A20000010000000000000010, B20000010000000000000002, ); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = A50000010000000000000002; buildPhases = (A60000010000000000000001, A60000010000000000000002, A60000010000000000000003, ); buildRules = ( ); dependencies = ( ); fileSystemSynchronizedGroups = (AF0000010000000000000001, ); name = TokenMeter; productName = TokenMeter; productReference = A20000010000000000000010; productType = "com.apple.product-type.application"; };
+		A40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = A50000010000000000000002; buildPhases = (A60000010000000000000001, A60000010000000000000002, A60000010000000000000003, ); buildRules = ( ); dependencies = ( ); fileSystemSynchronizedGroups = (AF0000010000000000000001, AF0000010000000000000003, AF0000010000000000000004, ); name = TokenMeter; productName = TokenMeter; productReference = A20000010000000000000010; productType = "com.apple.product-type.application"; };
 		B40000010000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B50000010000000000000001; buildPhases = (B60000010000000000000001, B60000010000000000000002, B60000010000000000000003, ); buildRules = ( ); dependencies = (B91000010000000000000001, ); fileSystemSynchronizedGroups = (AF0000010000000000000002, ); name = TokenMeterTests; productName = TokenMeterTests; productReference = B20000010000000000000002; productType = "com.apple.product-type.bundle.unit-test"; };
 /* End PBXNativeTarget section */
 
@@ -92,7 +92,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000028, A10000010000000000000014, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, A10000010000000000000027, A10000010000000000000031, A10000010000000000000032, A10000010000000000000033, A10000010000000000000034, A10000010000000000000044, A10000010000000000000046, A10000010000000000000082, A10000010000000000000064, A10000010000000000000065, A10000010000000000000066, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000010000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000005, A10000010000000000000006, A10000010000000000000007, A10000010000000000000028, A10000010000000000000014, A10000010000000000000023, A10000010000000000000024, A10000010000000000000025, A10000010000000000000026, A10000010000000000000027, A10000010000000000000032, A10000010000000000000033, A10000010000000000000034, A10000010000000000000044, A10000010000000000000046, A10000010000000000000082, A10000010000000000000064, A10000010000000000000065, A10000010000000000000066, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */

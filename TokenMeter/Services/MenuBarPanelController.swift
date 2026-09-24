@@ -180,6 +180,22 @@ private final class MenuBarHostingView: NSHostingView<AnyView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
+/// 点一下状态栏图标该做什么。
+///
+/// 左击开关面板；右击只弹菜单。二次点击有多种来源：真右键（rightMouseDown）、
+/// control-左击，以及第三方鼠标工具合成的事件；只要不是普通左击都按二次点击处理。
+///
+/// 设置里关掉「点击图标弹出面板」之后，左击也落到菜单那一支：图标还在，
+/// 只是点击与右键同一个结果。
+enum StatusItemClick: Equatable {
+    case togglePanel
+    case contextMenu
+
+    static func resolve(isSecondary: Bool, opensPanel: Bool) -> Self {
+        isSecondary || !opensPanel ? .contextMenu : .togglePanel
+    }
+}
+
 @MainActor
 final class MenuBarPanelController: NSObject {
     private let store: UsageStore
@@ -239,6 +255,15 @@ final class MenuBarPanelController: NSObject {
                 },
                 onReorderModeChange: { [weak self] reordering in
                     self?.panel.isReordering = reordering
+                },
+                onOpenSettings: { [weak self] in
+                    self?.openSettings()
+                },
+                onAddSubscription: { [weak self] in
+                    self?.addSubscription()
+                },
+                onEditSubscription: { [weak self] id in
+                    self?.editSubscription(id)
                 }
             )
             .environment(store)
@@ -367,18 +392,19 @@ final class MenuBarPanelController: NSObject {
         panel.isVisible ? hidePanel() : showPanel()
     }
 
-    /// 左击开关面板；右击只弹菜单（先把面板收起）。
-    /// 二次点击有多种来源：真右键（rightMouseDown）、control-左击，以及
-    /// 第三方鼠标工具合成的事件；只要不是普通左击都按二次点击处理。
+    /// 左击开关面板；右击只弹菜单（先把面板收起）。规则本身在 `StatusItemClick`。
     @objc private func handleStatusItemClick() {
         let event = NSApp.currentEvent
         let isSecondary = event?.type == .rightMouseDown
             || event?.modifierFlags.contains(.control) == true
-        guard isSecondary else {
-            togglePanel()
-            return
+        let action = StatusItemClick.resolve(
+            isSecondary: isSecondary,
+            opensPanel: store.settings.menuBarItemOpensPanel
+        )
+        switch action {
+        case .togglePanel: togglePanel()
+        case .contextMenu: presentContextMenu()
         }
-        presentContextMenu()
     }
 
     /// 弹出右击菜单。statusItem.menu 非空说明正处在菜单弹出期间，忽略重入。
@@ -399,10 +425,23 @@ final class MenuBarPanelController: NSObject {
         addItem.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         menu.addItem(addItem)
         menu.addItem(menuItem(title: "设置…", action: #selector(openSettings)))
+        #if DEBUG
+        // 状态预览（TM-06）原来在面板的设置页里；设置搬去独立窗口之后收进这个菜单——
+        // 它预览的是**面板**的各种状态，入口留在面板这一侧才合理。
+        menu.addItem(.separator())
+        menu.addItem(menuItem(title: "预览状态", action: #selector(previewStatus)))
+        #endif
         menu.addItem(.separator())
         menu.addItem(menuItem(title: "退出 TokenMeter", action: #selector(quit)))
         return menu
     }()
+
+    #if DEBUG
+    @objc private func previewStatus() {
+        navigation.previewMode = .normal
+        showPanel()
+    }
+    #endif
 
     private func menuItem(title: String, action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
@@ -411,18 +450,40 @@ final class MenuBarPanelController: NSObject {
     }
 
     @objc private func addSubscription() {
-        navigation.beginAdding()
-        showPanel()
+        // 添加订阅是独立设置窗口里的一页，不是面板里的二级页。
+        hidePanel()
+        onAddSubscription?()
     }
 
+    /// 点订阅卡片：编辑也发生在设置窗口里，所以这里同样先把面板收起来。
+    private func editSubscription(_ id: UUID) {
+        hidePanel()
+        onEditSubscription?(id)
+    }
+
+    /// 独立设置窗口的入口。面板控制器不认识那个窗口，由 app 委托注入——
+    /// 这里只负责把「用户要设置 / 要添加订阅 / 要改哪条订阅」说出去。
+    var onOpenSettings: (() -> Void)?
+    var onAddSubscription: (() -> Void)?
+    var onEditSubscription: ((UUID) -> Void)?
+
     @objc private func openSettings() {
-        navigation.route = .settings
-        showPanel()
+        // 设置是一个独立窗口，不是面板里的一页。面板这时要收起来：
+        // 留着它盖在窗口前面没有意义。
+        hidePanel()
+        onOpenSettings?()
     }
 
     @objc private func quit() {
         store.stop()
         NSApplication.shared.terminate(nil)
+    }
+
+    /// 设置里改了「点击图标弹出面板」：关掉的那一刻把已经弹出的面板收掉。
+    ///
+    /// 图标本身不动——它还在菜单栏上，左键从此只弹菜单。
+    func settingsChanged() {
+        if !store.settings.menuBarItemOpensPanel { hidePanel() }
     }
 
     private func showPanel() {

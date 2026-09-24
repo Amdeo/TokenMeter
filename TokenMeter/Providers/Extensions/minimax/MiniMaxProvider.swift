@@ -20,6 +20,7 @@ struct MiniMaxProviderDefinition: ProviderDefinition {
             iconResourceName: "icon-minimax",
             fallbackSystemImage: "cube.fill",
             tintRGB: 0xFF9F0A,
+            railMarkResource: "minimax",
             capabilityDescription: "支持 MiniMax Coding Plan 套餐额度。",
             authPageURL: URL(string: "https://platform.minimaxi.com/user-center/basic-information/interface-key"),
             homepageURL: URL(string: "https://platform.minimaxi.com"),

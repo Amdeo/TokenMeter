@@ -129,6 +129,53 @@ struct SubscriptionQuotaPalette: Codable, Hashable, Sendable {
     }
 }
 
+/// 一条订阅在悬浮条上的呈现配置。
+///
+/// 与卡片样式、进度条配色存在同一层——订阅自己身上：三者都是「这条订阅长什么样」，
+/// 都要能在编辑页里改、保存订阅时才落盘。
+///
+/// 移植自 Pulse 的每账号面板设置（`AppSettings` 的 `enabledAccounts`、`pinnedWindows`
+/// 与 `ringTints`）。那边存在 UserDefaults 的字典里、按账号 id 寻址，因为账号是枚举出来的；
+/// 这里随订阅本身一起持久化，订阅被删掉时配置跟着消失，不会留下孤儿键。
+struct SubscriptionRailSettings: Codable, Hashable, Sendable {
+    /// 是否在悬浮条上画这条订阅的环。默认显示。
+    ///
+    /// 只影响悬浮条：菜单栏面板始终列出全部订阅。
+    var showsInRail: Bool
+    /// 环追踪哪个额度。
+    ///
+    /// `nil` 表示自动：最接近用尽的那一个。其余取值是 `overallKey`（供应商上报的
+    /// 总使用量聚合比例）或一个额度窗口的名字。钉住的窗口在某次读数里不存在时退回自动，
+    /// 而不是画一个空环——Pulse 的 `headlineWindow(preferring:)` 同一条规则。
+    var trackedWindow: String?
+    /// 环、环里的标记与下方数字用的颜色。`nil` 表示按用量状态取语义色。
+    var tintRGB: UInt32?
+
+    /// `trackedWindow` 里表示「总使用量」的取值。
+    ///
+    /// 与 `SubscriptionQuotaColors.overallKey` 是同一个键：它们指的是同一个额度，
+    /// 只是一个用在配色上、一个用在悬浮条上。
+    static let overallKey = SubscriptionQuotaColors.overallKey
+
+    init(showsInRail: Bool = true, trackedWindow: String? = nil, tintRGB: UInt32? = nil) {
+        self.showsInRail = showsInRail
+        self.trackedWindow = trackedWindow
+        self.tintRGB = tintRGB
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case showsInRail, trackedWindow, tintRGB
+    }
+
+    /// 缺失的字段按默认值补齐：旧数据里没有 `rail` 键，以后新增的字段也不该让订阅解不出来。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        showsInRail = try container.decodeIfPresent(Bool.self, forKey: .showsInRail) ?? true
+        trackedWindow = try container.decodeIfPresent(String.self, forKey: .trackedWindow)
+        tintRGB = try container.decodeIfPresent(UInt32.self, forKey: .tintRGB)
+    }
+}
+
 struct Subscription: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     let providerID: ProviderID
@@ -140,6 +187,8 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
     /// 只有声明了进度条能力的卡片会读取与展示它。
     var quotaColors: SubscriptionQuotaPalette
     var cardStyle: SubscriptionCardStyle
+    /// 悬浮条上的呈现配置（是否显示、追踪哪个额度、环的颜色）。
+    var rail: SubscriptionRailSettings
 
     init(
         id: UUID = UUID(),
@@ -149,7 +198,8 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         createdAt: Date = .now,
         isEnabled: Bool = true,
         quotaColors: SubscriptionQuotaPalette = SubscriptionQuotaPalette(),
-        cardStyle: SubscriptionCardStyle = .standard
+        cardStyle: SubscriptionCardStyle = .standard,
+        rail: SubscriptionRailSettings = SubscriptionRailSettings()
     ) {
         self.id = id
         self.providerID = providerID
@@ -159,11 +209,12 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         self.isEnabled = isEnabled
         self.quotaColors = quotaColors
         self.cardStyle = cardStyle
+        self.rail = rail
     }
 
     /// 兼容旧数据的解码：优先读新字段 providerID/authMethodID，缺失时回退旧 platform/authMethod。
     enum CodingKeys: String, CodingKey {
-        case id, name, createdAt, isEnabled, quotaColors, cardStyle
+        case id, name, createdAt, isEnabled, quotaColors, cardStyle, rail
         case providerID
         case authMethodID
         case platform
@@ -197,6 +248,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
             )
         }
         cardStyle = try container.decodeIfPresent(SubscriptionCardStyle.self, forKey: .cardStyle) ?? .standard
+        rail = try container.decodeIfPresent(SubscriptionRailSettings.self, forKey: .rail) ?? SubscriptionRailSettings()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -209,6 +261,7 @@ struct Subscription: Identifiable, Codable, Hashable, Sendable {
         try container.encode(isEnabled, forKey: .isEnabled)
         try container.encode(quotaColors, forKey: .quotaColors)
         try container.encode(cardStyle, forKey: .cardStyle)
+        try container.encode(rail, forKey: .rail)
     }
 }
 
@@ -243,6 +296,9 @@ enum SubscriptionQuotaColors: Sendable {
         0x6366F1, 0x3B82F6, 0x06B6D4, 0x14B8A6,
         0x22C55E, 0xA855F7, 0xEC4899, 0x64748B
     ]
+
+    /// 悬浮条环颜色的「自定义」起始色：色板首色，切过去时看得见变化。
+    static let defaultRingTint: UInt32 = presets[0]
 
     /// 把额度名称规范化为 `name.<...>` 专属键：去首尾空白、小写、压缩连续空白。
     static func nameKey(_ name: String) -> String {
@@ -493,6 +549,20 @@ enum QuotaUnit: Codable, Sendable, Equatable {
         if case .currency(_, let scale) = self { return scale }
         return 1
     }
+
+    /// 金额前面的紧凑符号，用在两个数并排的地方（详情卡片的「已用 / 上限」）。
+    ///
+    /// 「USD 1761.00 / USD 2304.00」在 280pt 的卡片里放不下，而 `$1761.00 / $2304.00` 放得下。
+    /// 认不出的币种照旧写代码——宁可长一点也不写错符号。
+    static func compactSymbol(for code: String) -> String {
+        switch code {
+        case "USD": "$"
+        case "CNY", "JPY": "¥"
+        case "EUR": "€"
+        case "GBP": "£"
+        default: "\(code) "
+        }
+    }
 }
 
 struct Quota: Identifiable, Codable, Sendable {
@@ -573,6 +643,17 @@ struct Quota: Identifiable, Codable, Sendable {
         if displayValue >= 1_000_000 { return String(format: "%.1fM", displayValue / 1_000_000) }
         if displayValue >= 1_000 { return String(format: "%.1fK", displayValue / 1_000) }
         return String(format: "%.0f", displayValue)
+    }
+
+    /// 两个金额并排时的紧凑写法：`$1761.00` 而不是 `USD 1761.00`。
+    ///
+    /// 只有真并排放不下的地方才用——悬浮条详情卡片那一行要同时写重置提示与两个金额。
+    /// 单个数出现的地方（面板卡片、余额行）仍走 `usedText` 那套带代码的写法。
+    static func compactText(value: Double, unit: QuotaUnit) -> String {
+        // 非币种照旧：那套写法已经做了 K/M 压缩，不能为了换个写法反而变长。
+        guard let code = unit.label else { return format(value: value, unit: unit) }
+        let amount = String(format: "%.2f", value / unit.displayScale)
+        return "\(QuotaUnit.compactSymbol(for: code))\(amount)"
     }
 }
 

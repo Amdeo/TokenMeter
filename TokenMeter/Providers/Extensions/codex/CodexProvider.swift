@@ -19,6 +19,7 @@ struct CodexProviderDefinition: ProviderDefinition {
             iconResourceName: nil,
             fallbackSystemImage: "chevron.left.forwardslash.chevron.right",
             tintRGB: 0x10A37F,
+            railMarkResource: "openai",
             capabilityDescription: "支持 OpenAI Codex 订阅额度。",
             authPageURL: URL(string: "https://auth.openai.com/codex/device"),
             homepageURL: URL(string: "https://chatgpt.com"),

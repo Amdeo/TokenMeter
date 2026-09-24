@@ -42,10 +42,9 @@ struct SettingsAndNotificationTests {
     @Test
     func reportedAdaptiveHeightClampsToPanelBounds() {
         let navigation = freshPanelNavigationState()
-        navigation.beginAdding()
-        navigation.reportMeasuredHeight(PanelSize.minimumAdaptiveHeight - 1, for: .addProvider)
+        navigation.reportMeasuredHeight(PanelSize.minimumAdaptiveHeight - 1)
         #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
-        navigation.reportMeasuredHeight(PanelSize.maximumAdaptiveHeight + 1, for: .addProvider)
+        navigation.reportMeasuredHeight(PanelSize.maximumAdaptiveHeight + 1)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
     }
 
@@ -183,6 +182,32 @@ struct SettingsAndNotificationTests {
         #expect(settings.launchAtLogin)
         #expect(login.registerCount == 0)
         #expect(login.unregisterCount == 0)
+    }
+
+    @Test
+    func menuBarItemOpensPanelByDefaultAndPersists() {
+        let suite = "TokenMeterTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let makeStore = {
+            SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: FakeNotificationAuthorizationManager())
+        }
+
+        // 图标的主要用途就是弹面板，默认必须是开着的。
+        let settings = makeStore()
+        #expect(settings.menuBarItemOpensPanel)
+
+        settings.menuBarItemOpensPanel = false
+        #expect(!makeStore().menuBarItemOpensPanel)
+    }
+
+    /// 点状态栏图标的规则：只有「普通左击 + 面板开着」才弹面板，其余一律弹菜单。
+    @Test
+    func onlyAPlainLeftClickWithThePanelOnTogglesIt() {
+        #expect(StatusItemClick.resolve(isSecondary: false, opensPanel: true) == .togglePanel)
+        #expect(StatusItemClick.resolve(isSecondary: false, opensPanel: false) == .contextMenu)
+        #expect(StatusItemClick.resolve(isSecondary: true, opensPanel: true) == .contextMenu)
+        #expect(StatusItemClick.resolve(isSecondary: true, opensPanel: false) == .contextMenu)
     }
 
     @Test
@@ -627,7 +652,7 @@ struct PanelNavigationTests {
     }
 
     @Test
-    func manualOverviewHeightIsClampedAndDoesNotDisableOtherRouteMeasurements() {
+    func manualHeightIsClampedAndSurvivesMeasurements() {
         let suite = "TokenMeterTests.PanelHeight.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -638,60 +663,9 @@ struct PanelNavigationTests {
         navigation.setUserHeight(1_000, persist: false)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
 
-        navigation.reportMeasuredHeight(420, for: .overview)
+        // 手动高度在手，测量值不再改高度。
+        navigation.reportMeasuredHeight(420)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        navigation.route = .settings
-        navigation.reportMeasuredHeight(420, for: .settings)
-        #expect(navigation.panelSize.height == 420)
-        navigation.route = .overview
-        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-    }
-
-    @Test
-    func manualHeightPersistsForEveryPageCategory() {
-        let suite = "TokenMeterTests.PanelHeight.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-
-        let routes: [(PanelNavigationState.Route, Double)] = [
-            (.overview, 410),
-            (.settings, 420),
-            (.migration, 430),
-            (.addProvider, 440),
-            (.addConfiguration, 450),
-            (.editConfiguration(UUID()), 460),
-            (.appearance, 470),
-        ]
-        let navigation = PanelNavigationState(defaults: defaults)
-        for (route, height) in routes {
-            navigation.route = route
-            navigation.setUserHeight(CGFloat(height), persist: true)
-            navigation.reportMeasuredHeight(CGFloat(height + 100), for: route)
-            #expect(navigation.panelSize.height == height)
-        }
-
-        let restored = PanelNavigationState(defaults: defaults)
-        for (route, height) in routes {
-            restored.route = route
-            #expect(restored.hasManualHeight)
-            #expect(restored.panelSize.height == height)
-            #expect(restored.size(for: route).height == height)
-        }
-    }
-
-    @Test
-    func panelSizeIsRememberedPerRoute() {
-        let navigation = freshPanelNavigationState()
-        navigation.route = .settings
-        navigation.reportMeasuredHeight(700, for: .settings)
-        navigation.route = .addProvider
-        navigation.reportMeasuredHeight(500, for: .addProvider)
-
-        // 弹出/切回某个页面时取它自己的高度：借用别的页面的尺寸会让内容被居中裁掉上下两端。
-        #expect(navigation.size(for: .settings).height == 700)
-        #expect(navigation.size(for: .addProvider).height == 500)
-        // 没量过的页面沿用当前尺寸，内容随后报出的测量值再校准。
-        #expect(navigation.size(for: .migration).height == navigation.panelSize.height)
     }
 
     @Test
@@ -786,58 +760,33 @@ struct PanelNavigationTests {
     }
 
     @Test
-    func panelUsesCompactWidthForEveryRoute() {
+    func thePanelKeepsItsCompactWidth() {
         let navigation = freshPanelNavigationState()
         #expect(navigation.panelSize == .compact)
-        navigation.beginAdding()
-        #expect(navigation.panelSize == .compact)
-        navigation.selectProvider(.kimi)
-        #expect(navigation.panelSize == .compact)
-        navigation.returnToOverview()
-        navigation.route = .settings
-        #expect(navigation.panelSize == .compact)
-    }
-
-    @Test
-    func adaptivePanelHeightClampsAndIgnoresOtherRoutes() {
-        let navigation = freshPanelNavigationState()
-        navigation.beginAdding()
-        #expect(navigation.panelSize == .compact)
-        navigation.reportMeasuredHeight(100, for: .addProvider)
-        #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
-        navigation.reportMeasuredHeight(900, for: .addProvider)
-        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        navigation.reportMeasuredHeight(500, for: .settings)
-        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        navigation.route = .settings
-        // 自适应路由保持当前高度直到新页面测量（不再强制回 compact）
-        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
-        navigation.reportMeasuredHeight(400, for: .addProvider)
-        #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
+        navigation.reportMeasuredHeight(700)
+        #expect(navigation.panelSize.width == PanelSize.compact.width)
     }
 
     @Test
     func adaptivePanelMeasurementPreservesFixedWidthAndDeduplicatesTolerance() {
         let navigation = freshPanelNavigationState()
-        navigation.route = .addProvider
-        navigation.reportMeasuredHeight(400, for: .addProvider)
+        navigation.reportMeasuredHeight(400)
         #expect(navigation.panelSize.width == 340)
         let measured = navigation.panelSize
-        navigation.reportMeasuredHeight(400.5, for: .addProvider)
+        navigation.reportMeasuredHeight(400.5)
         #expect(navigation.panelSize == measured)
-        navigation.reportMeasuredHeight(402, for: .addProvider)
+        navigation.reportMeasuredHeight(402)
         #expect(navigation.panelSize.height == 402)
     }
     @Test
-    func overviewRouteGrowsWithSubscriptionContent() {
-        // 概览页随订阅列表增高：上报内容高度，钳制到最小/最大区间内
+    func thePanelGrowsWithItsContent() {
+        // 概览随订阅列表增高：上报内容高度，钳制到最小/最大区间内
         let navigation = freshPanelNavigationState()
-        navigation.route = .overview
-        navigation.reportMeasuredHeight(PanelSize.minimumAdaptiveHeight - 1, for: .overview)
+        navigation.reportMeasuredHeight(PanelSize.minimumAdaptiveHeight - 1)
         #expect(navigation.panelSize.height == PanelSize.minimumAdaptiveHeight)
-        navigation.reportMeasuredHeight(420, for: .overview)
+        navigation.reportMeasuredHeight(420)
         #expect(navigation.panelSize.height == 420)
-        navigation.reportMeasuredHeight(PanelSize.maximumAdaptiveHeight + 1, for: .overview)
+        navigation.reportMeasuredHeight(PanelSize.maximumAdaptiveHeight + 1)
         #expect(navigation.panelSize.height == PanelSize.maximumAdaptiveHeight)
     }
 
@@ -848,51 +797,10 @@ struct PanelNavigationTests {
         #expect(PanelLayoutMetrics.subscriptionListMaxHeight < PanelSize.maximumAdaptiveHeight)
         // 内容远超列表上限时，面板高度依然被全局钳制在最大高度内
         let navigation = freshPanelNavigationState()
-        navigation.route = .overview
         navigation.reportMeasuredHeight(
-            PanelLayoutMetrics.subscriptionListMaxHeight + PanelLayoutMetrics.rootVerticalChrome + 200,
-            for: .overview
+            PanelLayoutMetrics.subscriptionListMaxHeight + PanelLayoutMetrics.rootVerticalChrome + 200
         )
         #expect(navigation.panelSize.height <= PanelSize.maximumAdaptiveHeight)
-    }
-
-    @Test
-    func addingSelectionCreatesCleanDraftAndConfigurationRoute() {
-        let navigation = freshPanelNavigationState()
-        navigation.beginAdding()
-        #expect(navigation.draft == nil)
-        #expect(navigation.route == .addProvider)
-
-        navigation.selectProvider(.kimi)
-        let draft = navigation.draft
-        #expect(draft?.providerID == .kimi)
-        #expect(draft?.isDirty == false)
-        #expect(navigation.route == .addConfiguration)
-        if case .addConfiguration = navigation.content(for: []) {
-        } else { Issue.record("Provider selection did not resolve to add configuration") }
-    }
-
-    @Test
-    func editingFromCardCreatesDraftAndResolvesConfigurationRoute() {
-        let navigation = freshPanelNavigationState()
-        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .apiKey)
-        navigation.beginEditingConfiguration(subscription)
-        #expect(navigation.draft != nil)
-        #expect(navigation.route == .editConfiguration(subscription.id))
-        if case .editConfiguration(let draft, let resolved) = navigation.content(for: [subscription]) {
-            #expect(draft.original?.id == subscription.id)
-            #expect(resolved.id == subscription.id)
-            #expect(!draft.isDirty)
-        } else { Issue.record("Edit configuration route did not resolve") }
-    }
-
-    @Test
-    func invalidRouteStatesRecoverWithoutCreatingAddConfiguration() {
-        let navigation = freshPanelNavigationState()
-        navigation.route = .addConfiguration
-        #expect(isRecovery(navigation.content(for: [])))
-        navigation.route = .editConfiguration(UUID())
-        #expect(isRecovery(navigation.content(for: [])))
     }
 
     @Test
@@ -958,29 +866,11 @@ struct PanelNavigationTests {
         #expect(draft.browserImportSessionID != originalGeneration)
         #expect(!draft.isDirty)
     }
-    @Test
-    func returnToOverviewClearsDraftAndInvalidatesTasks() throws {
-        let navigation = freshPanelNavigationState()
-        navigation.beginAdding()
-        navigation.selectProvider(.deepSeek)
-        let draft = try #require(navigation.draft)
-        let generation = draft.oauthSessionID
-        navigation.returnToOverview()
-        #expect(navigation.draft == nil)
-        #expect(navigation.route == .overview)
-        #expect(draft.oauthSessionID != generation)
-    }
-
     private var testOAuthCredential: OAuthCredential {
         OAuthCredential(accessToken: "oauth", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
     }
 
     private var testBrowserCredential: BrowserTokenCredential {
         BrowserTokenCredential(accessToken: "browser", refreshToken: "refresh", expiresAt: .distantFuture, tokenType: "Bearer")
-    }
-
-    private func isRecovery(_ content: PanelNavigationState.Content) -> Bool {
-        if case .recovery = content { return true }
-        return false
     }
 }

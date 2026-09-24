@@ -4,44 +4,31 @@ import Testing
 import SwiftUI
 @testable import TokenMeter
 
-/// 菜单面板布局稳定性回归：路由切换时的尺寸同步、屏幕限高、真实根视图布局与容器圆角生命周期。
+/// 菜单面板布局稳定性回归：高度采纳与屏幕限高、真实根视图布局与容器圆角生命周期。
 @MainActor
 struct PanelLayoutStabilityTests {
 
-    // MARK: - 路由尺寸同步
+    // MARK: - 高度采纳
 
-    /// 切页必须立刻用目标页记住的高度（手动高度优先，其次是它上次的测量值）。
-    /// 窗口尺寸与 SwiftUI 根视图必须同时切换：只改其中一个时，原生窗口会停在旧高度，
-    /// 内容被居中裁掉首尾，顶部的返回按钮既看不到也点不到。
+    /// 面板只剩概览一页，高度只有两个来源：内容量出来的，和用户拖出来的。
+    /// 内容量出来的立刻生效（面板要随订阅增删变高变矮）。
     @Test
-    func routeSwitchAdoptsRememberedHeightBeforeThePageReportsBack() {
+    func measuredHeightBecomesThePanelHeight() {
         let navigation = freshNavigationState()
-        navigation.route = .settings
-        navigation.reportMeasuredHeight(700, for: .settings)
-        navigation.route = .addProvider
-        navigation.reportMeasuredHeight(500, for: .addProvider)
-
-        navigation.route = .settings
+        navigation.reportMeasuredHeight(700)
         #expect(navigation.panelSize.height == 700)
-
-        navigation.route = .addProvider
-        #expect(navigation.panelSize.height == 500)
-
-        // 没量过的页面沿用当前高度，等它自己报出测量值再校准。
-        navigation.route = .migration
+        navigation.reportMeasuredHeight(500)
         #expect(navigation.panelSize.height == 500)
     }
 
-    /// 手动高度优先于该页的历史测量值，往返也不丢。
+    /// 手动高度优先于测量值：用户拖出来的高度不该被下一次测量改掉。
     @Test
-    func routeSwitchAdoptsManualHeightAheadOfMeasurement() {
+    func manualHeightOutranksMeasurement() {
         let navigation = freshNavigationState()
-        navigation.route = .settings
         navigation.setUserHeight(640, persist: false)
-        navigation.route = .overview
-        navigation.reportMeasuredHeight(500, for: .overview)
-        navigation.route = .settings
+        navigation.reportMeasuredHeight(500)
         #expect(navigation.panelSize.height == 640)
+        #expect(navigation.hasManualHeight)
     }
 
     // MARK: - 屏幕边界
@@ -101,7 +88,7 @@ struct PanelLayoutStabilityTests {
     @Test
     func screenLimitNeverStretchesAShortPanel() {
         let navigation = freshNavigationState()
-        navigation.reportMeasuredHeight(400, for: .overview)
+        navigation.reportMeasuredHeight(400)
         navigation.setMaximumVisibleHeight(684)
         #expect(navigation.displayedSize.height == 400)
         #expect(!navigation.isHeightLimitedByScreen)
@@ -112,18 +99,18 @@ struct PanelLayoutStabilityTests {
     @Test
     func clampedMeasurementDoesNotPoisonTheDesiredHeight() {
         let navigation = freshNavigationState()
-        navigation.reportMeasuredHeight(880, for: .overview)
+        navigation.reportMeasuredHeight(880)
         navigation.setMaximumVisibleHeight(684)
         #expect(navigation.displayedSize.height == 684)
 
-        navigation.reportMeasuredHeight(684, for: .overview)
+        navigation.reportMeasuredHeight(684)
         #expect(navigation.panelSize.height == 880)
 
         navigation.setMaximumVisibleHeight(nil)
         #expect(navigation.displayedSize.height == 880)
 
         // 限高解除后测量重新生效
-        navigation.reportMeasuredHeight(520, for: .overview)
+        navigation.reportMeasuredHeight(520)
         #expect(navigation.panelSize.height == 520)
     }
 

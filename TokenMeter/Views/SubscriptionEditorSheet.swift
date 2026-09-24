@@ -1,26 +1,37 @@
 import SwiftUI
 import AppKit
 
-struct SubscriptionEditorSheet: View {
+/// 订阅编辑器正文：订阅信息 / 外观入口 / 悬浮条 / 认证方式 + 底栏 + 全部认证与保存逻辑。
+///
+/// 只在独立设置窗口里用（订阅子页与「添加订阅…」页）。它曾经也由菜单面板的 TM-04 / TM-05
+/// 宿主，那两页已经删掉了，所以当时为两个宿主准备的两个旋钮（`heightRoute`、
+/// `showsBackButton` / `showsCancel`）也一并消失——窗口里的子页是被选中的，没有上一页。
+struct SubscriptionEditorContent: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let subscription: Subscription?
-    let onClose: () -> Void
+    /// 编辑结束（保存成功 / 删除）时调用。窗口宿主据此重建草稿或清掉选中。
+    let onFinish: () -> Void
     let onAppearance: () -> Void
+    /// 新建订阅保存成功时回调，带上刚建出来的订阅 id。
+    ///
+    /// 窗口宿主用它把侧边栏选中切到刚建的这条订阅上。
+    var onCreated: ((UUID) -> Void)?
     @Bindable var draft: SubscriptionEditorDraft
     @State private var showDeleteConfirmation = false
-    @State private var showDiscardConfirmation = false
 
     init(
         draft: SubscriptionEditorDraft,
         subscription: Subscription? = nil,
-        onClose: @escaping () -> Void = {},
-        onAppearance: @escaping () -> Void = {}
+        onFinish: @escaping () -> Void = {},
+        onAppearance: @escaping () -> Void = {},
+        onCreated: ((UUID) -> Void)? = nil
     ) {
         self.subscription = subscription
-        self.onClose = onClose
+        self.onFinish = onFinish
         self.onAppearance = onAppearance
+        self.onCreated = onCreated
         self.draft = draft
     }
 
@@ -42,13 +53,16 @@ struct SubscriptionEditorSheet: View {
         selectedAuthMethod?.flowID ?? .apiKey
     }
 
+    /// 页头的返回动作。窗口里的订阅子页是被侧边栏选中的，没有上一页，所以恒为 nil。
+    private var backAction: (() -> Void)? { nil }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PageHeader(
                 definition: providerDefinition,
                 title: providerDefinition.metadata.displayName,
                 subtitle: "配置订阅",
-                onBack: attemptClose
+                onBack: backAction
             )
             if let homepageURL = providerDefinition.metadata.homepageURL {
                 OfficialSiteLink(host: homepageURL.host() ?? homepageURL.absoluteString) { openURL(homepageURL) }
@@ -65,6 +79,7 @@ struct SubscriptionEditorSheet: View {
                             action: onAppearance
                         )
                     }
+                    SubscriptionRailSection(draft: draft)
                     SheetSection(title: "认证方式", subtitle: "凭证只会写入 TokenMeter 本地私有文件，不会保存到订阅元数据。") {
                         AuthMethodSelection(
                             authMethods: providerDefinition.authMethods,
@@ -96,45 +111,16 @@ struct SubscriptionEditorSheet: View {
                     }
                 }
                 .padding(.vertical, 18)
-                .reportsIntrinsicPanelHeight(
-                    route: subscription.map { .editConfiguration($0.id) } ?? .addConfiguration,
-                    chrome: PanelLayoutMetrics.pageChrome
-                )
             }
             .scrollIndicators(.hidden)
-            HStack(spacing: 10) {
-                if isEditing {
-                    Button("删除订阅", role: .destructive) { showDeleteConfirmation = true }
-                        .buttonStyle(.plain).foregroundStyle(TM.danger)
-                }
-                Spacer()
-                Button("取消", action: attemptClose).keyboardShortcut(.cancelAction)
-                Button(isEditing ? "保存修改" : "添加订阅", action: save)
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                    .disabled(!canSave || draft.isAuthenticating)
-            }
-            .font(.system(size: 12)).padding(.top, 10).padding(.bottom, 8)
+            footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: draft.authMethodID) { _, _ in
             draft.clearAuthenticationState()
         }
         .overlay {
-            if showDiscardConfirmation {
-                ConfirmDialog(
-                    title: "放弃更改？",
-                    message: "未保存的内容将丢失，正在进行的认证流程也会被取消。",
-                    confirmTitle: "放弃更改",
-                    onConfirm: {
-                        showDiscardConfirmation = false
-                        onClose()
-                    },
-                    onCancel: {
-                        withAnimation(reduceMotion ? .none : .easeOut(duration: 0.15)) { showDiscardConfirmation = false }
-                    }
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            } else if showDeleteConfirmation {
+            if showDeleteConfirmation {
                 ConfirmDialog(
                     title: "删除订阅",
                     message: "将删除「\(subscription?.name ?? "")」的订阅与本地凭证，此操作不可撤销。",
@@ -152,6 +138,32 @@ struct SubscriptionEditorSheet: View {
         }
     }
 
+    /// 底栏：一条细线把它与滚上去的内容分开，自己钉在页面底部。
+    ///
+    /// 只有「保存」一个主按钮，永远在同一个位置够得着；删除在另一头，隔开一整行，
+    /// 它还会再问一次，所以不怕点错。省略号是 macOS 的规矩：这个按钮会先弹一个确认框。
+    private var footer: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(TM.divider)
+                .frame(height: 1)
+
+            HStack(spacing: 10) {
+                if isEditing {
+                    Button("删除订阅…", role: .destructive) { showDeleteConfirmation = true }
+                        .buttonStyle(.plain).foregroundStyle(TM.danger)
+                }
+                Spacer()
+                Button("保存", action: save)
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .disabled(!canSave || draft.isAuthenticating)
+            }
+            .font(.system(size: 12))
+            .padding(.top, 12)
+            .padding(.bottom, 6)
+        }
+    }
+
     private var canSave: Bool {
         AuthFlowRegistry.canSave(
             originalAuthMethodID: subscription?.authMethodID,
@@ -161,7 +173,6 @@ struct SubscriptionEditorSheet: View {
         )
     }
 
-    private func attemptClose() { if draft.isDirty { showDiscardConfirmation = true } else { onClose() } }
     private func save() { subscription.map { saveEditing($0) } ?? saveNew() }
 
     private func saveNew() {
@@ -171,13 +182,15 @@ struct SubscriptionEditorSheet: View {
             name: trimmedName.isEmpty ? providerDefinition.metadata.displayName : trimmedName,
             authMethodID: draft.authMethodID,
             quotaColors: draft.quotaColors,
-            cardStyle: draft.cardStyle
+            cardStyle: draft.cardStyle,
+            rail: draft.rail
         )
         do {
             try saveCredential(for: subscription.id)
             store.add(subscription)
             guard let persistenceError = store.lastPersistenceError else {
-                onClose()
+                onCreated?(subscription.id)
+                onFinish()
                 store.refresh(subscription)
                 return
             }
@@ -230,8 +243,16 @@ struct SubscriptionEditorSheet: View {
             }
             updated.cardStyle = draft.cardStyle
         }
+        if draft.rail != subscription.rail {
+            store.updateRailSettings(draft.rail, for: subscription)
+            if let persistenceError = store.lastPersistenceError {
+                draft.message = persistenceError
+                return
+            }
+            updated.rail = draft.rail
+        }
 
-        onClose()
+        onFinish()
         store.refresh(updated)
     }
 
@@ -239,7 +260,7 @@ struct SubscriptionEditorSheet: View {
         try AuthFlowRegistry.saveCredential(for: id, flowID: authFlowID, draft: draft)
     }
 
-    private func deleteSubscription() { guard let subscription else { return }; store.remove(subscription); onClose() }
+    private func deleteSubscription() { guard let subscription else { return }; store.remove(subscription); onFinish() }
     private func resetOAuthState() { draft.clearOAuthAuthentication() }
     private func cancelOAuth() { resetOAuthState() }
 
@@ -363,10 +384,30 @@ struct PageHeader: View {
     let definition: any ProviderDefinition
     let title: String
     let subtitle: String
-    let onBack: () -> Void
+    /// 返回入口。nil 表示这个宿主没有上一页可返回（独立窗口里的订阅子页就是这样），
+    /// 此时页头只画标记与标题。
+    let onBack: (() -> Void)?
+    let backLabel: String
+
+    init(
+        definition: any ProviderDefinition,
+        title: String,
+        subtitle: String,
+        onBack: (() -> Void)? = nil,
+        backLabel: String = "返回概览"
+    ) {
+        self.definition = definition
+        self.title = title
+        self.subtitle = subtitle
+        self.onBack = onBack
+        self.backLabel = backLabel
+    }
+
     var body: some View {
         HStack(spacing: 10) {
-            HeaderIconButton(systemName: "chevron.left", label: "返回概览", action: onBack)
+            if let onBack {
+                HeaderIconButton(systemName: "chevron.left", label: backLabel, action: onBack)
+            }
             PlatformLogo(definition: definition, size: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -416,7 +457,9 @@ private struct OfficialSiteLink: View {
 
 // MARK: - 通用组件
 
-private struct SheetSection<Content: View>: View {
+/// 编辑页里的一节：小标题 + 说明 + 内容。`SubscriptionEditorContent` 与
+/// `SubscriptionRailSection`（在 `Rail/` 里）共用它。
+struct SheetSection<Content: View>: View {
     let title: String
     let subtitle: String
     @ViewBuilder let content: () -> Content

@@ -12,14 +12,9 @@ struct PanelSize: Equatable, Sendable {
     static let measurementTolerance = 1.0
 }
 
-struct PanelHeightMeasurement: Equatable {
-    let route: PanelNavigationState.Route
-    let height: CGFloat
-}
-
 struct PanelHeightPreferenceKey: PreferenceKey {
-    static let defaultValue: PanelHeightMeasurement? = nil
-    static func reduce(value: inout PanelHeightMeasurement?, nextValue: () -> PanelHeightMeasurement?) {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
         value = nextValue() ?? value
     }
 }
@@ -32,88 +27,65 @@ struct SubscriptionRowHeightsPreferenceKey: PreferenceKey {
     }
 }
 
+/// 菜单面板的状态：它的尺寸，以及 Debug 的状态预览。
+///
+/// 它以前还管着面板里的**路由**——设置、添加订阅、编辑订阅、外观、数据迁移都曾是面板里的
+/// 二级页。那些现在都在独立设置窗口里，面板只剩概览一页，所以「按路由记住高度」那一整套
+/// 也随之消失：高度只剩一个手动值和一个测量值。
+///
+/// 名字里的 `Navigation` 是历史遗留。`Services/` 不是文件系统同步组，改文件名要同时改
+/// `project.pbxproj` 的三处条目，不值得为一个名字付那份代价。
 @MainActor
 @Observable
 final class PanelNavigationState {
-    enum Route: Equatable, Hashable {
-        case overview
-        case settings
-        case migration
-        case addProvider
-        case addConfiguration
-        case editConfiguration(UUID)
-        /// 外观二级页（卡片样式 + 配色 + 预览）；从新建/编辑配置页进入，返回仍在原配置页。
-        case appearance
-    }
+    /// Debug 的状态预览（TM-06）由状态栏右键菜单触发，所以状态放在这里而不是视图的
+    /// `@State`：菜单是 `MenuBarPanelController` 建的，它够不到视图内部的状态。
+    #if DEBUG
+    var previewMode: StatusPreviewMode?
+    #endif
 
-    enum Content {
-        case overview
-        case settings
-        case migration
-        case addProvider
-        case addConfiguration(SubscriptionEditorDraft)
-        case editConfiguration(draft: SubscriptionEditorDraft, subscription: Subscription)
-        case appearance(SubscriptionEditorDraft)
-        case recovery
-    }
-
-    var route: Route = .overview {
-        didSet {
-            guard route != oldValue else { return }
-            // 切页立刻用上目标页记住的高度（手动高度优先，其次它上次的测量值）。
-            // 如果等新页面报出测量值再改，两次更新之间原生窗口与 SwiftUI 根视图会不同高，
-            // 内容被居中裁掉首尾，顶部的返回按钮既看不到也点不到。
-            let adopted = size(for: route)
-            guard adopted != panelSize else { return }
-            panelSize = adopted
-        }
-    }
-    var draft: SubscriptionEditorDraft?
     private(set) var panelSize = PanelSize.compact
     /// 当前屏幕可视区允许的面板高度上限；由窗口控制器按锚定屏幕设置。
     /// 只是显示上限：既不写回 `panelSize`，也不影响用户保存的手动高度。
     private(set) var maximumVisibleHeight: Double?
-    private var manualHeights: [HeightRoute: Double] = [:]
-    /// 每个路由最后量到的高度：切页与弹出面板都按当前路由取，不借用其它页面的尺寸
-    /// （否则内容比窗口高时 SwiftUI 根视图会被居中，上下两端一起被裁）。
-    private var measuredHeights: [Route: Double] = [:]
+    /// 用户拖出来的高度；nil 表示按内容自适应。
+    private var manualHeight: Double?
     private let defaults: UserDefaults
 
-    var hasManualHeight: Bool { manualHeight(for: route) != nil }
+    /// 手动高度的存储键。**沿用概览页当年的键**：面板只剩这一页，用户在旧版本里拖出来的
+    /// 高度就该继续是这一页的高度，没有理由让他们重拖一次。
+    private static let manualHeightKey = "panel.overviewHeight"
+
+    var hasManualHeight: Bool { manualHeight != nil }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        for heightRoute in HeightRoute.allCases {
-            guard let savedHeight = defaults.object(forKey: heightRoute.defaultsKey) as? Double,
-                  savedHeight.isFinite else { continue }
-            manualHeights[heightRoute] = Self.clampedHeight(savedHeight)
-        }
-        if let manualHeight = manualHeight(for: route) {
-            panelSize = PanelSize(width: PanelSize.compact.width, height: manualHeight)
-        }
+        guard let saved = defaults.object(forKey: Self.manualHeightKey) as? Double, saved.isFinite else { return }
+        let clamped = Self.clampedHeight(saved)
+        manualHeight = clamped
+        panelSize = PanelSize(width: PanelSize.compact.width, height: clamped)
     }
 
-    func reportMeasuredHeight(_ height: CGFloat, for measuredRoute: Route) {
-        guard measuredRoute == route, height.isFinite else { return }
+    func reportMeasuredHeight(_ height: CGFloat) {
+        guard height.isFinite else { return }
         let clamped = Self.clampedHeight(Double(height))
         // 被屏幕限高时窗口比期望高度矮，此时量到的高度正好等于窗口高度，说明它是被裁出来的，
         // 不是内容的自适应高度；采纳它会让屏幕恢复后高度回不来。
         guard !isHeightLimitedByScreen
             || abs(clamped - displayedSize.height) >= PanelSize.measurementTolerance else { return }
-        measuredHeights[measuredRoute] = clamped
-        guard manualHeight(for: measuredRoute) == nil else { return }
+        guard manualHeight == nil else { return }
         guard abs(clamped - panelSize.height) >= PanelSize.measurementTolerance else { return }
         panelSize = PanelSize(width: PanelSize.compact.width, height: clamped)
     }
 
     /// 面板实际显示的高度：高过屏幕可视区时窗口顶部会跑到屏幕上沿之外
-    /// （返回按钮跟着消失），所以窗口与 SwiftUI 根视图都按它收缩。
+    /// （顶部内容跟着消失），所以窗口与 SwiftUI 根视图都按它收缩。
     var displayedSize: PanelSize {
         guard let maximumVisibleHeight else { return panelSize }
         return PanelSize(width: panelSize.width, height: min(panelSize.height, maximumVisibleHeight))
     }
 
-    /// 屏幕限高是否正在生效：窗口比期望高度矮，页面拿到的高度也被压缩。
+    /// 屏幕限高是否正在生效：窗口比期望高度矮，内容拿到的高度也被压缩。
     var isHeightLimitedByScreen: Bool {
         guard let maximumVisibleHeight else { return false }
         return maximumVisibleHeight < panelSize.height - PanelSize.measurementTolerance
@@ -125,120 +97,20 @@ final class PanelNavigationState {
         maximumVisibleHeight = resolved
     }
 
-    /// 某个路由的目标尺寸：手动高度优先，其次它上次的测量值；都没有就沿用当前尺寸，
-    /// 内容随后报出的测量值会把它校准。切页与弹出面板都走它。
-    func size(for route: Route) -> PanelSize {
-        if let manualHeight = manualHeight(for: route) {
-            return PanelSize(width: PanelSize.compact.width, height: manualHeight)
-        }
-        guard let measured = measuredHeights[route] else { return panelSize }
-        return PanelSize(width: PanelSize.compact.width, height: measured)
-    }
-
     func setUserHeight(_ height: CGFloat, persist: Bool) {
         guard height.isFinite else { return }
         let clamped = Self.clampedHeight(Double(height))
-        let heightRoute = HeightRoute(route)
-        manualHeights[heightRoute] = clamped
+        manualHeight = clamped
         if abs(clamped - panelSize.height) >= PanelSize.measurementTolerance {
             panelSize = PanelSize(width: PanelSize.compact.width, height: clamped)
         }
         if persist {
-            defaults.set(clamped, forKey: heightRoute.defaultsKey)
-        }
-    }
-
-    private func manualHeight(for route: Route) -> Double? {
-        manualHeights[HeightRoute(route)]
-    }
-
-    private enum HeightRoute: String, CaseIterable {
-        case overview
-        case settings
-        case migration
-        case addProvider
-        case addConfiguration
-        case editConfiguration
-        case appearance
-
-        init(_ route: Route) {
-            self = switch route {
-            case .overview: .overview
-            case .settings: .settings
-            case .migration: .migration
-            case .addProvider: .addProvider
-            case .addConfiguration: .addConfiguration
-            case .editConfiguration: .editConfiguration
-            case .appearance: .appearance
-            }
-        }
-
-        var defaultsKey: String {
-            self == .overview ? "panel.overviewHeight" : "panel.\(rawValue)Height"
+            defaults.set(clamped, forKey: Self.manualHeightKey)
         }
     }
 
     private static func clampedHeight(_ height: Double) -> Double {
         min(max(height, PanelSize.minimumAdaptiveHeight), PanelSize.maximumAdaptiveHeight)
-    }
-
-    func beginAdding() {
-        draft = nil
-        route = .addProvider
-    }
-
-    func selectProvider(_ providerID: ProviderID) {
-        draft = SubscriptionEditorDraft(providerID: providerID)
-        route = .addConfiguration
-    }
-
-    func beginEditingConfiguration(_ subscription: Subscription) {
-        draft = SubscriptionEditorDraft(subscription: subscription)
-        route = .editConfiguration(subscription.id)
-    }
-
-    func content(for subscriptions: [Subscription]) -> Content {
-        switch route {
-        case .overview: return .overview
-        case .settings: return .settings
-        case .migration: return .migration
-        case .addProvider: return .addProvider
-        case .addConfiguration:
-            guard let draft, draft.original == nil else { return .recovery }
-            return .addConfiguration(draft)
-        case .editConfiguration(let id):
-            guard let draft, draft.original?.id == id,
-                  let subscription = subscriptions.first(where: { $0.id == id })
-            else { return .recovery }
-            return .editConfiguration(draft: draft, subscription: subscription)
-        case .appearance:
-            guard let draft else { return .recovery }
-            return .appearance(draft)
-        }
-    }
-
-    /// 进入外观二级页：草稿由配置页延续，样式与颜色改动仍属于同一次编辑。
-    func showAppearanceSettings() {
-        guard draft != nil else { return }
-        route = .appearance
-    }
-
-    /// 从外观页返回它来自的配置页（新建或编辑），不丢草稿。
-    func returnToEditor() {
-        guard let draft else { returnToOverview(); return }
-        route = draft.original.map { .editConfiguration($0.id) } ?? .addConfiguration
-    }
-
-    func returnToSettings() {
-        draft?.cancelTasks()
-        draft = nil
-        route = .settings
-    }
-
-    func returnToOverview() {
-        draft?.cancelTasks()
-        draft = nil
-        route = .overview
     }
 }
 
@@ -262,6 +134,8 @@ final class SubscriptionEditorDraft {
     /// 按卡片样式隔离的进度条配色；编辑页读写的是 `currentQuotaColors`。
     var quotaColors: SubscriptionQuotaPalette
     var cardStyle: SubscriptionCardStyle
+    /// 悬浮条上的呈现配置：是否显示、追踪哪个额度、环的颜色。
+    var rail: SubscriptionRailSettings
     var apiKey = ""
     var oauthCredential: OAuthCredential?
     var browserCredential: BrowserTokenCredential?
@@ -292,6 +166,7 @@ final class SubscriptionEditorDraft {
         name = ""
         quotaColors = SubscriptionQuotaPalette()
         cardStyle = .standard
+        rail = SubscriptionRailSettings()
     }
 
     init(subscription: Subscription) {
@@ -304,6 +179,7 @@ final class SubscriptionEditorDraft {
         name = subscription.name
         quotaColors = subscription.quotaColors
         cardStyle = subscription.cardStyle
+        rail = subscription.rail
     }
 
     var isEditing: Bool { original != nil }
@@ -330,6 +206,7 @@ final class SubscriptionEditorDraft {
                 || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 || !quotaColors.isEmpty
                 || cardStyle != .standard
+                || rail != SubscriptionRailSettings()
         }
         return providerID != initialProviderID
             || authMethodID != originalAuthMethodID
@@ -337,6 +214,7 @@ final class SubscriptionEditorDraft {
             || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             || quotaColors != original?.quotaColors
             || cardStyle != (original?.cardStyle ?? .standard)
+            || rail != (original?.rail ?? SubscriptionRailSettings())
     }
 
     func cancelTasks() {

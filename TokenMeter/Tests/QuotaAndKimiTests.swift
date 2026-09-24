@@ -913,6 +913,66 @@ extension QuotaAndKimiTests {
         let persisted = try JSONDecoder().decode([Subscription].self, from: Data(contentsOf: fixture.metadataURL))
         #expect(persisted.map(\.id) == [recovered.id])
     }
+
+    // MARK: - 金额的紧凑写法
+
+    /// 悬浮条详情卡片那一行要并排放两个金额，`USD 1761.00 / USD 2304.00` 放不下。
+    /// 紧凑写法是符号 `$1761.00 / $2304.00`，与面板的 Siyu 卡片同一份。
+    @Test
+    func compactTextUsesASymbolForCurrencyAndKeepsCodeForUnknownOnes() {
+        #expect(Quota.compactText(value: 1761, unit: .currency(code: "USD", scale: 1)) == "$1761.00")
+        #expect(Quota.compactText(value: 1234, unit: .currency(code: "CNY", scale: 100)) == "¥12.34")
+        #expect(Quota.compactText(value: 1.5, unit: .currency(code: "ABC", scale: 1)) == "ABC 1.50")
+        // 非币种照旧走带 K/M 压缩的写法——不为了换个写法反而变长。
+        #expect(Quota.compactText(value: 4_234_112, unit: .tokens) == Quota(name: "q", used: 4_234_112, limit: 1, resetAt: nil).usedText)
+    }
+
+    // MARK: - 显示顺序
+
+    @Test @MainActor
+    func movingByOneSwapsWithTheNeighbour() throws {
+        let fixture = try UsageStoreFixture()
+        defer { fixture.remove() }
+        let store = fixture.makeStore()
+        let a = Subscription(providerID: .kimi, name: "A")
+        let b = Subscription(providerID: .deepSeek, name: "B")
+        let c = Subscription(providerID: .claude, name: "C")
+        [a, b, c].forEach(store.add)
+
+        store.moveSubscription(b.id, by: -1)
+        #expect(store.subscriptions.map(\.id) == [b.id, a.id, c.id])
+
+        store.moveSubscription(b.id, by: 1)
+        #expect(store.subscriptions.map(\.id) == [a.id, b.id, c.id])
+
+        // 越界不动。
+        store.moveSubscription(a.id, by: -1)
+        #expect(store.subscriptions.map(\.id) == [a.id, b.id, c.id])
+        store.moveSubscription(c.id, by: 1)
+        #expect(store.subscriptions.map(\.id) == [a.id, b.id, c.id])
+    }
+
+    /// 拖动的项落在目标当前的位置：目标往下（拖自上而来）或往原地（拖自下而来）让位。
+    @Test @MainActor
+    func draggingOntoAnotherRowLandsAtThatRowsPlace() throws {
+        let fixture = try UsageStoreFixture()
+        defer { fixture.remove() }
+        let store = fixture.makeStore()
+        let a = Subscription(providerID: .kimi, name: "A")
+        let b = Subscription(providerID: .deepSeek, name: "B")
+        let c = Subscription(providerID: .claude, name: "C")
+        [a, b, c].forEach(store.add)
+
+        store.moveSubscription(a.id, onto: c.id)
+        #expect(store.subscriptions.map(\.id) == [b.id, c.id, a.id])
+
+        store.moveSubscription(c.id, onto: b.id)
+        #expect(store.subscriptions.map(\.id) == [c.id, b.id, a.id])
+
+        // 重启之后顺序还在：排序走同一份持久化。
+        let reloaded = fixture.makeStore()
+        #expect(reloaded.subscriptions.map(\.id) == [c.id, b.id, a.id])
+    }
 }
 
 @MainActor

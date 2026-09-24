@@ -160,6 +160,28 @@ final class UsageStore {
         saveSubscriptions()
     }
 
+    /// 上移 / 下移一格（设置里的箭头）：与邻居互换。越界不动。
+    func moveSubscription(_ id: UUID, by offset: Int) {
+        guard canMutateSubscriptions,
+              let from = subscriptions.firstIndex(where: { $0.id == id }),
+              subscriptions.indices.contains(from + offset) else { return }
+        subscriptions.swapAt(from, from + offset)
+        saveSubscriptions()
+    }
+
+    /// 拖到另一项的位置上（设置里的拖放）：拖动的项落在目标当前的位置。
+    func moveSubscription(_ id: UUID, onto targetID: UUID) {
+        guard id != targetID,
+              canMutateSubscriptions,
+              let from = subscriptions.firstIndex(where: { $0.id == id }),
+              let to = subscriptions.firstIndex(where: { $0.id == targetID }) else { return }
+        var order = subscriptions
+        let subscription = order.remove(at: from)
+        order.insert(subscription, at: min(to, order.count))
+        subscriptions = order
+        saveSubscriptions()
+    }
+
     func remove(_ subscription: Subscription) {
         guard canMutateSubscriptions else { return }
         subscriptions.removeAll { $0.id == subscription.id }
@@ -202,6 +224,13 @@ final class UsageStore {
     func updateCardStyle(_ cardStyle: SubscriptionCardStyle, for subscription: Subscription) {
         guard canMutateSubscriptions, let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return }
         subscriptions[index].cardStyle = cardStyle
+        saveSubscriptions()
+    }
+
+    /// 写入悬浮条上的呈现配置（是否显示、追踪哪个额度、环的颜色）。
+    func updateRailSettings(_ rail: SubscriptionRailSettings, for subscription: Subscription) {
+        guard canMutateSubscriptions, let index = subscriptions.firstIndex(where: { $0.id == subscription.id }) else { return }
+        subscriptions[index].rail = rail
         saveSubscriptions()
     }
 
