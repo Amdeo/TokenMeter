@@ -139,7 +139,7 @@ If TokenMeter saves you time, you can tip via WeChat Pay:
 
 ## Acknowledgements
 
-TokenMeter learned a great deal from another open-source project, [Pulse](https://github.com/qunqin24/Pulse) (Apache License 2.0): the screen-edge usage rail, the settings window's card scaffolding (`SettingsGroup` / `SettingsRow` / `SettingsNavigation`), the detail card's outline, the per-account panel settings, and the release tooling (the single-source `VERSION`, `scripts/dmg.sh`, `scripts/appcast.py`, and how the release doc and the changelog are organized) all came from it, rewritten for TokenMeter's data model and interface; the places that were ported say so in the code, where the comments read `移植自 Pulse 的 X`. Pulse's license is compatible with this project's GPL-3.0.
+TokenMeter borrows a few things from another open-source project, [Pulse](https://github.com/qunqin24/Pulse) (Apache License 2.0), and uses them here: the screen-edge usage rail, the settings window's card scaffolding (`SettingsGroup` / `SettingsRow` / `SettingsNavigation`), the detail card's outline, the per-account panel settings, and the release tooling (the single-source `VERSION`, `scripts/dmg.sh`, `scripts/appcast.py`, and how the release doc and the changelog are organized). Each of them is implemented against TokenMeter's own data model and interface; where code was taken directly from Pulse, the comment says `移植自 Pulse 的 X`. TokenMeter is a project of its own rather than a fork of Pulse, and what came directly from Pulse stays under its Apache License 2.0, which this project's GPL-3.0 is compatible with.
 
 In-app updates use [Sparkle](https://github.com/sparkle-project/Sparkle) (MIT License).
 

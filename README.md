@@ -140,7 +140,7 @@ TokenMeter 不包含遥测、崩溃上报或广告代码，但它会直接访问
 
 ## 致谢
 
-TokenMeter 参考了另一个开源项目 [Pulse](https://github.com/qunqin24/Pulse)（Apache License 2.0）：屏幕边缘的用量悬浮条、设置窗口的卡片脚手架（`SettingsGroup` / `SettingsRow` / `SettingsNavigation`）、详情卡片的轮廓、每账号的面板设置，以及发版那套工具（`VERSION` 单一来源、`scripts/dmg.sh`、`scripts/appcast.py`、发版文档与 CHANGELOG 的组织方式）都从它那里学来，再按 TokenMeter 的数据模型与界面习惯重写；代码里对应的地方都注明了「移植自 Pulse 的 X」。Pulse 的协议与本项目的 GPL-3.0 兼容。
+TokenMeter 借鉴了另一个开源项目 [Pulse](https://github.com/qunqin24/Pulse)（Apache License 2.0），把它的几样东西拿过来用在了这里：屏幕边缘的用量悬浮条、设置窗口的卡片脚手架（`SettingsGroup` / `SettingsRow` / `SettingsNavigation`）、详情卡片的轮廓、每账号的面板设置，以及发版那套工具（`VERSION` 单一来源、`scripts/dmg.sh`、`scripts/appcast.py`、发版文档与 CHANGELOG 的组织方式）。它们都按 TokenMeter 自己的数据模型与界面习惯来实现；凡是直接取自 Pulse 的代码，注释里都写了「移植自 Pulse 的 X」。TokenMeter 是独立项目，不是 Pulse 的 fork；直接取自 Pulse 的那部分仍在其 Apache License 2.0 之下，与本项目的 GPL-3.0 兼容。
 
 应用内更新使用 [Sparkle](https://github.com/sparkle-project/Sparkle)（MIT License）。
 
