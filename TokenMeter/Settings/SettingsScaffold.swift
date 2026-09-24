@@ -25,7 +25,9 @@ struct SettingsGroup<Content: View>: View {
                     .padding(.leading, 4)
             }
 
-            VStack(spacing: 0) {
+            // 左对齐而不是居中：`SettingsRow` 靠 `Spacer` 自己占满整行，居中对它没有影响，
+            // 但卡片里若放的是裸文本，居中会把整段话挪到卡片中间去。
+            VStack(alignment: .leading, spacing: 0) {
                 content
             }
             .background(TM.cardFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -90,6 +92,27 @@ struct SettingsRow<Control: View>: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .frame(minHeight: 44)
+    }
+}
+
+/// 卡片里不放控件的一段内容：状态行、说明文字、报错。
+///
+/// `SettingsRow` 自带内边距，裸着放进 `SettingsGroup` 的文本会一直贴到卡片边线上——
+/// 圆角与描边正好压着第一个字。这一层补上同一份内边距，多行内容之间再留一点行距。
+struct SettingsNote<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 }
 

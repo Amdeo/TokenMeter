@@ -19,6 +19,12 @@ struct SettingsWindowView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
+    /// 禁用行的整体淡出。
+    ///
+    /// `.disabled` 只改交互，macOS 不会因此把这一行画淡——少了这一层，
+    /// 一行按不动的开关看起来和能按的一模一样。
+    private static let disabledRowOpacity = 0.55
+
     var body: some View {
         NavigationSplitView {
             sidebar
@@ -196,6 +202,7 @@ struct SettingsWindowView: View {
                     }
                 }
                 .disabled(!settings.autoRefreshEnabled)
+                .opacity(settings.autoRefreshEnabled ? 1 : Self.disabledRowOpacity)
             }
 
             SettingsGroup("外观") {
@@ -221,21 +228,23 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup {
-                HStack(spacing: 6) {
-                    Text(settings.loginItemStatus.label)
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.textTertiary)
-                    Spacer()
-                    Button("刷新状态") { settings.refreshLoginItemStatus() }
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.accent)
-                        .buttonStyle(.plain)
-                }
-                if let error = settings.loginItemError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.danger)
-                        .fixedSize(horizontal: false, vertical: true)
+                SettingsNote {
+                    HStack(spacing: 6) {
+                        Text(settings.loginItemStatus.label)
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.textTertiary)
+                        Spacer()
+                        Button("刷新状态") { settings.refreshLoginItemStatus() }
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.accent)
+                            .buttonStyle(.plain)
+                    }
+                    if let error = settings.loginItemError {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
@@ -352,10 +361,12 @@ struct SettingsWindowView: View {
             orderGroup
 
             SettingsGroup {
-                Text("悬浮条一整天停在屏幕边上：鼠标划过展开，悬停某个图标看详情，点击刷新该订阅，右键切换位置。每条订阅自己那一份（是否上条、环追哪个额度、环什么颜色）在它的订阅设置里。")
-                    .font(.system(size: 11))
-                    .foregroundStyle(TM.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+                SettingsNote {
+                    Text("悬浮条一整天停在屏幕边上：鼠标划过展开，悬停某个图标看详情，点击刷新该订阅，右键切换位置。每条订阅自己那一份（是否上条、环追哪个额度、环什么颜色）在它的订阅设置里。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -465,36 +476,38 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(settings.notificationStatus == .authorized ? TM.ok : TM.warn)
-                        .frame(width: 6, height: 6)
-                    Text(settings.notificationStatusLabel)
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.textSecondary)
-                    Spacer()
-                    if settings.notificationStatus == .notDetermined {
-                        Button("允许通知") { settings.requestNotificationsIfNeeded() }
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(TM.accent)
-                            .buttonStyle(.plain)
-                    } else if settings.notificationStatus == .denied {
-                        Button("前往系统设置") { settings.openNotificationSettings() }
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(TM.accent)
-                            .buttonStyle(.plain)
+                SettingsNote {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(settings.notificationStatus == .authorized ? TM.ok : TM.warn)
+                            .frame(width: 6, height: 6)
+                        Text(settings.notificationStatusLabel)
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.textSecondary)
+                        Spacer()
+                        if settings.notificationStatus == .notDetermined {
+                            Button("允许通知") { settings.requestNotificationsIfNeeded() }
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(TM.accent)
+                                .buttonStyle(.plain)
+                        } else if settings.notificationStatus == .denied {
+                            Button("前往系统设置") { settings.openNotificationSettings() }
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(TM.accent)
+                                .buttonStyle(.plain)
+                        }
                     }
-                }
-                if settings.notificationStatus == .denied {
-                    Text("请在 系统设置 → 通知 → TokenMeter 中开启。")
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.textTertiary)
-                }
-                if let error = settings.notificationRequestError {
-                    Text(error)
-                        .font(.system(size: 11))
-                        .foregroundStyle(TM.danger)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if settings.notificationStatus == .denied {
+                        Text("请在 系统设置 → 通知 → TokenMeter 中开启。")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.textTertiary)
+                    }
+                    if let error = settings.notificationRequestError {
+                        Text(error)
+                            .font(.system(size: 11))
+                            .foregroundStyle(TM.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
@@ -555,9 +568,11 @@ struct SettingsWindowView: View {
             }
 
             SettingsGroup {
-                Label("凭据以本地明文文件保存，受文件权限保护", systemImage: "lock.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(TM.textTertiary)
+                SettingsNote {
+                    Label("凭据以本地明文文件保存，受文件权限保护", systemImage: "lock.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(TM.textTertiary)
+                }
             }
         }
     }
