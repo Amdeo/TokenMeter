@@ -2,6 +2,64 @@
 
 All notable changes are documented here. Each entry is bilingual — 中文在前，English 在后.
 
+## 0.4.0 — 2026-09-25
+
+**中文**
+
+**应用内更新（Sparkle）**
+
+- 应用能自己更新了：后台按 `SUScheduledCheckInterval`（两小时）查一次新版本，找到后弹的是 Sparkle 自己的窗口，下载、验签、安装、重启一并做完。
+- 手动检查有两个入口：菜单栏图标右键菜单的「检查更新…」，以及设置窗口「应用」页版本号右边的「检查更新…」按钮（在测试宿主等不能检查的进程里，按钮留着但按不动）。
+- 更新源是 `main` 上的 `appcast.xml`，条目指向 GitHub Release 里的 zip；地址由 `Info.plist` 的 `SUFeedURL` 固定，信任由 `SUPublicEDKey` 固定。
+- 更新包的完整性由 Sparkle 的 EdDSA 签名保证，与 Apple 账号无关：feed 里带签名，app 里带公钥，签名对不上的包一律不装。自动检查开着、`SUAutomaticallyUpdate` 关着——查到新版本仍由用户确认再装。
+
+**发布产物新增 DMG**
+
+- 每个版本除了 zip 与同名 `.sha256`，多一个 `TokenMeter-<version>-macos-universal.dmg`：卷名是「TokenMeter <version>」，卷里只有 app 和指向 `/Applications` 的符号链接，把它拖过去就算装完。
+- 由 `scripts/dmg.sh <app 路径> [输出目录]` 打出（输出目录默认 `dist/`），全程不碰 GUI：不挂载镜像、不跑 AppleScript、不经过 Finder，因此没有桌面会话的 CI runner 也能跑。可重复执行，失败会把 staging 目录与半个 DMG 一并清掉。
+- 版本号读自 app 自己的 `CFBundleShortVersionString`，DMG 名字与卷名不会和 app 本体各说各话。
+
+**发版流水线：ad-hoc 签名与自动更新 appcast**
+
+- 构建完成后由内向外 ad-hoc 签名（`Updater.app` / `Downloader.xpc` / `Installer.xpc` → `Sparkle.framework` → app，`codesign --sign -`），签完用 `codesign --verify --deep --strict` 自检：Sparkle 的 XPC 服务在未签名的 bundle 里不会加载。
+- 发布成功后多一步「Offer it to Sparkle」：切回 `main`，用 `scripts/appcast.py <version> <zip 路径> <下载 URL>` 给 zip 签名（私钥来自仓库 secret `SPARKLE_PRIVATE_KEY`）并把 `<item>` 插到 `appcast.xml` 最前，以 `github-actions[bot]` 提交 `Offer <version> to Sparkle` 推回 `main`，最后回读远端确认——推不上去就报 `::error::` 让这次发布显性失败，而不是悄悄没人能更新。
+- feed 条目带 `sparkle:version` / `sparkle:shortVersionString` / `sparkle:minimumSystemVersion`（14.0） / `sparkle:edSignature` / `length`，更新说明由 CHANGELOG 该版本一节转成 HTML 随 feed 下发。脚本只改 `appcast.xml`、不做任何 git 操作，同一个版本重复跑不会插出两条。
+- 校验和与签名并存：`.sha256` 供人手工核对下载，EdDSA 签名由 Sparkle 自动验。
+- 版本号带 `-` 的预发布在 GitHub 上会标成 pre-release，但 Sparkle 的 feed 不区分渠道——装了的人一样会收到。
+
+**签名、公证与首次打开**
+
+- app 与 DMG 都没有 Developer ID 签名、也没有公证，因为维护者不是苹果开发者：首次打开仍会被 Gatekeeper 拦下（「无法验证开发者」或「已损坏」），放行要用户自己动手——右键 app →「打开」，或到「系统设置 → 隐私与安全性」点「仍要打开」。zip 下载同样如此。
+- 这是有意的取舍，不是打包漏了一步：本机 ad-hoc 签名只为了让 Sparkle 的 XPC 能被加载，更新包的完整性由 EdDSA 签名保证，与有没有 Apple 账号无关。
+
+**English**
+
+**In-app updates (Sparkle)**
+
+- The app updates itself now: it checks for a new version in the background every two hours (`SUScheduledCheckInterval`), and Sparkle's own window takes it from there — download, signature check, install and relaunch in one go.
+- Two ways to check by hand: 检查更新… in the menu-bar item's right-click menu, and 检查更新… next to the version on the settings window's 应用 page (kept visible but disabled in a process that cannot check, such as the test host).
+- The feed is `appcast.xml` on `main`, whose items point at the ZIP on the GitHub Release; `SUFeedURL` in `Info.plist` fixes the address and `SUPublicEDKey` fixes the trust.
+- An update's integrity rests on Sparkle's EdDSA signature and owes nothing to an Apple account: the feed carries the signature, the app carries the public half, and an archive that does not match is never installed. Automatic checks are on and `SUAutomaticallyUpdate` is off, so installing a version that was found is still the user's call.
+
+**A DMG among the release assets**
+
+- Each release now ships `TokenMeter-<version>-macos-universal.dmg` alongside the ZIP and its matching `.sha256`: the volume is named TokenMeter <version> and holds the app plus a symlink to /Applications, so dragging it across is the whole install.
+- Built by `scripts/dmg.sh <app path> [output directory]` (the output directory defaults to `dist/`), which stays clear of the GUI — no mounted image, no AppleScript, no Finder — so a CI runner with no desktop session is enough. Repeatable, and a failure takes its staging directory and the half-written DMG with it.
+- The file name and the volume name read the version from the app's own `CFBundleShortVersionString`, so the artifact cannot disagree with the app it carries.
+
+**The release pipeline: ad-hoc signing and a self-updating appcast**
+
+- The app is now ad-hoc signed from the inside out once it is built (Updater.app / Downloader.xpc / Installer.xpc → Sparkle.framework → the app, with `codesign --sign -`), and the result is checked with `codesign --verify --deep --strict`: Sparkle's XPC services will not load out of an unsigned bundle.
+- A new step offers the ZIP to Sparkle once the release is published: it checks out `main`, runs `scripts/appcast.py <version> <zip path> <download URL>` to sign the archive (private key from the `SPARKLE_PRIVATE_KEY` repository secret) and insert the `<item>` at the top of `appcast.xml`, commits that as `github-actions[bot]` under the subject `Offer <version> to Sparkle`, pushes it to `main`, and reads the feed back off the remote — a push that did not land fails the release loudly instead of quietly leaving every installed copy on the old version.
+- The item carries `sparkle:version`, `sparkle:shortVersionString`, `sparkle:minimumSystemVersion` (14.0), `sparkle:edSignature` and `length`, with the release notes rendered from this version's CHANGELOG entry and delivered inside the feed. The script writes `appcast.xml` and nothing else — no git operations — and running it twice for one version adds no second item.
+- Checksums and signatures sit side by side on purpose: the `.sha256` file is for a human checking a download, the EdDSA signature is what Sparkle verifies.
+- A version number carrying `-` is marked pre-release on GitHub, but Sparkle's feed has no channels — installed copies are offered it just the same.
+
+**Signing, notarization and the first launch**
+
+- Neither the app nor the DMG carries a Developer ID signature, and neither is notarized, because the maintainer is not an Apple developer: Gatekeeper still stops the first launch of a download (「无法验证开发者」 or 「已损坏」), and letting it through is a manual step — right-click the app → 打开, or 系统设置 → 隐私与安全性 → 仍要打开. The ZIP download is the same.
+- That is a deliberate trade rather than a missing packaging step: the local ad-hoc signature exists only so that Sparkle's XPC services load at all, and an update's integrity is guaranteed by the EdDSA signature, with no Apple account involved either way.
+
 ## 0.3.0 — 2026-09-25
 
 **中文**
