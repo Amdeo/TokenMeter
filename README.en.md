@@ -19,7 +19,7 @@
 - **Official plans and relays in one place**: 11 providers, so official subscription quota windows and third-party relay balances need one tool and one sign-in, not two.
 - **Three authentication styles**: API key, OAuth (device flow / authorization code), and **browser session** — sign in once inside the embedded browser; no token copying and no plugins.
 - **Quota windows and balances side by side**: 5-hour / weekly / monthly windows, plan quotas, and account balances rendered as provider-specific cards, with multiple accounts and drag-to-reorder.
-- **Native**: Swift 6 + SwiftUI/AppKit with no third-party dependencies; lives in the menu bar and refreshes in the background, configurable from 60 seconds to 30 minutes.
+- **Native**: Swift 6 + SwiftUI/AppKit, whose only third-party dependency is Sparkle for in-app updates; lives in the menu bar and refreshes in the background, configurable from 60 seconds to 30 minutes.
 - **Quiet notifications**: only low balances, failed authentication, and repeated service errors — never quota exhaustion or plan expiry noise.
 - **Transparent and local**: no telemetry, no ads, no crash reporting; credentials stay in a private local file (directory `0700`, file `0600`), and an encrypted migration package is available.
 - **Extensible**: a new provider is one folder under `Providers/Extensions/<id>/` plus one line in `ProviderCatalog` — see the [provider development guide](docs/provider-development.md).
@@ -129,13 +129,21 @@ Do not publish these files, screenshots, logs, or browser exports. See [SECURITY
 
 ## Development and contributing
 
-The project uses Swift 6, SwiftUI, AppKit, ServiceManagement, and UserNotifications, with no third-party dependencies. The offline test requirement and contribution process are in [CONTRIBUTING.md](CONTRIBUTING.md); provider changes must also follow the [provider development guide](docs/provider-development.md). Public reports belong in GitHub Issues—never attach API keys, tokens, cookies, or a complete credential file.
+The project uses Swift 6, SwiftUI, AppKit, ServiceManagement, and UserNotifications; its only third-party dependency is [Sparkle](https://github.com/sparkle-project/Sparkle), for in-app updates. The offline test requirement and contribution process are in [CONTRIBUTING.md](CONTRIBUTING.md); provider changes must also follow the [provider development guide](docs/provider-development.md). Public reports belong in GitHub Issues—never attach API keys, tokens, cookies, or a complete credential file.
 
 ## Sponsor
 
 If TokenMeter saves you time, you can tip via WeChat Pay:
 
 <img src="docs/images/wechat-donate.png" alt="WeChat Pay QR code" width="260">
+
+## Acknowledgements
+
+TokenMeter learned a great deal from another open-source project, [Pulse](https://github.com/qunqin24/Pulse) (Apache License 2.0): the screen-edge usage rail, the settings window's card scaffolding (`SettingsGroup` / `SettingsRow` / `SettingsNavigation`), the detail card's outline, the per-account panel settings, and the release tooling (the single-source `VERSION`, `scripts/dmg.sh`, `scripts/appcast.py`, and how the release doc and the changelog are organized) all came from it, rewritten for TokenMeter's data model and interface; the places that were ported say so in the code, where the comments read `移植自 Pulse 的 X`. Pulse's license is compatible with this project's GPL-3.0.
+
+In-app updates use [Sparkle](https://github.com/sparkle-project/Sparkle) (MIT License).
+
+The rail's provider marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons) (MIT License) by way of Pulse; see [`TokenMeter/Rail/Marks/CREDITS.md`](TokenMeter/Rail/Marks/CREDITS.md) for the per-file details.
 
 ## License
 

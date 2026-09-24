@@ -20,7 +20,7 @@
 - **官方订阅与中转站放在一起**：11 个供应商，既有官方订阅的额度窗口，也有第三方中转站的账户余额，不用开两个工具、两套登录。
 - **三种认证都支持**：API Key、OAuth（设备授权 / 授权码），以及**网页登录态**——在内置浏览器里登录一次即可，不需要手动抠 token，也不用装插件。
 - **额度窗口与余额混排**：5 小时 / 每周 / 每月窗口、套餐额度与账户余额按供应商自适应成卡片，支持多账户与拖拽排序。
-- **原生实现**：Swift 6 + SwiftUI/AppKit，不含第三方依赖；菜单栏常驻，后台刷新 60 秒～30 分钟可调。
+- **原生实现**：Swift 6 + SwiftUI/AppKit，第三方依赖只有应用内更新用的 Sparkle；菜单栏常驻，后台刷新 60 秒～30 分钟可调。
 - **克制的通知**：只报低余额、认证失效与连续服务错误，不推送额度耗尽、套餐到期这类噪音。
 - **透明且本地**：无遥测、无广告、无崩溃上报；凭据只保存在本机私有文件（目录 `0700`、文件 `0600`），并提供加密的凭据迁移包。
 - **可扩展**：新增一个供应商 = `Providers/Extensions/<id>/` 下一个目录 + `ProviderCatalog` 一行，参见[供应商开发指南](docs/provider-development.md)。
@@ -130,13 +130,21 @@ TokenMeter 不包含遥测、崩溃上报或广告代码，但它会直接访问
 
 ## 开发与贡献
 
-项目使用 Swift 6、SwiftUI、AppKit、ServiceManagement 和 UserNotifications，不含第三方依赖。离线测试与贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；新增供应商还必须遵循[供应商开发指南](docs/provider-development.md)。公开问题请使用 GitHub Issues，并且绝不要附带 API Key、token、cookie 或完整凭据文件。
+项目使用 Swift 6、SwiftUI、AppKit、ServiceManagement 和 UserNotifications，第三方依赖只有应用内更新用的 [Sparkle](https://github.com/sparkle-project/Sparkle)。离线测试与贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；新增供应商还必须遵循[供应商开发指南](docs/provider-development.md)。公开问题请使用 GitHub Issues，并且绝不要附带 API Key、token、cookie 或完整凭据文件。
 
 ## 打赏
 
 如果 TokenMeter 帮你省了时间，欢迎用微信扫码打赏：
 
 <img src="docs/images/wechat-donate.png" alt="微信赞赏码" width="260">
+
+## 致谢
+
+TokenMeter 参考了另一个开源项目 [Pulse](https://github.com/qunqin24/Pulse)（Apache License 2.0）：屏幕边缘的用量悬浮条、设置窗口的卡片脚手架（`SettingsGroup` / `SettingsRow` / `SettingsNavigation`）、详情卡片的轮廓、每账号的面板设置，以及发版那套工具（`VERSION` 单一来源、`scripts/dmg.sh`、`scripts/appcast.py`、发版文档与 CHANGELOG 的组织方式）都从它那里学来，再按 TokenMeter 的数据模型与界面习惯重写；代码里对应的地方都注明了「移植自 Pulse 的 X」。Pulse 的协议与本项目的 GPL-3.0 兼容。
+
+应用内更新使用 [Sparkle](https://github.com/sparkle-project/Sparkle)（MIT License）。
+
+悬浮条上的供应商标记来自 [Lobe Icons](https://github.com/lobehub/lobe-icons)（MIT License），经 Pulse 整理后取用，明细见 [`TokenMeter/Rail/Marks/CREDITS.md`](TokenMeter/Rail/Marks/CREDITS.md)。
 
 ## 许可证
 
