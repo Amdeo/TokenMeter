@@ -25,6 +25,7 @@ xcuserdata/
 .codebase-memory/
 .context7/
 .zcode/
+.kimi-code/
 
 # macOS
 .DS_Store
