@@ -38,7 +38,7 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         // 悬浮条的放置由窗口控制器与设置窗口共用：设置窗口里那个「位置」选择器
         // 改的就是它。
         let placement = RailPlacement.restored()
-        startRail(store: store, settings: settings, placement: placement, panel: controller)
+        startRail(store: store, settings: settings, placement: placement)
         startSettings(store: store, settings: settings, placement: placement, panel: controller)
     }
 
@@ -49,13 +49,14 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
     private func startRail(
         store: UsageStore,
         settings: SettingsStore,
-        placement: RailPlacement,
-        panel: MenuBarPanelController
+        placement: RailPlacement
     ) {
         let rail = RailWindowController(store: store, settings: settings, placement: placement)
 
-        railMenuActions.onOpenPanel = { [weak panel] in panel?.present() }
         railMenuActions.onOpenSettings = { [weak self] in self?.settingsController?.show(pane: .general) }
+        // 「常显示」就是设置里那个「离开时自动收起」的反面。菜单里说正面：
+        // 勾上 = 不收，因为勾选项上写「离开时自动收起」会让人分不清勾了到底收不收。
+        railMenuActions.onToggleAlwaysVisible = { settings.railAutoCollapse.toggle() }
         railMenuActions.onMove = { [weak rail] dock in
             rail?.move(to: dock)
         }
@@ -63,7 +64,10 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
             store.stop()
             NSApplication.shared.terminate(nil)
         }
-        rail.contextMenu = { [weak self] in self?.railMenu(placement) ?? NSMenu() }
+        let actions = railMenuActions
+        rail.contextMenu = {
+            RailContextMenu.build(placement: placement, settings: settings, actions: actions)
+        }
 
         rail.start()
         railController = rail
@@ -89,47 +93,6 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
             window?.show(pane: .subscription(id))
         }
         settingsController = window
-    }
-
-    private func railMenu(_ placement: RailPlacement) -> NSMenu {
-        let menu = NSMenu()
-
-        let open = NSMenuItem(title: "打开 TokenMeter", action: #selector(RailMenuActions.openPanel), keyEquivalent: "")
-        open.target = railMenuActions
-        menu.addItem(open)
-
-        let settingsItem = NSMenuItem(title: "设置…", action: #selector(RailMenuActions.openSettings), keyEquivalent: "")
-        settingsItem.target = railMenuActions
-        menu.addItem(settingsItem)
-
-        menu.addItem(.separator())
-
-        // 位置放在菜单里而不是只放设置页里：它作用的对象就是这条条本身，
-        // 而拖动已经能做同一件事，菜单只是给一个说得清楚的做法。
-        let position = NSMenuItem(title: "位置", action: nil, keyEquivalent: "")
-        let submenu = NSMenu()
-        let options: [(String, RailDock, Selector)] = [
-            ("贴到屏幕左侧", .edge(.left), #selector(RailMenuActions.dockLeft)),
-            ("贴到屏幕右侧", .edge(.right), #selector(RailMenuActions.dockRight)),
-            ("贴到屏幕顶部", .edge(.top), #selector(RailMenuActions.dockTop)),
-            ("自由悬浮", .floating, #selector(RailMenuActions.float)),
-        ]
-        for (title, dock, action) in options {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-            item.target = railMenuActions
-            item.state = placement.dock == dock ? .on : .off
-            submenu.addItem(item)
-        }
-        position.submenu = submenu
-        menu.addItem(position)
-
-        menu.addItem(.separator())
-
-        let quit = NSMenuItem(title: "退出 TokenMeter", action: #selector(RailMenuActions.quit), keyEquivalent: "")
-        quit.target = railMenuActions
-        menu.addItem(quit)
-
-        return menu
     }
 
     /// 设置一变就让悬浮条跟上：开关它、换层级、换空间策略、起停跨屏跟随、按新的尺寸预算重摆。
