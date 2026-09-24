@@ -927,6 +927,52 @@ extension QuotaAndKimiTests {
         #expect(Quota.compactText(value: 4_234_112, unit: .tokens) == Quota(name: "q", used: 4_234_112, limit: 1, resetAt: nil).usedText)
     }
 
+    // MARK: - 显示顺序
+
+    @Test @MainActor
+    func movingByOneSwapsWithTheNeighbour() throws {
+        let fixture = try UsageStoreFixture()
+        defer { fixture.remove() }
+        let store = fixture.makeStore()
+        let a = Subscription(providerID: .kimi, name: "A")
+        let b = Subscription(providerID: .deepSeek, name: "B")
+        let c = Subscription(providerID: .claude, name: "C")
+        [a, b, c].forEach(store.add)
+
+        store.moveSubscription(b.id, by: -1)
+        #expect(store.subscriptions.map(\.id) == [b.id, a.id, c.id])
+
+        store.moveSubscription(b.id, by: 1)
+        #expect(store.subscriptions.map(\.id) == [a.id, b.id, c.id])
+
+        // 越界不动。
+        store.moveSubscription(a.id, by: -1)
+        #expect(store.subscriptions.map(\.id) == [a.id, b.id, c.id])
+        store.moveSubscription(c.id, by: 1)
+        #expect(store.subscriptions.map(\.id) == [a.id, b.id, c.id])
+    }
+
+    /// 拖动的项落在目标当前的位置：目标往下（拖自上而来）或往原地（拖自下而来）让位。
+    @Test @MainActor
+    func draggingOntoAnotherRowLandsAtThatRowsPlace() throws {
+        let fixture = try UsageStoreFixture()
+        defer { fixture.remove() }
+        let store = fixture.makeStore()
+        let a = Subscription(providerID: .kimi, name: "A")
+        let b = Subscription(providerID: .deepSeek, name: "B")
+        let c = Subscription(providerID: .claude, name: "C")
+        [a, b, c].forEach(store.add)
+
+        store.moveSubscription(a.id, onto: c.id)
+        #expect(store.subscriptions.map(\.id) == [b.id, c.id, a.id])
+
+        store.moveSubscription(c.id, onto: b.id)
+        #expect(store.subscriptions.map(\.id) == [c.id, b.id, a.id])
+
+        // 重启之后顺序还在：排序走同一份持久化。
+        let reloaded = fixture.makeStore()
+        #expect(reloaded.subscriptions.map(\.id) == [c.id, b.id, a.id])
+    }
 }
 
 @MainActor

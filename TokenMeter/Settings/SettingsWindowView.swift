@@ -12,6 +12,9 @@ struct SettingsWindowView: View {
     let railPlacement: RailPlacement
     @Bindable var navigation: SettingsNavigation
 
+    /// 「显示顺序」里被拖放悬停的那一行，用来高亮它。
+    @State private var dropTargetID: UUID?
+
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
@@ -323,11 +326,89 @@ struct SettingsWindowView: View {
                 )
             }
 
+            orderGroup
+
             SettingsGroup {
                 Text("悬浮条一整天停在屏幕边上：鼠标划过展开，悬停某个图标看详情，点击刷新该订阅，右键切换位置。每条订阅自己那一份（是否上条、环追哪个额度、环什么颜色）在它的订阅设置里。")
                     .font(.system(size: 11))
                     .foregroundStyle(TM.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// 「显示顺序」：悬浮条上环的顺序、面板里卡片的顺序、侧边栏的顺序，都是这一个。
+    ///
+    /// 箭头与拖放都给（移植自 Pulse 的 Order 组）：箭头是一格一格的精确做法，
+    /// 也是键盘与辅助功能唯一能走的路；拖放一次跨很多格。悬停中的目标行高亮一下，
+    /// 不然放手前不知道会落在谁身上。
+    @ViewBuilder
+    private var orderGroup: some View {
+        if !store.subscriptions.isEmpty {
+            SettingsGroup("显示顺序") {
+                ForEach(Array(store.subscriptions.enumerated()), id: \.element.id) { index, subscription in
+                    if index > 0 { SettingsRowDivider() }
+                    orderRow(subscription, index: index)
+                }
+            }
+        }
+    }
+
+    private func orderRow(_ subscription: Subscription, index: Int) -> some View {
+        let metadata = ProviderRegistry.definition(for: subscription.providerID)?.metadata
+        return SettingsRow(
+            subscription.name,
+            // 排一个悬浮条上没有的东西，看起来像是箭头没生效。
+            subtitle: subscription.rail.showsInRail ? nil : "未显示在悬浮条上",
+            icon: metadata?.railMarkResource,
+            iconFallback: metadata?.fallbackSystemImage ?? "questionmark"
+        ) {
+            HStack(spacing: 4) {
+                Button { store.moveSubscription(subscription.id, by: -1) } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .disabled(index == 0)
+                .accessibilityLabel("将「\(subscription.name)」上移一格")
+
+                Button { store.moveSubscription(subscription.id, by: 1) } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .disabled(index == store.subscriptions.count - 1)
+                .accessibilityLabel("将「\(subscription.name)」下移一格")
+            }
+            .buttonStyle(.borderless)
+        }
+        // 整行都能被拖：只有文字能起拖的话，多数人试不出来有拖放。
+        .contentShape(.rect)
+        .background(dropTargetID == subscription.id ? TM.accent.opacity(0.12) : Color.clear)
+        .draggable(subscription.id.uuidString) {
+            // 系统默认的拖拽图是整行——整个窗口宽的一坨。拖拽图只需要标记与名字。
+            HStack(spacing: 8) {
+                ProviderMarkView(
+                    resource: metadata?.railMarkResource,
+                    fallbackSystemImage: metadata?.fallbackSystemImage ?? "questionmark",
+                    size: 15
+                )
+                Text(subscription.name)
+                    .font(.system(size: 13))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        .dropDestination(for: String.self) { ids, _ in
+            dropTargetID = nil
+            guard let dragged = ids.first.flatMap(UUID.init(uuidString:)),
+                  store.subscriptions.contains(where: { $0.id == dragged })
+            else { return false }
+            store.moveSubscription(dragged, onto: subscription.id)
+            return true
+        } isTargeted: { isTargeted in
+            // 进出两行的报告顺序没人保证，所以清掉要按身份来，
+            // 不能在离开时无条件清——会把下一行刚设上的高亮抹掉。
+            if isTargeted {
+                dropTargetID = subscription.id
+            } else if dropTargetID == subscription.id {
+                dropTargetID = nil
             }
         }
     }
