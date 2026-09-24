@@ -34,6 +34,7 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         let controller = MenuBarPanelController(store: store, navigation: navigation)
         controller.start()
         panelController = controller
+        observePanelSettings(settings, controller: controller)
 
         // 悬浮条的放置由窗口控制器与设置窗口共用：设置窗口里那个「位置」选择器
         // 改的就是它。
@@ -118,6 +119,21 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 controller.settingsChanged()
                 self.observeRailSettings(settings, controller: controller)
+            }
+        }
+    }
+
+    /// 「点击图标弹出面板」改了要让面板跟上：关掉时把已经弹出的那个收掉。
+    ///
+    /// 与悬浮条那份观察同一个套路：`onChange` 只报一次，回调里要重新注册。
+    private func observePanelSettings(_ settings: SettingsStore, controller: MenuBarPanelController) {
+        withObservationTracking {
+            _ = settings.menuBarItemOpensPanel
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                controller.settingsChanged()
+                self.observePanelSettings(settings, controller: controller)
             }
         }
     }

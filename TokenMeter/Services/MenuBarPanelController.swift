@@ -180,6 +180,22 @@ private final class MenuBarHostingView: NSHostingView<AnyView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
+/// 点一下状态栏图标该做什么。
+///
+/// 左击开关面板；右击只弹菜单。二次点击有多种来源：真右键（rightMouseDown）、
+/// control-左击，以及第三方鼠标工具合成的事件；只要不是普通左击都按二次点击处理。
+///
+/// 设置里关掉「点击图标弹出面板」之后，左击也落到菜单那一支：图标还在，
+/// 只是点击与右键同一个结果。
+enum StatusItemClick: Equatable {
+    case togglePanel
+    case contextMenu
+
+    static func resolve(isSecondary: Bool, opensPanel: Bool) -> Self {
+        isSecondary || !opensPanel ? .contextMenu : .togglePanel
+    }
+}
+
 @MainActor
 final class MenuBarPanelController: NSObject {
     private let store: UsageStore
@@ -376,18 +392,19 @@ final class MenuBarPanelController: NSObject {
         panel.isVisible ? hidePanel() : showPanel()
     }
 
-    /// 左击开关面板；右击只弹菜单（先把面板收起）。
-    /// 二次点击有多种来源：真右键（rightMouseDown）、control-左击，以及
-    /// 第三方鼠标工具合成的事件；只要不是普通左击都按二次点击处理。
+    /// 左击开关面板；右击只弹菜单（先把面板收起）。规则本身在 `StatusItemClick`。
     @objc private func handleStatusItemClick() {
         let event = NSApp.currentEvent
         let isSecondary = event?.type == .rightMouseDown
             || event?.modifierFlags.contains(.control) == true
-        guard isSecondary else {
-            togglePanel()
-            return
+        let action = StatusItemClick.resolve(
+            isSecondary: isSecondary,
+            opensPanel: store.settings.menuBarItemOpensPanel
+        )
+        switch action {
+        case .togglePanel: togglePanel()
+        case .contextMenu: presentContextMenu()
         }
-        presentContextMenu()
     }
 
     /// 弹出右击菜单。statusItem.menu 非空说明正处在菜单弹出期间，忽略重入。
@@ -462,13 +479,11 @@ final class MenuBarPanelController: NSObject {
         NSApplication.shared.terminate(nil)
     }
 
-    /// 从外面（悬浮条的右键菜单）把管理面板叫出来。
+    /// 设置里改了「点击图标弹出面板」：关掉的那一刻把已经弹出的面板收掉。
     ///
-    /// 只开这一个入口，`showPanel` 的显示语义（先定位、再激活、再 makeKey）
-    /// 仍然只写在它自己那一处。
-    func present() {
-        guard isStarted else { return }
-        showPanel()
+    /// 图标本身不动——它还在菜单栏上，左键从此只弹菜单。
+    func settingsChanged() {
+        if !store.settings.menuBarItemOpensPanel { hidePanel() }
     }
 
     private func showPanel() {

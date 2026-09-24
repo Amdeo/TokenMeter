@@ -186,6 +186,14 @@ struct SettingsWindowView: View {
                 )
             }
 
+            SettingsGroup("菜单栏") {
+                toggle(
+                    "点击图标弹出面板",
+                    subtitle: "关掉之后图标还在，只是左键改弹右键那个菜单；面板从此只有这个图标能打开。",
+                    isOn: $settings.menuBarItemOpensPanel
+                )
+            }
+
             SettingsGroup {
                 HStack(spacing: 6) {
                     Text(settings.loginItemStatus.label)

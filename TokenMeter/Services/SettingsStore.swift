@@ -116,6 +116,14 @@ final class SettingsStore {
         }
     }
 
+    /// 点菜单栏图标是否弹出概览面板。
+    ///
+    /// 关掉之后图标还在，只是左键不再弹面板——与右键一样弹那个菜单（添加订阅 / 设置 / 退出）。
+    /// 面板本身仍然可以从悬浮条的右键菜单打开。默认打开：图标的主要用途就是弹面板。
+    var menuBarItemOpensPanel: Bool {
+        didSet { defaults.set(menuBarItemOpensPanel, forKey: Keys.menuBarItemOpensPanel) }
+    }
+
     /// 是否显示贴边/悬浮的常驻悬浮条。
     ///
     /// 默认关闭：它是一个常驻在屏幕上的元素，不该在用户没要求的时候出现。
@@ -247,6 +255,7 @@ final class SettingsStore {
         lowBalanceAlerts = defaults.object(forKey: Keys.lowBalanceAlerts) as? Bool ?? true
         authenticationAlerts = defaults.object(forKey: Keys.authenticationAlerts) as? Bool ?? true
         serviceErrorAlerts = defaults.object(forKey: Keys.serviceErrorAlerts) as? Bool ?? false
+        menuBarItemOpensPanel = defaults.object(forKey: Keys.menuBarItemOpensPanel) as? Bool ?? true
         railEnabled = defaults.object(forKey: Keys.railEnabled) as? Bool ?? false
         railAutoCollapse = defaults.object(forKey: Keys.railAutoCollapse) as? Bool ?? true
         railFollowsActiveDisplay = defaults.object(forKey: Keys.railFollowsActiveDisplay) as? Bool ?? false
@@ -350,6 +359,7 @@ final class SettingsStore {
         static let serviceErrorAlerts = "settings.serviceErrorAlerts"
         static let cnyThreshold = "settings.cnyBalanceThreshold"
         static let usdThreshold = "settings.usdBalanceThreshold"
+        static let menuBarItemOpensPanel = "settings.menuBarItemOpensPanel"
         static let railEnabled = "settings.railEnabled"
         static let railAutoCollapse = "settings.railAutoCollapse"
         static let railFollowsActiveDisplay = "settings.railFollowsActiveDisplay"

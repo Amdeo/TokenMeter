@@ -185,6 +185,32 @@ struct SettingsAndNotificationTests {
     }
 
     @Test
+    func menuBarItemOpensPanelByDefaultAndPersists() {
+        let suite = "TokenMeterTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let makeStore = {
+            SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager(), notificationManager: FakeNotificationAuthorizationManager())
+        }
+
+        // 图标的主要用途就是弹面板，默认必须是开着的。
+        let settings = makeStore()
+        #expect(settings.menuBarItemOpensPanel)
+
+        settings.menuBarItemOpensPanel = false
+        #expect(!makeStore().menuBarItemOpensPanel)
+    }
+
+    /// 点状态栏图标的规则：只有「普通左击 + 面板开着」才弹面板，其余一律弹菜单。
+    @Test
+    func onlyAPlainLeftClickWithThePanelOnTogglesIt() {
+        #expect(StatusItemClick.resolve(isSecondary: false, opensPanel: true) == .togglePanel)
+        #expect(StatusItemClick.resolve(isSecondary: false, opensPanel: false) == .contextMenu)
+        #expect(StatusItemClick.resolve(isSecondary: true, opensPanel: true) == .contextMenu)
+        #expect(StatusItemClick.resolve(isSecondary: true, opensPanel: false) == .contextMenu)
+    }
+
+    @Test
     func failedLoginItemChangesDoNotAttemptOppositeOperation() {
         let suite = "TokenMeterTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
