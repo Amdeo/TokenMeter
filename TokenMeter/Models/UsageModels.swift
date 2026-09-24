@@ -549,6 +549,20 @@ enum QuotaUnit: Codable, Sendable, Equatable {
         if case .currency(_, let scale) = self { return scale }
         return 1
     }
+
+    /// 金额前面的紧凑符号，用在两个数并排的地方（详情卡片的「已用 / 上限」）。
+    ///
+    /// 「USD 1761.00 / USD 2304.00」在 280pt 的卡片里放不下，而 `$1761.00 / $2304.00` 放得下。
+    /// 认不出的币种照旧写代码——宁可长一点也不写错符号。
+    static func compactSymbol(for code: String) -> String {
+        switch code {
+        case "USD": "$"
+        case "CNY", "JPY": "¥"
+        case "EUR": "€"
+        case "GBP": "£"
+        default: "\(code) "
+        }
+    }
 }
 
 struct Quota: Identifiable, Codable, Sendable {
@@ -629,6 +643,17 @@ struct Quota: Identifiable, Codable, Sendable {
         if displayValue >= 1_000_000 { return String(format: "%.1fM", displayValue / 1_000_000) }
         if displayValue >= 1_000 { return String(format: "%.1fK", displayValue / 1_000) }
         return String(format: "%.0f", displayValue)
+    }
+
+    /// 两个金额并排时的紧凑写法：`$1761.00` 而不是 `USD 1761.00`。
+    ///
+    /// 只有真并排放不下的地方才用——悬浮条详情卡片那一行要同时写重置提示与两个金额。
+    /// 单个数出现的地方（面板卡片、余额行）仍走 `usedText` 那套带代码的写法。
+    static func compactText(value: Double, unit: QuotaUnit) -> String {
+        // 非币种照旧：那套写法已经做了 K/M 压缩，不能为了换个写法反而变长。
+        guard let code = unit.label else { return format(value: value, unit: unit) }
+        let amount = String(format: "%.2f", value / unit.displayScale)
+        return "\(QuotaUnit.compactSymbol(for: code))\(amount)"
     }
 }
 

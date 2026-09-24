@@ -162,4 +162,37 @@ struct RailMetricsTests {
         #expect(roomyPanel.height > tightPanel.height)
         #expect(roomyPanel.height >= roomyRail.height)
     }
+
+    // MARK: - 详情卡片
+
+    /// 卡片宽度的底线：一行最长的内容（重置提示 + 两个紧凑金额）必须装得下。
+    ///
+    /// 那一行被截断的恰恰是最值得读的数（上限）。哪天把卡片缩窄，这个测试会响。
+    @Test
+    func theCardFitsItsLongestRow() {
+        let budget = RailCardLayout.width - RailCardLayout.padding * 2
+        let usd = QuotaUnit.currency(code: "USD", scale: 1)
+        let line = "13 天后刷新额度 · \(Quota.compactText(value: 18_600, unit: usd)) / \(Quota.compactText(value: 35_094.34, unit: usd))"
+
+        // 与 `RailDetailCard.rowView` 同一个字体：11.5pt rounded regular。
+        let base = NSFont.systemFont(ofSize: RailCardLayout.rowFontSize, weight: .regular)
+        let font = NSFont(
+            descriptor: base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor,
+            size: RailCardLayout.rowFontSize
+        ) ?? base
+        let measured = (line as NSString).size(withAttributes: [.font: font]).width
+
+        #expect(measured <= budget, "\(line) 量出来是 \(measured)pt，卡片文字预算只有 \(budget)pt")
+    }
+
+    /// 窗口的横向预算必须装得下卡片本身 + 指针 + 间隙，否则卡片会被窗口边缘裁掉。
+    @Test
+    func thePanelReservesTheCardsFullWidth() {
+        let panel = RailPanelLayout.size(
+            for: .right,
+            railLength: 100,
+            metrics: RailMetrics(spacing: .default)
+        )
+        #expect(panel.width >= RailCardLayout.width + RailCardLayout.pointerWidth + RailCardLayout.horizontalGap + RailLayout.width)
+    }
 }

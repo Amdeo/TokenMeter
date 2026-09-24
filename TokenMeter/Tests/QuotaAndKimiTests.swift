@@ -913,6 +913,20 @@ extension QuotaAndKimiTests {
         let persisted = try JSONDecoder().decode([Subscription].self, from: Data(contentsOf: fixture.metadataURL))
         #expect(persisted.map(\.id) == [recovered.id])
     }
+
+    // MARK: - 金额的紧凑写法
+
+    /// 悬浮条详情卡片那一行要并排放两个金额，`USD 1761.00 / USD 2304.00` 放不下。
+    /// 紧凑写法是符号 `$1761.00 / $2304.00`，与面板的 Siyu 卡片同一份。
+    @Test
+    func compactTextUsesASymbolForCurrencyAndKeepsCodeForUnknownOnes() {
+        #expect(Quota.compactText(value: 1761, unit: .currency(code: "USD", scale: 1)) == "$1761.00")
+        #expect(Quota.compactText(value: 1234, unit: .currency(code: "CNY", scale: 100)) == "¥12.34")
+        #expect(Quota.compactText(value: 1.5, unit: .currency(code: "ABC", scale: 1)) == "ABC 1.50")
+        // 非币种照旧走带 K/M 压缩的写法——不为了换个写法反而变长。
+        #expect(Quota.compactText(value: 4_234_112, unit: .tokens) == Quota(name: "q", used: 4_234_112, limit: 1, resetAt: nil).usedText)
+    }
+
 }
 
 @MainActor

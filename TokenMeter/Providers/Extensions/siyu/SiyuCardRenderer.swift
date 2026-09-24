@@ -94,23 +94,12 @@ struct SiyuCardRenderer: ProviderCardRenderer {
         var id: String { key }
     }
 
-    /// “$已用 / $总量”格式（两位小数），货币符号按单位代码映射。
+    /// “$已用 / $总量”格式（两位小数）。与悬浮条详情卡片共用同一套紧凑写法
+    /// （`Quota.compactText`），两处显示的是同一个数，就不该有两套币种写法。
     private static func amountText(_ quota: Quota) -> String {
-        let symbol = currencySymbol(for: quota.unit.label)
-        let used = String(format: "%.2f", quota.used / quota.unit.displayScale)
-        let limit = String(format: "%.2f", quota.limit / quota.unit.displayScale)
-        return "\(symbol)\(used) / \(symbol)\(limit)"
-    }
-
-    private static func currencySymbol(for code: String?) -> String {
-        switch code {
-        case "USD": "$"
-        case "CNY": "¥"
-        case "EUR": "€"
-        case "JPY": "¥"
-        case "GBP": "£"
-        default: "\(code ?? "") "
-        }
+        let used = Quota.compactText(value: quota.used, unit: quota.unit)
+        let limit = Quota.compactText(value: quota.limit, unit: quota.unit)
+        return "\(used) / \(limit)"
     }
 
     /// 与真实 Siyu 卡一致：一个带分组元数据的套餐（每日/每月窗口 + 到期日）+ 余额行

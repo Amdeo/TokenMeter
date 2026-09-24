@@ -80,6 +80,77 @@ struct RailEntryTests {
         #expect(height <= RailLayout.percentTextHeight)
     }
 
+    // MARK: - 总使用量
+
+    /// 面板卡片的顶部锚点（总使用量）在悬浮条卡片里也要有：列成第一行。
+    @Test
+    func theOverallUsageLeadsTheCardsRows() {
+        let now = Date()
+        let reset = now.addingTimeInterval(86_400 * 5)
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
+        let snapshot = UsageSnapshot.realtime(
+            subscription: subscription,
+            quotas: [Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: now, kind: .fiveHour)],
+            overallUsageRatio: 0.52,
+            overallResetAt: reset
+        )
+        let entry = RailEntryBuilder.entry(for: subscription, snapshot: snapshot)
+
+        #expect(entry.rows.first?.name == "总使用量")
+        #expect(entry.rows.first?.fraction == 0.52)
+        #expect(entry.rows.first?.resetAt == reset)
+        // 只有比例没有金额：那行只写重置时间。
+        #expect(entry.rows.first?.usedText == nil)
+        #expect(entry.rows.first?.limitText == nil)
+        #expect(entry.rows.count == 2)
+    }
+
+    /// API Key 模式没有订阅总量这一说，与面板同一条规则。
+    @Test
+    func apiKeyModeHasNoOverallRow() {
+        let subscription = Subscription(providerID: .kimi, name: "Kimi")
+        let snapshot = UsageSnapshot.realtime(
+            subscription: subscription,
+            quotas: [Quota(name: "可用余额", used: 0, limit: 100, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)],
+            overallUsageRatio: 0.52
+        )
+        let entry = RailEntryBuilder.entry(for: subscription, snapshot: snapshot)
+
+        #expect(!entry.rows.contains { $0.id == SubscriptionQuotaColors.overallKey })
+    }
+
+    /// 快照没上报总使用量时不摆那一行——不能画一个假的零。
+    @Test
+    func noOverallNoRow() {
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
+        let snapshot = UsageSnapshot.realtime(
+            subscription: subscription,
+            quotas: [Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: .now, kind: .fiveHour)]
+        )
+        let entry = RailEntryBuilder.entry(for: subscription, snapshot: snapshot)
+
+        #expect(entry.rows.count == 1)
+    }
+
+    /// 用户在编辑页给总使用量配了色，那一行就用它。
+    @Test
+    func theOverallRowTakesTheConfiguredColor() {
+        let subscription = Subscription(
+            providerID: .kimi,
+            name: "Kimi",
+            authMethodID: .kimiBrowserSession,
+            quotaColors: SubscriptionQuotaPalette(standard: [SubscriptionQuotaColors.overallKey: 0xFF00FF])
+        )
+        let snapshot = UsageSnapshot.realtime(
+            subscription: subscription,
+            quotas: [],
+            overallUsageRatio: 0.52
+        )
+        let entry = RailEntryBuilder.entry(for: subscription, snapshot: snapshot)
+
+        #expect(entry.rows.first?.colorRGB == 0xFF00FF)
+    }
+
     /// 用与 `RailRingLabel` 完全相同的字体构造量一次渲染尺寸。
     private static func renderedSize(of text: String) -> CGSize {
         let probe = Text(text)

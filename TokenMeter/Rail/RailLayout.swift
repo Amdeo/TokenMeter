@@ -218,7 +218,15 @@ struct RailMetrics: Equatable, Sendable {
 
 /// 悬停详情卡片的尺寸常量。移植自 Pulse 的 `DetailCardLayout`。
 enum RailCardLayout {
-    static let width: CGFloat = 250
+    /// 卡片宽度。**不是随便定的**：它是「一行最长的内容」量出来的预算。
+    ///
+    /// 一行里最长的东西是重置提示加两个金额（`13 天后刷新额度 · $18600.00 / $35094.34`，
+    /// 约 228pt）。250 装不下它，最后那个数会被省略号吃掉——而那一行里最值得读的
+    /// 恰恰是它。280 减去左右各 18 的内边距还剩 244，量到的最长一行放得下并留有余量。
+    ///
+    /// 宽度同时是窗口的横向预算（见 `RailPanelLayout.cardReach`），所以它不能跟着
+    /// 内容变：窗口每换一个订阅就改尺寸，会让条在屏幕上来回弹。
+    static let width: CGFloat = 280
     static let padding: CGFloat = 18
     /// 环自己的曲线：环描边的外沿。
     static let cornerRadius: CGFloat = (RailLayout.ringDiameter + RailLayout.ringLineWidth) / 2

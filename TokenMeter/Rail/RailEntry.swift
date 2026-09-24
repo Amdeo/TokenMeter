@@ -41,11 +41,13 @@ struct RailEntry: Identifiable, Equatable {
     let rows: [Row]
 
     struct Row: Identifiable, Equatable {
-        let id: UUID
+        /// 额度行的 id；「总使用量」不是额度行，用 `SubscriptionQuotaColors.overallKey`。
+        let id: String
         let name: String
         let fraction: Double
-        let usedText: String
-        let limitText: String
+        /// 已用 / 上限。没有数字可写时（总使用量只有比例）为 nil。
+        let usedText: String?
+        let limitText: String?
         let resetAt: Date?
         let kind: Quota.Kind
         let status: QuotaStatus
@@ -241,13 +243,15 @@ enum RailEntryBuilder {
 
     private static func rows(for snapshot: UsageSnapshot, subscription: Subscription) -> [RailEntry.Row] {
         let colors = subscription.quotaColors[subscription.cardStyle]
-        return snapshot.quotas.map { quota in
+        var rows = snapshot.quotas.map { quota in
             RailEntry.Row(
-                id: quota.id,
+                id: quota.id.uuidString,
                 name: quota.name,
                 fraction: quota.fraction,
-                usedText: quota.usedText,
-                limitText: quota.limitText,
+                // 卡片那一行要同时放重置提示与两个金额，`USD 1761.00 / USD 2304.00` 放不下，
+                // 所以这里用紧凑写法（`$1761.00 / $2304.00`）。
+                usedText: Quota.compactText(value: quota.used, unit: quota.unit),
+                limitText: Quota.compactText(value: quota.limit, unit: quota.unit),
                 resetAt: quota.resetAt,
                 kind: quota.kind,
                 status: quota.status,
@@ -256,5 +260,27 @@ enum RailEntryBuilder {
                     ?? colors[SubscriptionQuotaColors.genericKey]
             )
         }
+
+        // 「总使用量」不是额度行——它是面板卡片顶部那个锚点的数据。悬浮条卡片也把它列上，
+        // 排在最前，与面板一样是头条。仅订阅制（非 API Key）模式有这个数字，与面板同一条规则。
+        if let overall = snapshot.overallUsageRatio, subscription.authMethodID != .apiKey {
+            rows.insert(RailEntry.Row(
+                id: SubscriptionQuotaColors.overallKey,
+                name: "总使用量",
+                fraction: overall,
+                usedText: nil,
+                limitText: nil,
+                resetAt: snapshot.overallResetAt,
+                kind: .generic,
+                status: SubscriptionCardPresentation.ratioStatus(for: overall),
+                // 用户在编辑页给总使用量配过色就用它；没配过走 generic 默认色，
+                // 与卡里其它行「没配置就按类型取默认」同一条规矩。
+                colorRGB: SubscriptionQuotaColors.hasOverallConfiguration(colors)
+                    ? SubscriptionQuotaColors.resolveOverall(colors).tokenMeterRGB
+                    : nil
+            ), at: 0)
+        }
+
+        return rows
     }
 }

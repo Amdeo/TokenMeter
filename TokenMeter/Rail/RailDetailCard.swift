@@ -147,10 +147,11 @@ struct RailDetailCard: View {
     ///
     /// 顺序是有讲究的：重置时间是这个 app 里最常被问的那个数，
     /// 而「已用 / 上限」在余额型额度上会很长，放后面让它先被截断。
+    /// 总使用量只有比例没有金额，那一行就只写重置时间。
     private func detailText(_ row: RailEntry.Row) -> String {
         let reset = row.resetAt.map { SubscriptionCardPresentation.resetHintText(for: $0) }
-        let amounts = "\(row.usedText) / \(row.limitText)"
-        return [reset, amounts].compactMap { $0 }.joined(separator: " · ")
+        let amounts = [row.usedText, row.limitText].compactMap { $0 }.joined(separator: " / ")
+        return [reset, amounts.isEmpty ? nil : amounts].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var emptyMessage: String {
