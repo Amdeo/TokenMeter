@@ -67,15 +67,17 @@
 
 ### 已发布版本
 
-最新版本见 [Releases](https://github.com/Amdeo/TokenMeter/releases)。每个版本由 GitHub Actions 构建，产出形如 `TokenMeter-<版本>-macos-universal.zip` 的 universal（Apple Silicon + Intel）压缩包和同名 `.sha256` 校验文件。发布包是**未签名**构建；请从 GitHub Release 下载、解压后按 macOS 的安全提示操作。发布版本与 `main` 分支不同：`main` 包含发布后的开发改动，适合需要从源码构建的用户。
+最新版本见 [Releases](https://github.com/Amdeo/TokenMeter/releases)。每个版本由 GitHub Actions 构建，提供两种 universal（Apple Silicon + Intel）下载：`TokenMeter-<版本>-macos-universal.dmg`（打开后把 app 拖进 Applications 就装完），以及 `TokenMeter-<版本>-macos-universal.zip`（旁有同名 `.sha256` 校验文件）。发布包只带 ad-hoc 签名，没有 Developer ID、也没有 Apple 公证；请只从本仓库的 GitHub Release 下载，并按下面的步骤首次打开。发布版本与 `main` 分支不同：`main` 包含发布后的开发改动，适合需要从源码构建的用户。
 
-未签名构建没有 Developer ID 签名和 Apple 公证，首次打开时 macOS 会拦截：
+未签名（仅 ad-hoc）的构建首次打开时会被 Gatekeeper 拦截：
 
-1. 解压后把 `TokenMeter.app` 拖入 `/Applications`。
+1. 打开 DMG，把 `TokenMeter.app` 拖入 `/Applications`（用 zip 的话解压后同样拖入）。
 2. 在 Finder 中按住 Control 点击该应用，选择「打开」，再在弹窗中选择「打开」；或前往「系统设置 → 隐私与安全性」，在安全提示处选择「仍要打开」。
 3. 如果系统提示应用「已损坏」，先用同一个 Release 里的 `.sha256` 文件比对 `shasum -a 256`；校验一致时执行 `xattr -dr com.apple.quarantine /Applications/TokenMeter.app`，然后重新打开。
 
-只从本仓库的 GitHub Release 下载构建产物。签名与公证流程见[贡献指南](CONTRIBUTING.md)。
+装好之后可以在应用内检查更新：菜单栏右键菜单的「检查更新…」，或设置窗口「应用」页版本行右侧的按钮。TokenMeter 也会自动检查（默认每 2 小时一次），找到新版本后询问你是否安装。
+
+只从本仓库的 GitHub Release 下载构建产物。DMG、Sparkle 更新源与签名现状见[发版说明](docs/releasing.md)。
 
 ### 从源码构建
 

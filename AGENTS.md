@@ -77,6 +77,15 @@ The release version lives in `VERSION` at the repository root and nowhere else.
 `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`. Never hand-edit those
 build settings; see `docs/releasing.md` for the release procedure.
 
+In-app updates come from Sparkle (an SPM dependency, `Sparkle` from 2.6.0). The
+feed URL and the EdDSA public key live in `TokenMeter/Info.plist`
+(`SUFeedURL` / `SUPublicEDKey`), the updater is `Services/AppUpdate.swift`, and
+`appcast.xml` on `main` is what installed copies read. Sparkle's XPC services
+load only out of a signed bundle, so the release workflow ad-hoc signs the app
+(`codesign --sign -`, inside out); there is no Developer ID and no
+notarization. Release assets are the ZIP, its `.sha256` and a DMG
+(`scripts/dmg.sh`), and the feed entry is written by `scripts/appcast.py`.
+
 ## Coding Style & Naming Conventions
 
 Follow existing Swift style: four-space indentation, one type per logical

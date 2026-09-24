@@ -9,7 +9,9 @@
 
 ## Build and test offline
 
-The project has no third-party dependencies. Build and run the existing Swift Testing suite without network access after Xcode has the required SDK installed:
+The project's only third-party dependency is Sparkle (Swift Package Manager), so
+the first build fetches it from GitHub; later builds work offline. Build and run
+the existing Swift Testing suite:
 
 ```bash
 xcodebuild -project TokenMeter.xcodeproj -scheme TokenMeter \
@@ -55,11 +57,15 @@ an annotated `v<version>` tag.
 
 Full procedure, workflow gates, pre-release versions and repair steps:
 [docs/releasing.md](docs/releasing.md). In short, the `Release` workflow runs the
-test suite, builds the universal (arm64 + x86_64) unsigned archive, writes
-`TokenMeter-<version>-macos-universal.zip` plus its SHA-256 checksum, and
-attaches both to the GitHub Release for that tag. Tag a commit whose CI is green;
-use `workflow_dispatch` to rebuild or repair a tag that already exists. The
-workflow owns the release assets — do not upload a second archive by hand.
+test suite, builds the universal (arm64 + x86_64) app and ad-hoc signs it
+(Sparkle's XPC services will not load out of an unsigned bundle; there is no
+Developer ID and no notarization), writes `TokenMeter-<version>-macos-universal.zip`
+plus its SHA-256 checksum, cuts a DMG from the same app with `scripts/dmg.sh`,
+attaches those three assets to the GitHub Release for that tag, and finally signs
+the ZIP and commits its entry into `appcast.xml` on `main` so installed copies can
+update themselves. Tag a commit whose CI is green; use `workflow_dispatch` to
+rebuild or repair a tag that already exists. The workflow owns the release assets
+— do not upload a second archive by hand.
 
 To reproduce the same archive locally (offline checks, or signed distribution),
 run `bash scripts/package-release.sh` from a checkout with Xcode 26+. It builds
