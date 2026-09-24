@@ -1,10 +1,15 @@
 name: Release
 
 # Tag-driven release: push an annotated `v*` tag and this workflow runs the test
-# suite, builds the universal unsigned archive, writes the SHA-256 checksum, and
-# publishes the GitHub Release for that tag. Signed/notarized packages are still
-# produced locally with `scripts/package-release.sh` (maintainer credentials,
-# see CONTRIBUTING.md). Re-run or repair a release with workflow_dispatch.
+# suite, builds the universal app, ad-hoc signs it, writes the ZIP and its
+# SHA-256 checksum, cuts a DMG, and publishes the GitHub Release for that tag.
+#
+# There is no Developer ID and no notarization (the maintainer is not an Apple
+# developer): the signature is ad-hoc, which is all Sparkle needs — its XPC
+# services will not load out of an unsigned bundle. Gatekeeper still stops the
+# first launch of a download, and that is unchanged. `scripts/package-release.sh`
+# stays the local, hand-run packager. Re-run or repair a release with
+# workflow_dispatch.
 #
 # VERSION is the single source of the version: the gates below reject a tag
 # that disagrees with it and a version with no CHANGELOG entry, and
@@ -121,15 +126,62 @@ jobs:
             exit 1
           fi
           lipo -archs "$app/Contents/MacOS/TokenMeter"
+      # Sparkle's XPC services and its updater only load out of a bundle that
+      # carries a signature, so the app cannot stay unsigned the way the build
+      # leaves it. Inside out, deepest first: a signature seals everything
+      # nested inside the bundle it covers, so signing the app first would be
+      # invalidated by the next signature written under it. `codesign --deep`
+      # would sign a bundle in one call, but Sparkle's XPC services and its
+      # Updater.app are code identities of their own that have to carry
+      # signatures of their own — which is exactly what the deep pass skips.
+      #
+      # Ad-hoc (`--sign -`) and nothing more: no Developer ID is involved, and
+      # Gatekeeper still refuses the first launch of an unnotarized download.
+      - name: Ad-hoc sign the app
+        run: |
+          set -euo pipefail
+          app=build/release-derived-data/Build/Products/Release/TokenMeter.app
+          framework="$app/Contents/Frameworks/Sparkle.framework"
+          if [ ! -d "$framework" ]; then
+            echo "::error::Sparkle.framework is not embedded in $app — updates would not install."
+            exit 1
+          fi
+
+          # `-depth` walks a bundle's contents before the bundle itself, which is
+          # the order the seals require; `-type d` keeps the framework's own
+          # symlinks (Updater.app, Versions/Current) out of it, so each bundle is
+          # signed once, through its real path.
+          while IFS= read -r -d '' nested; do
+            echo "signing ${nested#"$app"/}"
+            codesign --force --sign - "$nested"
+          done < <(find "$framework" -depth -type d \( -name '*.xpc' -o -name '*.app' \) -print0)
+
+          codesign --force --sign - "$framework"
+          codesign --force --sign - "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
       - name: Package the ZIP and checksum
         run: |
           set -euo pipefail
           app=build/release-derived-data/Build/Products/Release/TokenMeter.app
           name="TokenMeter-${VERSION}-macos-universal"
+          # The name is published here rather than spelled out again in the
+          # steps below: the download URL written into appcast.xml has to name
+          # the asset this step produced, and nothing downstream would notice a
+          # typo until every installed copy failed to update.
+          echo "ARCHIVE_NAME=$name" >> "$GITHUB_ENV"
           mkdir -p dist
           ditto -c -k --keepParent "$app" "dist/$name.zip"
           (cd dist && shasum -a 256 "$name.zip" > "$name.zip.sha256")
           ls -l dist
+      # The disk image is the friendlier download of the two — it carries the
+      # install hint (drag the app to Applications) that a zip cannot. The
+      # script builds it headlessly: no Finder, no AppleScript, no temporary
+      # mount, so a runner with no desktop session is all it needs.
+      - name: Package the disk image
+        run: |
+          set -euo pipefail
+          scripts/dmg.sh build/release-derived-data/Build/Products/Release/TokenMeter.app dist
+          ls -l dist/*.dmg
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -142,11 +194,11 @@ jobs:
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release $RELEASE_TAG exists; replacing its assets."
-            gh release upload "$RELEASE_TAG" dist/*.zip dist/*.sha256 --clobber
+            gh release upload "$RELEASE_TAG" dist/*.zip dist/*.sha256 dist/*.dmg --clobber
             exit 0
           fi
           {
-            echo "未签名 universal 构建（arm64 + x86_64）。首次打开会被 Gatekeeper 拦截，步骤见 README 的「安装 → 已发布版本」；下载后用同名 .sha256 文件校验。"
+            echo "ad-hoc 签名的 universal 构建（arm64 + x86_64）：没有 Developer ID，也没有公证，首次打开仍会被 Gatekeeper 拦截，步骤见 README 的「安装 → 已发布版本」。附 zip（旁有同名 .sha256 可校验）与 DMG 两种下载。"
             echo
             # Release notes come from the CHANGELOG entry for this version — the
             # heading (`## <version>`, optionally with ` — <date>`) up to the next
@@ -163,5 +215,5 @@ jobs:
               gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq .body
             fi
           } > dist/notes.md
-          gh release create "$RELEASE_TAG" dist/*.zip dist/*.sha256 \
+          gh release create "$RELEASE_TAG" dist/*.zip dist/*.sha256 dist/*.dmg \
             --title "TokenMeter $VERSION" --notes-file dist/notes.md $prerelease
