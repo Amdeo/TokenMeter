@@ -184,6 +184,13 @@ final class SettingsStore {
     var railUsesRoundEnds: Bool {
         didSet { defaults.set(railUsesRoundEnds, forKey: Keys.railUsesRoundEnds) }
     }
+    /// 悬浮条的配色：深色 / 浅色 / 跟随主题。
+    ///
+    /// 与 app 主题无关——主题只管面板与设置窗口。条一整天悬在任意内容之上，
+    /// 配色由用户自己定；默认深色。
+    var railColorScheme: RailColorScheme {
+        didSet { defaults.set(railColorScheme.rawValue, forKey: Keys.railColorScheme) }
+    }
 
     /// 悬浮条当前的尺寸预算。窗口与视图都必须读它，不能各自算。
     var railMetrics: RailMetrics {
@@ -270,6 +277,7 @@ final class SettingsStore {
         railDockShowsAlertColor = defaults.object(forKey: Keys.railDockShowsAlertColor) as? Bool ?? true
         railAnimatesActivity = defaults.object(forKey: Keys.railAnimatesActivity) as? Bool ?? false
         railUsesRoundEnds = defaults.object(forKey: Keys.railUsesRoundEnds) as? Bool ?? false
+        railColorScheme = RailColorScheme(rawValue: defaults.string(forKey: Keys.railColorScheme) ?? "") ?? .default
         cnyBalanceThreshold = max(0, defaults.object(forKey: Keys.cnyThreshold) as? Double ?? 5)
         usdBalanceThreshold = max(0, defaults.object(forKey: Keys.usdThreshold) as? Double ?? 1)
         refreshLoginItemStatus()
@@ -374,5 +382,6 @@ final class SettingsStore {
         static let railDockShowsAlertColor = "settings.railDockShowsAlertColor"
         static let railAnimatesActivity = "settings.railAnimatesActivity"
         static let railUsesRoundEnds = "settings.railUsesRoundEnds"
+        static let railColorScheme = "settings.railColorScheme"
     }
 }

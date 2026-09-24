@@ -58,6 +58,39 @@ struct RailSettingsTests {
         #expect(decoded.rail == original.rail)
     }
 
+    // MARK: - 条的配色
+
+    /// 默认深色：条一整天悬在任意壁纸上，实心表面只有深色才到处读得清。
+    /// 它也必须真的持久化——重启之后不该掉回默认。
+    @Test
+    func theRailsColorSchemeDefaultsToDarkAndPersists() {
+        let suite = "TokenMeterTests.RailSettings.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let makeStore = {
+            SettingsStore(
+                defaults: defaults,
+                loginItemManager: RailSettingsLoginItemManager(),
+                notificationManager: RailSettingsNotificationManager()
+            )
+        }
+
+        let settings = makeStore()
+        #expect(settings.railColorScheme == .dark)
+
+        settings.railColorScheme = .light
+        #expect(makeStore().railColorScheme == .light)
+    }
+
+    /// 跟随主题透出环境外观；深色与浅色直接钉。
+    @Test
+    func theColorSchemePinsOrPassesThrough() {
+        #expect(RailColorScheme.dark.pinnedColorScheme(ambient: .light) == .dark)
+        #expect(RailColorScheme.light.pinnedColorScheme(ambient: .dark) == .light)
+        #expect(RailColorScheme.followTheme.pinnedColorScheme(ambient: .dark) == .dark)
+        #expect(RailColorScheme.followTheme.pinnedColorScheme(ambient: .light) == .light)
+    }
+
     // MARK: - 条上显示哪些订阅
 
     @Test

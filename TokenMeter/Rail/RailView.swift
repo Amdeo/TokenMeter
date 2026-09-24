@@ -23,6 +23,8 @@ struct RailView: View {
     @State private var isHovered = false
     /// 收起前的一刻宽限，免得路过时蹭到条的一个角就让它抖一下。
     @State private var hideAfterDelay: Task<Void, Never>?
+    /// 环境外观：开着玻璃时透出去（材质自己挑外观），不开玻璃时这棵树钉成深色。
+    @Environment(\.colorScheme) private var colorScheme
     /// 指针在条窗口里的位置，供卡片与命中判定使用。
     @State private var pointerPoint: CGPoint?
 
@@ -110,6 +112,13 @@ struct RailView: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("TokenMeter 用量悬浮条")
+            // 条一整天悬在任意内容之上，配色由用户自己定（`RailColorScheme`），
+            // 与 app 主题无关——主题只管面板与设置窗口。TM 令牌是自适应色，
+            // 钉了外观，条的表面与环上的文字就全部按那一份解析。
+            // 开着玻璃时不钉：材质会跟着背后的内容自己挑外观，强钉会把文字画在亮玻璃上。
+            .environment(\.colorScheme, settings.glassEffectEnabled
+                ? colorScheme
+                : settings.railColorScheme.pinnedColorScheme(ambient: colorScheme))
     }
 
     // MARK: - 数据

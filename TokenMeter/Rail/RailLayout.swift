@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 
 /// 悬浮条的尺寸常量。
 ///
@@ -89,6 +90,39 @@ enum RailSpacing: String, CaseIterable, Identifiable, Sendable {
         case .compact: "紧凑"
         case .standard: "标准"
         case .roomy: "宽松"
+        }
+    }
+}
+
+/// 悬浮条的配色。
+///
+/// 与 app 的主题无关：主题只管面板与设置窗口。条一整天悬在任意内容之上，
+/// 配色由用户自己定。默认深色——实心表面只有深色才在任何壁纸上都读得清，
+/// 浅色胶囊会化进浅色壁纸。
+enum RailColorScheme: String, CaseIterable, Identifiable, Sendable {
+    case dark
+    case light
+    /// 跟随 app 的外观（面板与设置窗口那一套主题）。
+    case followTheme
+
+    static let `default` = RailColorScheme.dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .dark: "深色"
+        case .light: "浅色"
+        case .followTheme: "跟随主题"
+        }
+    }
+
+    /// 钉定给悬浮条视图树的外观；跟随主题时透出环境外观。
+    func pinnedColorScheme(ambient: ColorScheme) -> ColorScheme {
+        switch self {
+        case .dark: .dark
+        case .light: .light
+        case .followTheme: ambient
         }
     }
 }

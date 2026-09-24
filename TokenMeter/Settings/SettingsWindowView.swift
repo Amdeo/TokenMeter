@@ -222,6 +222,16 @@ struct SettingsWindowView: View {
             SettingsGroup("显示") {
                 toggle("显示悬浮条", isOn: $settings.railEnabled)
                 SettingsRowDivider()
+                picker(
+                    "条的配色",
+                    subtitle: "环与详情卡片跟着它走。开着玻璃特效时由玻璃材质决定。",
+                    selection: $settings.railColorScheme
+                ) {
+                    ForEach(RailColorScheme.allCases) { scheme in
+                        Text(scheme.title).tag(scheme)
+                    }
+                }
+                SettingsRowDivider()
                 toggle("离开时自动收起", isOn: $settings.railAutoCollapse)
                 SettingsRowDivider()
                 toggle("跟随鼠标所在显示器", isOn: $settings.railFollowsActiveDisplay)
