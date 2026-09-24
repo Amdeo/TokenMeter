@@ -425,6 +425,7 @@ final class MenuBarPanelController: NSObject {
         addItem.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
         menu.addItem(addItem)
         menu.addItem(menuItem(title: "设置…", action: #selector(openSettings)))
+        menu.addItem(menuItem(title: "检查更新…", action: #selector(checkForUpdates)))
         #if DEBUG
         // 状态预览（TM-06）原来在面板的设置页里；设置搬去独立窗口之后收进这个菜单——
         // 它预览的是**面板**的各种状态，入口留在面板这一侧才合理。
@@ -466,12 +467,20 @@ final class MenuBarPanelController: NSObject {
     var onOpenSettings: (() -> Void)?
     var onAddSubscription: (() -> Void)?
     var onEditSubscription: ((UUID) -> Void)?
+    /// 「检查更新…」：更新检查归 app 委托（`AppUpdate`），面板只负责把菜单项接出去。
+    var onCheckForUpdates: (() -> Void)?
 
     @objc private func openSettings() {
         // 设置是一个独立窗口，不是面板里的一页。面板这时要收起来：
         // 留着它盖在窗口前面没有意义。
         hidePanel()
         onOpenSettings?()
+    }
+
+    /// 与「设置…」一样先收起面板：Sparkle 的进度窗口要开在前面，面板留着只是挡路。
+    @objc private func checkForUpdates() {
+        hidePanel()
+        onCheckForUpdates?()
     }
 
     @objc private func quit() {

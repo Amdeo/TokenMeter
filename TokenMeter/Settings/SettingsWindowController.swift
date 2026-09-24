@@ -15,14 +15,16 @@ final class SettingsWindowController {
     private let store: UsageStore
     private let settings: SettingsStore
     private let railPlacement: RailPlacement
+    private let update: AppUpdate
     private let navigation = SettingsNavigation()
     private var window: NSWindow?
     private var hasBeenPlaced = false
 
-    init(store: UsageStore, settings: SettingsStore, railPlacement: RailPlacement) {
+    init(store: UsageStore, settings: SettingsStore, railPlacement: RailPlacement, update: AppUpdate) {
         self.store = store
         self.settings = settings
         self.railPlacement = railPlacement
+        self.update = update
         observeAppearance()
     }
 
@@ -105,6 +107,7 @@ final class SettingsWindowController {
                 store: store,
                 settings: settings,
                 railPlacement: railPlacement,
+                update: update,
                 navigation: navigation
             )
             // 订阅子页复用的 `SubscriptionEditorContent` / `SubscriptionAppearanceContent`

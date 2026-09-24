@@ -10,6 +10,7 @@ struct SettingsWindowView: View {
     let store: UsageStore
     @Bindable var settings: SettingsStore
     let railPlacement: RailPlacement
+    let update: AppUpdate
     @Bindable var navigation: SettingsNavigation
 
     /// 「显示顺序」里被拖放悬停的那一行，用来高亮它。
@@ -557,9 +558,15 @@ struct SettingsWindowView: View {
         VStack(alignment: .leading, spacing: 22) {
             SettingsGroup("TokenMeter") {
                 SettingsRow("版本") {
-                    Text(version)
-                        .font(.system(size: 12).monospacedDigit())
-                        .foregroundStyle(TM.textSecondary)
+                    HStack(spacing: 12) {
+                        Text(version)
+                            .font(.system(size: 12).monospacedDigit())
+                            .foregroundStyle(TM.textSecondary)
+                        // 找到新版本时弹的是 Sparkle 自己的窗口，这里不再画一层。
+                        // 测试宿主 / 不是 app bundle 时 `canCheck` 为 false，按钮留着但按不动。
+                        Button("检查更新…") { update.checkForUpdates() }
+                            .disabled(!update.canCheck)
+                    }
                 }
                 SettingsRowDivider()
                 SettingsRow("反馈问题", subtitle: "在 GitHub 上提 issue。") {

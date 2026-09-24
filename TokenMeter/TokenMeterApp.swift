@@ -15,6 +15,9 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: MenuBarPanelController?
     private var railController: RailWindowController?
     private var settingsController: SettingsWindowController?
+    /// 更新检查。放在这里是因为它要在整个 app 生命周期里活着：
+    /// 只是把它塞进设置窗口或面板，那些对象一没，Sparkle 的排期也就停了。
+    private var update: AppUpdate?
     /// 悬浮条右键菜单的目标。菜单项持的是 target/action 对而不是闭包，
     /// 所以这个对象必须在菜单的生命周期之外活着。
     private let railMenuActions = RailMenuActions()
@@ -31,7 +34,11 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         let navigation = PanelNavigationState()
         if settings.autoRefreshEnabled { store.start() }
 
+        let update = AppUpdate()
+        self.update = update
+
         let controller = MenuBarPanelController(store: store, navigation: navigation)
+        controller.onCheckForUpdates = { [weak update] in update?.checkForUpdates() }
         controller.start()
         panelController = controller
         observePanelSettings(settings, controller: controller)
@@ -40,7 +47,7 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         // 改的就是它。
         let placement = RailPlacement.restored()
         startRail(store: store, settings: settings, placement: placement)
-        startSettings(store: store, settings: settings, placement: placement, panel: controller)
+        startSettings(store: store, settings: settings, placement: placement, panel: controller, update: update)
     }
 
     /// 常驻悬浮条。
@@ -85,9 +92,15 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         store: UsageStore,
         settings: SettingsStore,
         placement: RailPlacement,
-        panel: MenuBarPanelController
+        panel: MenuBarPanelController,
+        update: AppUpdate
     ) {
-        let window = SettingsWindowController(store: store, settings: settings, railPlacement: placement)
+        let window = SettingsWindowController(
+            store: store,
+            settings: settings,
+            railPlacement: placement,
+            update: update
+        )
         panel.onOpenSettings = { [weak window] in window?.show(pane: .general) }
         panel.onAddSubscription = { [weak window] in window?.show(pane: .addSubscription) }
         panel.onEditSubscription = { [weak window] id in

@@ -26,5 +26,15 @@
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 TokenMeter</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/Amdeo/TokenMeter/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>DXI37+ptRYBAl3kqaHRlCOOo2SZmPfEXkHsDzTXnnQo=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>7200</integer>
 </dict>
 </plist>
