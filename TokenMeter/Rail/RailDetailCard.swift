@@ -2,8 +2,9 @@ import SwiftUI
 
 /// 悬停时展开的详情卡片。
 ///
-/// 移植自 Pulse 的 `UsageDetailCard`，去掉它的预算预测与余额行（余额在 TokenMeter 里
-/// 本来就是一个额度行，走同一条渲染路径）。
+/// 移植自 Pulse 的 `UsageDetailCard`，去掉它的预算预测。行有两种读法：
+/// 额度窗口读「用了这一窗的多少」（进度条 + 百分比 + 已用 / 上限），
+/// 余额读「还剩多少钱」（一行字）。
 struct RailDetailCard: View {
     let entry: RailEntry
     /// 贴在哪条屏幕边上；指针画在朝向条的那一侧。
@@ -102,7 +103,47 @@ struct RailDetailCard: View {
         }
     }
 
+    /// 一行额度在卡片上的样子，取决于它是**比例**还是**存量**。
+    ///
+    /// 额度窗口（5 小时 / 每周 / 通用）说的是「这一窗用了多少」，所以画进度条；
+    /// 余额说的是「还剩多少钱」，没有「用了多少」这回事，所以只画一个数。
+    @ViewBuilder
     private func rowView(_ row: RailEntry.Row) -> some View {
+        if row.kind == .balance {
+            balanceRow(row)
+        } else {
+            quotaRow(row)
+        }
+    }
+
+    /// 余额行：一行字，标签在左、**还剩多少**在右。
+    ///
+    /// 余额不画进度条，也不写「已用 / 上限」：供应商把它报成「剩了多少钱」
+    /// （`used: 0`），那条绿弧永远是空的、「0.00 / 28.17」也永远读不出意义。
+    /// 同样的排版在面板卡片的 `BalanceMenuRow` 与紧凑卡的 `CompactBalanceCard`
+    /// 里已经用了两处，这里是第三处——同一件东西在 app 里只有一个读法。
+    private func balanceRow(_ row: RailEntry.Row) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(row.name)
+                .font(.system(size: RailCardLayout.rowFontSize, weight: .medium, design: .rounded))
+                .foregroundStyle(TM.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if let remaining = row.remainingText {
+                Text(remaining)
+                    .font(.system(size: RailCardLayout.balanceFontSize, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(balanceColor(row))
+                    .lineLimit(1)
+                    // 名称过长时先截断名称，金额始终完整可见。
+                    .layoutPriority(1)
+            }
+        }
+        .frame(height: RailCardLayout.balanceRowHeight)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func quotaRow(_ row: RailEntry.Row) -> some View {
         VStack(alignment: .leading, spacing: RailCardLayout.rowInternalSpacing) {
             HStack(spacing: 6) {
                 Text(row.name)
@@ -143,10 +184,21 @@ struct RailDetailCard: View {
         return SubscriptionQuotaColors.defaultColor(forKind: row.kind)
     }
 
-    /// 一行的第二段说明：什么时候刷新，以及用量本身。
+    /// 余额金额的颜色。余额是**读数**，不是身份——所以它不跟进度条那套默认色走：
+    ///
+    /// - 一分不剩（甚至透支）恒为红：被挡住不是口味问题，与环、细条同一条规则；
+    /// - 用户给余额配过色就写它（解析链与额度行相同）；
+    /// - 其余写正文主色。卡片里只有余额一行是金额，不需要靠颜色说「这是哪个额度」。
+    private func balanceColor(_ row: RailEntry.Row) -> Color {
+        if row.status == .exhausted { return TM.danger }
+        if let rgb = row.colorRGB { return Color(hex: rgb) }
+        return TM.textPrimary
+    }
+
+    /// 额度行的第二段说明：什么时候刷新，以及用量本身。余额行走 `balanceRow`，不经过这里。
     ///
     /// 顺序是有讲究的：重置时间是这个 app 里最常被问的那个数，
-    /// 而「已用 / 上限」在余额型额度上会很长，放后面让它先被截断。
+    /// 而「已用 / 上限」很长，放后面让它先被截断。
     /// 总使用量只有比例没有金额，那一行就只写重置时间。
     private func detailText(_ row: RailEntry.Row) -> String {
         let reset = row.resetAt.map { SubscriptionCardPresentation.resetHintText(for: $0) }

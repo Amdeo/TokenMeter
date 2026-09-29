@@ -48,6 +48,12 @@ struct RailEntry: Identifiable, Equatable {
         /// 已用 / 上限。没有数字可写时（总使用量只有比例）为 nil。
         let usedText: String?
         let limitText: String?
+        /// 余额行画在卡片上的那个数：**还剩多少**。
+        ///
+        /// 只有余额行有它。余额是存量而不是比例——供应商把它报成「剩了多少钱」
+        /// （`used: 0`），所以「已用 / 上限」那对数字在余额上恒为「0.00 / 28.17」、
+        /// 比例恒为 0。卡片据此改画这**一个**数（见 `RailDetailCard.balanceRow`）。
+        let remainingText: String?
         let resetAt: Date?
         let kind: Quota.Kind
         let status: QuotaStatus
@@ -252,6 +258,9 @@ enum RailEntryBuilder {
                 // 所以这里用紧凑写法（`$1761.00 / $2304.00`）。
                 usedText: Quota.compactText(value: quota.used, unit: quota.unit),
                 limitText: Quota.compactText(value: quota.limit, unit: quota.unit),
+                // 余额不上那对「已用 / 上限」：它说的是还剩多少。单个金额出现的地方
+                // 用带币种的写法（`USD 12.34`），与面板卡片的余额行同一条规矩。
+                remainingText: quota.kind == .balance ? quota.remainingText : nil,
                 resetAt: quota.resetAt,
                 kind: quota.kind,
                 status: quota.status,
@@ -270,6 +279,7 @@ enum RailEntryBuilder {
                 fraction: overall,
                 usedText: nil,
                 limitText: nil,
+                remainingText: nil,
                 resetAt: snapshot.overallResetAt,
                 kind: .generic,
                 status: SubscriptionCardPresentation.ratioStatus(for: overall),

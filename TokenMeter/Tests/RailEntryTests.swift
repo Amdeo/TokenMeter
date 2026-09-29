@@ -80,6 +80,27 @@ struct RailEntryTests {
         #expect(height <= RailLayout.percentTextHeight)
     }
 
+    // MARK: - 余额行
+
+    /// 余额行带着「还剩多少」，额度行不带：卡片据此决定画一行数还是一根进度条。
+    @Test
+    func onlyBalanceRowsCarryTheAmountLeft() {
+        let subscription = Subscription(providerID: .kimi, name: "Kimi", authMethodID: .kimiBrowserSession)
+        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(name: "5 小时额度", used: 62, limit: 100, resetAt: .now, kind: .fiveHour),
+            Quota(name: "可用余额", used: 0, limit: 28.17, resetAt: nil, unit: .currency(code: "CNY", scale: 1), kind: .balance)
+        ])
+        let entry = RailEntryBuilder.entry(for: subscription, snapshot: snapshot)
+        let balance = entry.rows.first { $0.kind == .balance }
+
+        // 单个金额出现的地方带币种，与面板卡片的余额行同一个写法。
+        #expect(balance?.remainingText == "CNY 28.17")
+        // 供应商把余额报成 `used: 0`，所以它的比例恒为 0——画出来只会是一根永远空的条。
+        #expect(balance?.fraction == 0)
+        // 额度窗口读的是「已用 / 上限」，没有这一格。
+        #expect(entry.rows.first { $0.kind == .fiveHour }?.remainingText == nil)
+    }
+
     // MARK: - 总使用量
 
     /// 面板卡片的顶部锚点（总使用量）在悬浮条卡片里也要有：列成第一行。

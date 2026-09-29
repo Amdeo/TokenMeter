@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import SwiftUI
 import Testing
 @testable import TokenMeter
 
@@ -194,5 +195,37 @@ struct RailMetricsTests {
             metrics: RailMetrics(spacing: .default)
         )
         #expect(panel.width >= RailCardLayout.width + RailCardLayout.pointerWidth + RailCardLayout.horizontalGap + RailLayout.width)
+    }
+
+    /// 余额行只有一行字，而它那一行比额度行的任何一行都大。
+    ///
+    /// 行高给少了，金额会画到气泡外面去——卡片的高度是逐行量出来的，溢出的字不计入。
+    /// 宽度给少了，最该读的那个数会被省略号吃掉（标签先截断，金额最后）。
+    @Test
+    func theBalanceRowFitsItsAmount() {
+        // 余额是单个数，带币种：这是卡片里可能出现的较长形态。
+        let amount = "USD 35094.34"
+        let size = Self.renderedBalanceSize(of: amount)
+
+        #expect(
+            size.height <= RailCardLayout.balanceRowHeight,
+            "「\(amount)」量得 \(size.height)pt，余额行只有 \(RailCardLayout.balanceRowHeight)pt"
+        )
+        #expect(
+            size.width <= RailCardLayout.width - RailCardLayout.padding * 2,
+            "「\(amount)」量得 \(size.width)pt，卡片文字预算只有 \(RailCardLayout.width - RailCardLayout.padding * 2)pt"
+        )
+    }
+
+    /// 用与 `RailDetailCard.balanceRow` 完全相同的字体构造量一次渲染尺寸。
+    private static func renderedBalanceSize(of text: String) -> CGSize {
+        let probe = Text(text)
+            .font(.system(size: RailCardLayout.balanceFontSize, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
+        let host = NSHostingView(rootView: probe)
+        host.layout()
+        return host.fittingSize
     }
 }

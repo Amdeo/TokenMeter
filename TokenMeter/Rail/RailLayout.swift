@@ -283,7 +283,16 @@ enum RailCardLayout {
     static let headerIconSize: CGFloat = 16
     static let rowTextLineHeight: CGFloat = 14
 
-    /// 一条额度行的高度：标题 + 进度条 + 百分比。
+    /// 余额金额的字号：比行标签大一号。金额自带币种（`USD 12.34`），
+    /// 与面板卡片的余额行同一种读法（那里是 13pt）。
+    static let balanceFontSize: CGFloat = 13
+    /// 余额行的高度：**只有一行字**。
+    ///
+    /// 余额不画进度条，也不写「已用 / 上限」，所以它比额度行（`rowHeight`）矮一截。
+    /// 卡片的高度是逐行量出来的，这一行给少了就会画到气泡外面去。
+    static let balanceRowHeight: CGFloat = 18
+
+    /// 一条额度行的高度：标题 + 进度条 + 明细。
     static var rowHeight: CGFloat {
         rowTextLineHeight + rowInternalSpacing + progressBarHeight + rowInternalSpacing + rowTextLineHeight
     }
