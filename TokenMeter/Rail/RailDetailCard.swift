@@ -144,7 +144,9 @@ struct RailDetailCard: View {
     }
 
     private func quotaRow(_ row: RailEntry.Row) -> some View {
-        VStack(alignment: .leading, spacing: RailCardLayout.rowInternalSpacing) {
+        // 没有第二段可写时就别留那一行空位：它是白占的高度。
+        let detail = detailText(row)
+        return VStack(alignment: .leading, spacing: RailCardLayout.rowInternalSpacing) {
             HStack(spacing: 6) {
                 Text(row.name)
                     .font(.system(size: RailCardLayout.rowFontSize, weight: .medium, design: .rounded))
@@ -169,11 +171,13 @@ struct RailDetailCard: View {
             }
             .frame(height: RailCardLayout.progressBarHeight)
 
-            Text(detailText(row))
-                .font(.system(size: RailCardLayout.rowFontSize, weight: .regular, design: .rounded))
-                .foregroundStyle(TM.textTertiary)
-                .lineLimit(1)
-                .frame(height: RailCardLayout.rowTextLineHeight)
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.system(size: RailCardLayout.rowFontSize, weight: .regular, design: .rounded))
+                    .foregroundStyle(TM.textTertiary)
+                    .lineLimit(1)
+                    .frame(height: RailCardLayout.rowTextLineHeight)
+            }
         }
     }
 
@@ -195,11 +199,14 @@ struct RailDetailCard: View {
         return TM.textPrimary
     }
 
-    /// 额度行的第二段说明：什么时候刷新，以及用量本身。余额行走 `balanceRow`，不经过这里。
+    /// 额度行的第二段说明：什么时候刷新，以及金额本身。余额行走 `balanceRow`，不经过这里。
     ///
-    /// 顺序是有讲究的：重置时间是这个 app 里最常被问的那个数，
-    /// 而「已用 / 上限」很长，放后面让它先被截断。
-    /// 总使用量只有比例没有金额，那一行就只写重置时间。
+    /// **只写金额，不写计数。** `usedText` / `limitText` 由 `RailEntryBuilder` 只在带币种的
+    /// 额度上填（`¥52.00 / ¥100.00`）：那是「这一窗里有多少钱」这个卡片里没有第二个地方
+    /// 说的数。计数对是百分比已经说过的同一件事，不占这一行。
+    ///
+    /// 顺序是有讲究的：重置时间是这个 app 里最常被问的那个数，金额放后面让它先被截断。
+    /// 两样都没有时返回空串，调用方就不画这一行。
     private func detailText(_ row: RailEntry.Row) -> String {
         let reset = row.resetAt.map { SubscriptionCardPresentation.resetHintText(for: $0) }
         let amounts = [row.usedText, row.limitText].compactMap { $0 }.joined(separator: " / ")

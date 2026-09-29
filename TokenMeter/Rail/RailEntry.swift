@@ -45,7 +45,11 @@ struct RailEntry: Identifiable, Equatable {
         let id: String
         let name: String
         let fraction: Double
-        /// 已用 / 上限。没有数字可写时（总使用量只有比例）为 nil。
+        /// 已用 / 上限，**只有带币种的额度行有值**。
+        ///
+        /// 计数对（`62 / 100`）不写出来：百分比已经说过同一件事，而只报比例的窗口
+        /// （`used: 0.34, limit: 1`）更会写成「0 / 1」。金额对不一样——它说的是
+        /// 这一窗里有多少钱，所以留着（见 `RailEntryBuilder.rows`）。
         let usedText: String?
         let limitText: String?
         /// 余额行画在卡片上的那个数：**还剩多少**。
@@ -256,8 +260,11 @@ enum RailEntryBuilder {
                 fraction: quota.fraction,
                 // 卡片那一行要同时放重置提示与两个金额，`USD 1761.00 / USD 2304.00` 放不下，
                 // 所以这里用紧凑写法（`$1761.00 / $2304.00`）。
-                usedText: Quota.compactText(value: quota.used, unit: quota.unit),
-                limitText: Quota.compactText(value: quota.limit, unit: quota.unit),
+                // **只有金额对值得写出来。** 计数对（`62 / 100`）是百分比已经说过的同一件事，
+                // 只报比例、上限恒为 1 的窗口更会写成「0 / 1」；金额对说的是另一件事：
+                // 这一窗里有多少钱。
+                usedText: quota.unit.isCurrency ? Quota.compactText(value: quota.used, unit: quota.unit) : nil,
+                limitText: quota.unit.isCurrency ? Quota.compactText(value: quota.limit, unit: quota.unit) : nil,
                 // 余额不上那对「已用 / 上限」：它说的是还剩多少。单个金额出现的地方
                 // 用带币种的写法（`USD 12.34`），与面板卡片的余额行同一条规矩。
                 remainingText: quota.kind == .balance ? quota.remainingText : nil,

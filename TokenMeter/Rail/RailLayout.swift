@@ -292,12 +292,16 @@ enum RailCardLayout {
     /// 卡片的高度是逐行量出来的，这一行给少了就会画到气泡外面去。
     static let balanceRowHeight: CGFloat = 18
 
-    /// 一条额度行的高度：标题 + 进度条 + 明细。
+    /// 一条额度行的高度**上限**：标题 + 进度条 + 明细。
+    ///
+    /// 明细行可能不存在（没有刷新时间、也不是金额额度——见 `RailDetailCard.detailText`），
+    /// 所以这是「最占地方的那种额度行」的高度。窗口预算读的是上限，正好。
     static var rowHeight: CGFloat {
         rowTextLineHeight + rowInternalSpacing + progressBarHeight + rowInternalSpacing + rowTextLineHeight
     }
 
-    /// 卡片高度的公式。窗口 frame 在 SwiftUI 布局之前就要算出来，所以这是预算。
+    /// 卡片高度的公式。窗口 frame 在 SwiftUI 布局之前就要算出来，所以这是预算——
+    /// 而且因为明细行可以不存在（见 `rowHeight`），它是**上限**，不是精确值。
     static func height(forWindows count: Int, footnote: Bool = false) -> CGFloat {
         padding * 2
             + headerHeight

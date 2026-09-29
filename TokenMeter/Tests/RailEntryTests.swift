@@ -101,6 +101,29 @@ struct RailEntryTests {
         #expect(entry.rows.first { $0.kind == .fiveHour }?.remainingText == nil)
     }
 
+    /// 卡片上只写**金额**对。计数对（`62 / 100`）是百分比已经说过的同一件事，
+    /// 只报比例、上限恒为 1 的窗口更会写成「0 / 1」——那种行只剩刷新时间。
+    @Test
+    func onlyCurrencyRowsCarryTheirAmountPair() {
+        let subscription = Subscription(providerID: .siyu, name: "Siyu API", authMethodID: .siyuBrowserSession)
+        let snapshot = UsageSnapshot.realtime(subscription: subscription, quotas: [
+            Quota(name: "每周额度", used: 0.34, limit: 1, resetAt: .now, kind: .weekly),
+            Quota(
+                name: "DeepSeek大月卡 · 每日", used: 52, limit: 100, resetAt: .now,
+                unit: .currency(code: "CNY", scale: 1), kind: .generic
+            )
+        ])
+        let entry = RailEntryBuilder.entry(for: subscription, snapshot: snapshot)
+
+        let counts = entry.rows.first { $0.kind == .weekly }
+        #expect(counts?.usedText == nil)
+        #expect(counts?.limitText == nil)
+
+        let money = entry.rows.first { $0.name == "DeepSeek大月卡 · 每日" }
+        #expect(money?.usedText == "¥52.00")
+        #expect(money?.limitText == "¥100.00")
+    }
+
     // MARK: - 总使用量
 
     /// 面板卡片的顶部锚点（总使用量）在悬浮条卡片里也要有：列成第一行。
