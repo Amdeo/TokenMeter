@@ -39,7 +39,7 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         settings.requestNotificationsIfNeeded()
         let store = UsageStore(settings: settings)
         let navigation = PanelNavigationState()
-        if settings.autoRefreshEnabled { store.start() }
+        store.start()
 
         let update = AppUpdate()
         self.update = update

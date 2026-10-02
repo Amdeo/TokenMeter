@@ -245,9 +245,6 @@ struct MenuBarView: View {
             }
         }
         .modifier(TMColorSchemeModifier(mode: store.settings.appearanceMode))
-        .onChange(of: store.settings.autoRefreshEnabled) { _, enabled in
-            if enabled { store.start() } else { store.stop() }
-        }
     }
 
     private var dashboardContent: some View {

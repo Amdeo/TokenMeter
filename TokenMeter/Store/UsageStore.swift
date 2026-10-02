@@ -34,6 +34,8 @@ final class UsageStore {
     private let providerFactory: UsageProviderFactory
     /// 后台定时刷新循环。
     private var refreshTask: Task<Void, Never>?
+    private var isStarted = false
+    private var refreshObservationGeneration = 0
     /// 当前正在执行的一段刷新（手动 / 面板 / 后台 / 单订阅共用，串行互斥）。
     private var activeRefresh: Task<Void, Never>?
     private var activeRefreshID = UUID()
@@ -269,20 +271,58 @@ final class UsageStore {
     }
 
     func start() {
-        guard refreshTask == nil else { return }
-        refreshTask = Task { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                // 首轮立即刷新，避免应用启动后等待一个完整刷新周期才有数据。
-                if self.autoRefreshEnabled {
-                    self.refreshAll(source: .background)
-                }
-                try? await Task.sleep(for: .seconds(self.settings.refreshInterval))
+        guard !isStarted else { return }
+        isStarted = true
+        refreshObservationGeneration += 1
+        observeAutoRefresh()
+        scheduleAutoRefresh()
+    }
+
+    /// 后台刷新不依赖面板视图的生命周期；关掉自动刷新时也不保留睡眠循环。
+    private func observeAutoRefresh() {
+        let generation = refreshObservationGeneration
+        withObservationTracking {
+            _ = settings.autoRefreshEnabled
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.isStarted,
+                      self.refreshObservationGeneration == generation else { return }
+                self.scheduleAutoRefresh()
+                self.observeAutoRefresh()
             }
         }
     }
 
+    private func scheduleAutoRefresh() {
+        refreshTask?.cancel()
+        refreshTask = nil
+        guard autoRefreshEnabled else {
+            cancelActiveRefresh()
+            return
+        }
+        refreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                // 首轮立即刷新，避免应用启动后等待一个完整刷新周期才有数据。
+                guard let interval = self?.refreshInBackground() else { return }
+                do {
+                    // 不跨越睡眠持有 store，避免循环任务与 store 互相保留。
+                    try await Task.sleep(for: .seconds(interval))
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    private func refreshInBackground() -> TimeInterval? {
+        guard isStarted, autoRefreshEnabled else { return nil }
+        refreshAll(source: .background)
+        return settings.refreshInterval
+    }
+
     func stop() {
+        isStarted = false
+        refreshObservationGeneration += 1
         refreshTask?.cancel()
         refreshTask = nil
         cancelActiveRefresh()
