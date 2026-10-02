@@ -36,6 +36,22 @@ struct RailMarkTests {
     }
 
     @Test
+    func providerIconsShipInTheBundle() throws {
+        let providers = [
+            ("Codex", CodexProviderDefinition().metadata),
+            ("Claude", ClaudeProviderDefinition().metadata)
+        ]
+        for (provider, metadata) in providers {
+            let resource = try #require(metadata.iconResourceName, "\(provider) 未声明彩色图标资源")
+            let url = try #require(
+                Bundle.main.url(forResource: resource, withExtension: "png"),
+                "\(provider) 图标 \(resource).png 没有进 bundle"
+            )
+            #expect(NSImage(contentsOf: url) != nil, "\(provider) 图标 \(resource).png 无法加载")
+        }
+    }
+
+    @Test
     func everyMarkLoadsAsATemplateImage() throws {
         RailMarkStore.resetCache()
         for name in Self.allMarks {

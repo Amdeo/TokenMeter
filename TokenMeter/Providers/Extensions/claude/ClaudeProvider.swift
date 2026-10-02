@@ -16,7 +16,7 @@ struct ClaudeProviderDefinition: ProviderDefinition {
     var metadata: ProviderMetadata {
         ProviderMetadata(
             displayName: "Claude",
-            iconResourceName: nil,
+            iconResourceName: "icon-claude",
             fallbackSystemImage: "asterisk",
             tintRGB: 0xD97757,
             railMarkResource: "claude",

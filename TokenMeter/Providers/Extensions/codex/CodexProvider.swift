@@ -16,7 +16,7 @@ struct CodexProviderDefinition: ProviderDefinition {
     var metadata: ProviderMetadata {
         ProviderMetadata(
             displayName: "OpenAI Codex",
-            iconResourceName: nil,
+            iconResourceName: "icon-codex",
             fallbackSystemImage: "chevron.left.forwardslash.chevron.right",
             tintRGB: 0x10A37F,
             railMarkResource: "openai",

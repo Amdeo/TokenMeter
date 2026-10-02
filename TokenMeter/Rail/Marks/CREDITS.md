@@ -20,6 +20,19 @@
 | `opencode.svg` | OpenCode | `opencode-go` |
 | `zai.svg` | Z.ai | `zhipu` |
 
+## `Providers/Extensions/*/icon-*.png`
+
+Codex 与 Claude 的面板图标复用上方现有的 `Marks/openai.svg` 与 `Marks/claude.svg`
+路径（来源仍为 Lobe Icons，经 Pulse 整理，许可证见上文），再栅格化为 PNG。
+两张 PNG 都是 640×640 方形 tile：原始单色 mark 等比缩放到约 72% 画布并居中，
+Codex 使用纯白背景，Claude 使用暖浅色背景 `#FAF9F5`，其 mark 使用 Claude 橙
+`#D97757`。不添加圆角，圆角由 `PlatformLogo` 统一裁剪。上游品牌标记归各自所有者所有。
+
+| 文件 | 上游资产 | 对应 TokenMeter provider |
+| --- | --- | --- |
+| `Providers/Extensions/codex/icon-codex.png` | 现有 `Marks/openai.svg` 的 OpenAI knot 路径栅格化 | `codex` |
+| `Providers/Extensions/claude/icon-claude.png` | 现有 `Marks/claude.svg` 的 Claude 放射星路径栅格化并着色 `#D97757` | `claude` |
+
 ## `Marks/apikeyfun.png`
 
 唯一一张**位图**标记：APIKEY.FUN 没有公开的矢量 logo（官网只有 `/logo.png`），
