@@ -41,8 +41,8 @@ final class RailWindowController {
         )
 
         configurePanel()
-        installContent(initialSize: initialSize)
         installCallbacks()
+        observeSubscriptions()
 
         // 在设置或菜单里换位置只改放置，不移动窗口；没有这一句内容会镜像过来而窗口留在原地，
         // 条就搁浅在屏幕中间了。
@@ -65,6 +65,7 @@ final class RailWindowController {
                 // 条也可能刚掉到一块谁也没选的屏上。重新问一次。
                 self.displayFollower.forgetLastDisplay()
                 self.placePanel()
+                self.applyDisplayFollowing()
             }
         }
 
@@ -83,6 +84,9 @@ final class RailWindowController {
     }
 
     var isVisible: Bool { panel.isVisible }
+
+    // 生命周期回归测试读取真正的 SwiftUI 宿主；AppKit 的空 contentView 不代表已安装内容。
+    var hostedContentView: NSView? { hostingView }
 
     /// 条上右键弹出的菜单。
     ///
@@ -104,9 +108,15 @@ final class RailWindowController {
         isStarted = false
         displayFollower.stop()
         panel.orderOut(nil)
+        releaseContent()
     }
 
     func show() {
+        guard wantsVisible else {
+            releaseContent()
+            return
+        }
+        installContentIfNeeded(initialSize: panel.frame.size)
         // **放置、显示、再放置**，第二次才算数。
         //
         // `placePanel` 量的是条在窗口里相对于窗口**实际拿到**的 frame 的位置，
@@ -124,7 +134,12 @@ final class RailWindowController {
     }
 
     func toggle() {
-        panel.isVisible ? panel.orderOut(nil) : show()
+        if panel.isVisible {
+            panel.orderOut(nil)
+            releaseContent()
+        } else {
+            show()
+        }
         applyDisplayFollowing()
     }
 
@@ -134,6 +149,7 @@ final class RailWindowController {
         applyDisplayFollowing()
 
         if wantsVisible {
+            installContentIfNeeded(initialSize: panel.frame.size)
             if !panel.isVisible { show() }
             // 关掉一个供应商会缩短条，而条在窗口里坐哪儿是按它的长度算出来的——
             // 这里必须重做，否则条会从它被放下的地方漂走。
@@ -141,6 +157,7 @@ final class RailWindowController {
         } else {
             displayFollower.stop()
             panel.orderOut(nil)
+            releaseContent()
         }
     }
 
@@ -152,8 +169,10 @@ final class RailWindowController {
         guard hasEntries else {
             displayFollower.stop()
             panel.orderOut(nil)
+            releaseContent()
             return
         }
+        installContentIfNeeded(initialSize: panel.frame.size)
         if panel.isVisible { placePanel() } else { show() }
     }
 
@@ -207,7 +226,8 @@ final class RailWindowController {
     /// 条不在屏幕上、或这个设置关着时什么都不采样，所以只有一块屏的人、
     /// 或者把这项关掉的人，不会为任何定时器付钱。
     private func applyDisplayFollowing() {
-        guard settings.railEnabled, settings.railFollowsActiveDisplay, panel.isVisible else {
+        guard settings.railEnabled, settings.railFollowsActiveDisplay, panel.isVisible,
+              NSScreen.screens.count > 1 else {
             displayFollower.stop()
             return
         }
@@ -216,13 +236,13 @@ final class RailWindowController {
         displayFollower.start()
     }
 
-    private func installContent(initialSize: CGSize) {
+    private func installContentIfNeeded(initialSize: CGSize) {
+        guard hostingView == nil else { return }
         let hostingView = NSHostingView(
             rootView: RailView(
                 store: store,
                 settings: settings,
-                placement: placement,
-                onRailLengthChange: { [weak self] in self?.railLengthChanged() }
+                placement: placement
             )
         )
         // 宿主只负责填满窗口：窗口尺寸由这里的几何算出来，不是由内容拟合出来的。
@@ -231,6 +251,25 @@ final class RailWindowController {
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
         self.hostingView = hostingView
+    }
+
+    private func releaseContent() {
+        hostingView = nil
+        panel.contentView = nil
+    }
+
+    /// 内容存在时由 SwiftUI 观察快照；内容释放后只保留订阅观察，
+    /// 这样开关关闭或没有可显示订阅时不会留下隐藏的指针采样器。
+    private func observeSubscriptions() {
+        withObservationTracking {
+            _ = store.subscriptions
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.railLengthChanged()
+                self.observeSubscriptions()
+            }
+        }
     }
 
     private func installCallbacks() {

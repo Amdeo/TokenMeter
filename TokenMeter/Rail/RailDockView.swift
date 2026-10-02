@@ -134,7 +134,9 @@ struct RailDockView: View {
             entry: entry,
             isSelected: selected,
             options: options,
-            isRefreshing: isRefreshing
+            // 收起时环只是透明占位，停止它的活动动画，避免不可见的 repeatForever
+            // 动画继续驱动视图刷新。
+            isRefreshing: isRefreshing && isExpanded
         )
     }
 

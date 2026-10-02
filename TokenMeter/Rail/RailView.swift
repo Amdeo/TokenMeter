@@ -11,8 +11,26 @@ struct RailView: View {
     let store: UsageStore
     let settings: SettingsStore
     let placement: RailPlacement
-    /// 条的长度变了（订阅增删），窗口需要重新放置。
-    let onRailLengthChange: () -> Void
+
+    var body: some View {
+        let entries = RailEntryBuilder.entries(
+            subscriptions: store.subscriptions,
+            snapshots: store.snapshots
+        )
+        RailContentView(
+            store: store,
+            settings: settings,
+            placement: placement,
+            entries: entries
+        )
+    }
+}
+
+private struct RailContentView: View {
+    let store: UsageStore
+    let settings: SettingsStore
+    let placement: RailPlacement
+    let entries: [RailEntry]
 
     /// 卡片属于哪个**环**，也就是哪条订阅。
     @State private var selectedID: UUID?
@@ -25,8 +43,6 @@ struct RailView: View {
     @State private var hideAfterDelay: Task<Void, Never>?
     /// 环境外观：开着玻璃时透出去（材质自己挑外观），不开玻璃时这棵树钉成深色。
     @Environment(\.colorScheme) private var colorScheme
-    /// 指针在条窗口里的位置，供卡片与命中判定使用。
-    @State private var pointerPoint: CGPoint?
 
     var body: some View {
         // 条钉在一个铺满窗口的占位视图的对应角上，而且是用 overlay 而不是 stack 子视图：
@@ -92,11 +108,6 @@ struct RailView: View {
                 .padding(.top, placement.railTop)
                 .padding(.leading, placement.railLeading)
             }
-            // 窗口自己的矩形是按条的长度算出来的，而那个和只在有人要求时才重算。
-            // 增删一条订阅就会改变长度，所以这里必须主动要求。
-            .onChange(of: entries.count, initial: true) { _, _ in
-                onRailLengthChange()
-            }
             // 窗口负责拖动，所以内容是从这里知道那件事的：能抓多少取决于条有没有画出来，
             // 而那只有这一侧知道。
             .onChange(of: isExpanded, initial: true) { _, expanded in
@@ -122,11 +133,6 @@ struct RailView: View {
     }
 
     // MARK: - 数据
-
-    /// 一条订阅一个环，顺序即订阅顺序。
-    private var entries: [RailEntry] {
-        RailEntryBuilder.entries(subscriptions: store.subscriptions, snapshots: store.snapshots)
-    }
 
     /// 条是否完整画出来。
     ///
@@ -176,10 +182,18 @@ struct RailView: View {
     /// 条当前的尺寸。窗口一直按最大尺寸留着，所以卡片摆放与指针判定量的都是它，
     /// 不是窗口。
     private var railSize: CGSize {
+        railSize(for: entries)
+    }
+
+    private func railSize(for entries: [RailEntry]) -> CGSize {
         metrics.size(for: entries.count, on: placement.edge.axis, docked: placement.isDocked)
     }
 
     private var panelSize: CGSize {
+        panelSize(for: railSize)
+    }
+
+    private func panelSize(for railSize: CGSize) -> CGSize {
         RailHitArea.panelSize(
             for: placement.edge,
             railLength: max(railSize.width, railSize.height),
@@ -282,6 +296,8 @@ struct RailView: View {
     /// 而不必依赖一个只能在真实鼠标下观察的机制。
     private func selectRing(at point: CGPoint) {
         guard !placement.isDragging else { return }
+        let railSize = self.railSize
+        let panelSize = panelSize(for: railSize)
         guard let index = RailHitArea.slot(
             at: point,
             edge: placement.edge,
@@ -299,9 +315,13 @@ struct RailView: View {
 
     /// 指针不再在两者之上时，收起详情，并最终收起条本身。
     private func pointerMoved(_ point: CGPoint?) {
-        if pointerPoint != point { pointerPoint = point }
-
-        if let point, isOverContent(point) {
+        // 位置只用于当前这次命中判断，不写入 SwiftUI 状态；静止采样不会触发视图重建。
+        if let point {
+            guard isOverContent(point) else {
+                deselect()
+                scheduleHide()
+                return
+            }
             hideAfterDelay?.cancel()
             hideAfterDelay = nil
 
@@ -340,7 +360,9 @@ struct RailView: View {
     /// 窗口大部分是空的、透明的空间——它一直被保持在整个尺寸上（见 `RailPanelLayout`），
     /// 所以只问「指针在不在窗口里」会让卡片在一个离它很远的巨大空白区上保持展开。
     private func isOverContent(_ point: CGPoint) -> Bool {
-        if let notch = placement.notch, notchTarget(notch).contains(point) { return true }
+        let railSize = self.railSize
+        let panelSize = panelSize(for: railSize)
+        if let notch = placement.notch, notchTarget(notch, railSize: railSize).contains(point) { return true }
         let edge = placement.edge
 
         // 卷起来时只认细条自己的目标。去量条的全部范围会让窗口在它并不绘制的那
@@ -370,12 +392,12 @@ struct RailView: View {
         }
         if rail.contains(point) { return true }
 
-        guard let index = selectedIndex else { return false }
+        guard let selectedID, let index = entries.firstIndex(where: { $0.id == selectedID }) else { return false }
 
         // 沿卡片横跨窗口的整个范围，而不是停在卡片自己的边缘上，
         // 这样指针从条走到卡片之间跨过的那个间隙也被盖住了。
         // 沿条方向的宽容让边界不至于像一根绊线。
-        let start = railAlong + cardPadding(for: index) - RailLayout.pointerSlack
+        let start = railAlong + cardPadding(for: index, panelSize: panelSize) - RailLayout.pointerSlack
         let length = cardAlong + RailLayout.pointerSlack * 2
 
         let band = placement.edge.isVertical
@@ -384,8 +406,17 @@ struct RailView: View {
         return band.contains(point)
     }
 
+    private func cardPadding(for index: Int, panelSize: CGSize) -> CGFloat {
+        RailGeometry.cardPadding(
+            ringCentre: ringCentre(for: index),
+            cardAlong: cardAlong,
+            railAlong: railAlong,
+            panelAlong: placement.edge.isVertical ? panelSize.height : panelSize.width
+        )
+    }
+
     /// 硬件刘海在监听器的翻转坐标里的目标。
-    private func notchTarget(_ notch: CGRect) -> CGRect {
+    private func notchTarget(_ notch: CGRect, railSize: CGSize) -> CGRect {
         CGRect(
             x: placement.railLeading + railSize.width / 2 - notch.width / 2,
             y: placement.railTop - notch.height,

@@ -87,6 +87,7 @@ struct RailRingView: View {
                         value: isSpinning
                     )
                     .onAppear { isSpinning = true }
+                    .onDisappear { isSpinning = false }
             }
 
             mark
