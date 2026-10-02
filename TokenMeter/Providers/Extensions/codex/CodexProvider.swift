@@ -31,7 +31,7 @@ struct CodexProviderDefinition: ProviderDefinition {
         [AuthMethodDefinition(id: .codexDeviceOAuth, flowID: .deviceOAuth, title: "OpenAI Codex OAuth", systemImage: "lock.shield.fill", tintRGB: 0x10A37F, detail: "实验性，接口可能变动", deviceAuthorization: .codexCode)]
     }
 
-    @MainActor var cardRenderer: any ProviderCardRenderer { QuotaListCardRenderer() }
+    @MainActor var cardRenderer: any ProviderCardRenderer { CodexCardRenderer() }
 
     func makeUsageProvider(for subscription: Subscription) -> any UsageProvider {
         CodexUsageProvider(subscription: subscription)
@@ -129,7 +129,53 @@ struct CodexUsageProvider: UsageProvider {
     }
 
     static func parseUsage(_ response: CodexUsageResponse, subscription: Subscription, now: Date = .now) throws -> UsageSnapshot {
-        let quotas = [response.rateLimit?.primaryWindow, response.rateLimit?.secondaryWindow].compactMap { window -> Quota? in
+        var quotas: [Quota] = []
+
+        // 账号级窗口（服务端不给名字）：primary / secondary 的 kind 由窗口时长决定，不认槽位——
+        // Kimi Pro 没有 5 小时窗口，账号级那一组只报一个每周窗口，所以有几行画几行。
+        if let limit = response.rateLimit {
+            quotas += windowQuotas(from: limit, modelName: nil, now: now)
+        }
+
+        // 按模型限额：同一套窗口结构，但服务端给了名字（`limit_name` / `metered_feature`），
+        // 行名带上它，与账号级窗口区分开。
+        for extra in response.additionalRateLimits ?? [] {
+            guard let limit = extra.rateLimit else { continue }
+            quotas += windowQuotas(from: limit, modelName: extra.displayName, now: now)
+        }
+
+        // 预付费额度：`credits` 说的是「还剩多少钱」，用余额行表达——与中转站同一条读法。
+        // `unlimited` 为真时没有余额可报，不摆一行 0。
+        if let credits = response.credits,
+           credits.unlimited != true,
+           let balance = credits.balance?.value,
+           balance.isFinite {
+            quotas.append(Quota(
+                name: "可用额度",
+                used: 0,
+                limit: balance,
+                resetAt: nil,
+                unit: .currency(code: "USD", scale: 1),
+                kind: .balance
+            ))
+        }
+
+        guard !quotas.isEmpty else {
+            throw UsageProviderError.invalidResponse(subscription.providerID, "Codex 返回中没有可解析的额度窗口")
+        }
+
+        // 套餐名不进额度行，随快照带给自定义卡片（`providerData` 的既定用途）。
+        let plan = response.planType?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .realtime(
+            subscription: subscription,
+            quotas: quotas,
+            providerData: plan.flatMap { $0.isEmpty ? nil : .object(["plan": .string($0)]) }
+        )
+    }
+
+    /// 一组限额里的窗口，按各自时长命名；`modelName` 非空时行名带上它（按模型限额）。
+    private static func windowQuotas(from limit: CodexUsageResponse.RateLimit, modelName: String?, now: Date) -> [Quota] {
+        [limit.primaryWindow, limit.secondaryWindow].compactMap { window -> Quota? in
             guard let window,
                   let percentage = window.usedPercent?.value,
                   percentage.isFinite else { return nil }
@@ -138,14 +184,28 @@ struct CodexUsageProvider: UsageProvider {
             if let duration, abs(duration - 5 * 3_600) < 1 { kind = .fiveHour }
             else if let duration, abs(duration - 7 * 86_400) < 1 { kind = .weekly }
             else { kind = .generic }
-            let name = duration.map(Self.windowName) ?? "额度"
+            let base = duration.map(Self.windowName) ?? "额度"
+            let name = modelName.map { "\(base)（\($0)）" } ?? base
             let resetAt = window.resetAt?.value.flatMap(Self.date) ?? window.resetAfterSeconds?.value.map { now.addingTimeInterval($0) }
             return Quota(name: name, used: min(max(percentage, 0), 100), limit: 100, resetAt: resetAt, kind: kind)
         }
-        guard !quotas.isEmpty else {
-            throw UsageProviderError.invalidResponse(subscription.providerID, "Codex 返回中没有可解析的额度窗口")
+    }
+
+    /// 套餐标识 → 用户认得的套餐名。认不出的原样透传：一个不认识的名字也好过没有名字
+    /// （与 Pulse 的 `CodexUsageService.planName` 同一张表）。
+    static func planName(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "free": "Free"
+        case "go": "Go"
+        case "plus": "Plus"
+        case "pro": "Pro"
+        case "prolite": "Pro 5x"
+        case "team": "Team"
+        case "business": "Business"
+        case "enterprise": "Enterprise"
+        case "edu": "Edu"
+        default: raw
         }
-        return .realtime(subscription: subscription, quotas: quotas)
     }
 
     private static func windowName(_ seconds: Double) -> String {
@@ -177,6 +237,32 @@ struct CodexUsageResponse: Decodable {
             case usedPercent = "used_percent"; case limitWindowSeconds = "limit_window_seconds"; case resetAt = "reset_at"; case resetAfterSeconds = "reset_after_seconds"
         }
     }
+    /// 按模型限额：与账号级同一套窗口结构，另带一个名字（`limit_name`，回退 `metered_feature`）。
+    struct AdditionalRateLimit: Decodable {
+        let limitName: String?
+        let meteredFeature: String?
+        let rateLimit: RateLimit?
+        enum CodingKeys: String, CodingKey {
+            case limitName = "limit_name"; case meteredFeature = "metered_feature"; case rateLimit = "rate_limit"
+        }
+        var displayName: String? {
+            let name = limitName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let name, !name.isEmpty { return name }
+            let feature = meteredFeature?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (feature?.isEmpty == false) ? feature : nil
+        }
+    }
+    /// 预付费额度（`credits`）：`unlimited` 为真表示没有额度上限，`balance` 是剩余金额。
+    struct Credits: Decodable {
+        let unlimited: Bool?
+        let balance: FlexibleNumber?
+    }
     let rateLimit: RateLimit?
-    enum CodingKeys: String, CodingKey { case rateLimit = "rate_limit" }
+    let additionalRateLimits: [AdditionalRateLimit]?
+    let credits: Credits?
+    let planType: String?
+    enum CodingKeys: String, CodingKey {
+        case rateLimit = "rate_limit"; case additionalRateLimits = "additional_rate_limits"; case credits
+        case planType = "plan_type"
+    }
 }
