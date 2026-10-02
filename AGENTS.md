@@ -120,7 +120,7 @@ Use the following stable page IDs when referring to screens in tasks, issues, re
 | ID | Page name | SwiftUI entry point | How to open / notes |
 | --- | --- | --- | --- |
 | TM-01 | 概览面板（菜单栏） | `MenuBarView` | Click the TokenMeter menu-bar item. **面板只有这一页**：订阅列表、用量摘要、同步状态。头部的「添加订阅」与点订阅卡片都打开 TM-02 的对应页，面板本身不再有二级页。 |
-| TM-02 | 设置窗口 | `SettingsWindowView` / `SettingsWindowController` | 独立窗口，不是面板里的一页。入口：TM-01 头部的齿轮、TM-01 里的「添加订阅」与订阅卡片、菜单栏右键菜单的「设置…」与「添加订阅」、悬浮条右键菜单的「设置…」。左侧 source list 分「应用 / 订阅 / 其他」，订阅分组只列**已添加的**订阅。 |
+| TM-02 | 设置窗口 | `SettingsWindowView` / `SettingsWindowController` | 独立窗口，不是面板里的一页。入口：TM-01 头部的齿轮、TM-01 里的「添加订阅」与订阅卡片、菜单栏右键菜单的「设置…」与「添加订阅」、悬浮条右键菜单的「设置…」。**窗口活着的期间 app 会临时从 accessory 提成普通应用**（出现在 Dock、调度中心、⌘Tab；关闭后收回），所以收起面板也能在调度中心里找到它。左侧 source list 分「应用 / 订阅 / 其他」，订阅分组只列**已添加的**订阅。 |
 | TM-03 | 选择供应商页面 | `SettingsWindowView` → `ProviderSelectionContent` | TM-02 →「添加订阅…」。显示全部供应商卡片。 |
 | TM-04 | 添加订阅配置页面 | `SettingsWindowView` → `SubscriptionEditorContent` | 在 TM-03 里选中一个供应商之后。 |
 | TM-05 | 编辑订阅配置页面 | `SettingsWindowView` → `SubscriptionEditorContent` | 从 TM-01 的订阅卡片、或 TM-02 侧边栏的订阅行进入。`SubscriptionEditorDraft` 在侧边栏来回切换时保留未保存的配置。 |

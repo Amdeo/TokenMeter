@@ -6,7 +6,14 @@ struct TokenMeterApp: App {
     @NSApplicationDelegateAdaptor(TokenMeterAppDelegate.self) private var appDelegate
 
     var body: some Scene {
+        // 设置窗口是 `SettingsWindowController` 自己管的普通窗口，这个空场景只是
+        // SwiftUI 生命周期的落脚点。app 在设置窗口开着时会临时提成普通应用、出现
+        // 主菜单，SwiftUI 会给它自动加一个「设置…」（⌘,）——点了只会开出一个空
+        // 窗口。去掉它；设置窗口本身由面板、悬浮条与 Dock 图标负责召出。
         Settings { EmptyView() }
+            .commands {
+                CommandGroup(replacing: .appSettings) {}
+            }
     }
 }
 
@@ -156,6 +163,13 @@ final class TokenMeterAppDelegate: NSObject, NSApplicationDelegate {
         return environment["XCTestConfigurationFilePath"] != nil
             || environment["XCTestBundlePath"] != nil
             || NSClassFromString("XCTestCase") != nil
+    }
+
+    /// Dock 图标（设置窗口活着的时候才有）被点、或用户在 Finder 里再次打开 app：
+    /// 把设置窗口带回前面。窗口的下场由 `SettingsWindowController.reopen()` 决定。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        settingsController?.reopen()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {

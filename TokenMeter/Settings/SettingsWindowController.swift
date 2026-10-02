@@ -10,6 +10,9 @@ import SwiftUI
 /// 没有 Dock 图标、通常也不是最活跃的那个，所以窗口必须**显式激活** app，
 /// 否则它会开在用户正在看的东西后面。这也正是这里不用 SwiftUI 场景的原因：
 /// 窗口的激活与生命周期都要直接管。
+///
+/// 窗口活着期间 app 临时按普通应用跑（`updateActivationPolicy`）：只有这样它才
+/// 进得了调度中心与 Dock；窗口一关就收回 `accessory`。
 @MainActor
 final class SettingsWindowController {
     private let store: UsageStore
@@ -36,7 +39,15 @@ final class SettingsWindowController {
         self.window = window
         applyAppearance(to: window)
 
+        // 设置是 app 的普通窗口，要出现在调度中心、⌘Tab 和 Dock 里；accessory
+        // 应用的窗口不在其中，面板一收起来用户就找不回设置窗口。所以窗口活着的
+        // 期间 app 临时按普通应用跑，窗口一关就收回（见 `window.onClose`）。
+        Self.updateActivationPolicy(regular: true)
+
         NSApp.activate(ignoringOtherApps: true)
+        // 最小化的窗口也允许被重新叫到前面：`makeKeyAndOrderFront` 对着一个
+        // miniaturized 窗口什么都不会做。
+        if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
 
         // 只在第一次摆放。Pulse 每次 `show()` 都 `center()`，那会把用户拖到别处的窗口
@@ -45,6 +56,26 @@ final class SettingsWindowController {
             hasBeenPlaced = true
             window.center()
         }
+    }
+
+    /// Dock 图标（只在设置窗口活着的时候才有）被点、或用户在 Finder 里再次打开
+    /// app 时把设置窗口带回前面。窗口已经关掉就什么都不做——那时 Dock 图标也收回了。
+    func reopen() {
+        guard let window, window.isVisible || window.isMiniaturized else { return }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// 开设置窗口期间把 app 提成普通应用，关掉再收回菜单栏应用。
+    ///
+    /// `accessory`（`LSUIElement`）的窗口不进调度中心、⌘Tab，Dock 里也没有图标，
+    /// 这正是不开面板就找不见设置窗口的原因。策略是进程级的，所以这里只做对齐：
+    /// 目标与实际一致时不动它，避免无谓的反复切换。
+    private static func updateActivationPolicy(regular: Bool) {
+        let policy: NSApplication.ActivationPolicy = regular ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        _ = NSApp.setActivationPolicy(policy)
     }
 
     /// 订阅增删之后侧边栏要跟着变；选中的那条没了就退回通用页——
@@ -100,7 +131,11 @@ final class SettingsWindowController {
         window.titlebarSeparatorStyle = .automatic
         window.isReleasedWhenClosed = false
         window.title = "TokenMeter 设置"
-        window.onClose = { [weak navigation] in navigation?.isWindowVisible = false }
+        window.onClose = { [weak navigation] in
+            navigation?.isWindowVisible = false
+            // 窗口不在了就回菜单栏应用：Dock 图标跟着窗口走。
+            Self.updateActivationPolicy(regular: false)
+        }
 
         window.contentView = NSHostingView(
             rootView: SettingsWindowView(
