@@ -2,6 +2,24 @@
 
 All notable changes are documented here. Each entry is bilingual — 中文在前，English 在后.
 
+## 0.4.1 — 2026-10-02
+
+**中文**
+
+- 修复 Codex 设备授权响应解析：兼容字符串或数字形式的轮询间隔，以及 `expires_at` 到期时间，避免点击「开始设备授权」后立即报错。
+- Codex 用量卡片显示套餐名称、账户额度窗口、各模型的独立额度与预付余额；仅返回余额时也能正常显示，余额颜色可在外观设置中调整。
+- 悬浮条详情中的余额改为直接显示剩余金额；百分比额度移除重复的计数对与空白行，金额额度保留金额对。
+- 设置窗口打开期间，应用出现在 Dock、调度中心和 ⌘Tab 中，收起菜单面板后仍能找回窗口；再次打开会恢复已最小化的窗口，关闭后恢复菜单栏常驻模式。
+- 补充 Pulse、Sparkle 与 Lobe Icons 的致谢，并修正文档中的第三方依赖说明。
+
+**English**
+
+- Fixed Codex device authorization parsing to accept polling intervals as strings or numbers and the `expires_at` deadline, preventing an immediate error when starting authorization.
+- The Codex usage card now shows the plan name, account quota windows, per-model limits and prepaid credits. Credits-only responses are supported, and balance colours can be customized in appearance settings.
+- Rail details show balances as the remaining amount. Percentage quotas no longer repeat count pairs or leave empty rows; monetary quotas retain their amount pairs.
+- While the settings window is open, the app appears in the Dock, Mission Control and ⌘Tab, so the window remains accessible after dismissing the menu panel. Reopening restores a minimized window; closing it returns the app to menu-bar mode.
+- Added acknowledgements for Pulse, Sparkle and Lobe Icons, and corrected the documentation about third-party dependencies.
+
 ## 0.4.0 — 2026-09-25
 
 **中文**
