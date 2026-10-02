@@ -6,6 +6,24 @@
         <description>Updates for TokenMeter.</description>
         <language>en</language>
         <item>
+            <title>0.4.1</title>
+            <pubDate>Fri, 02 Oct 2026 14:05:53 -0000</pubDate>
+            <sparkle:version>401</sparkle:version>
+            <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <link>https://github.com/Amdeo/TokenMeter/releases/tag/v0.4.1</link>
+            <description><![CDATA[<style>
+  h2 { font-size: 1.05em; margin: 0 0 .5em; }
+  ul { margin: 0; padding-left: 1.2em; }
+  li { margin: .3em 0; }
+  p { margin: .8em 0 0; }
+</style><h2>TokenMeter 0.4.1</h2><p><strong>中文</strong></p><ul><li>修复 Codex 设备授权响应解析：兼容字符串或数字形式的轮询间隔，以及 <code>expires_at</code> 到期时间，避免点击「开始设备授权」后立即报错。</li><li>Codex 用量卡片显示套餐名称、账户额度窗口、各模型的独立额度与预付余额；仅返回余额时也能正常显示，余额颜色可在外观设置中调整。</li><li>悬浮条详情中的余额改为直接显示剩余金额；百分比额度移除重复的计数对与空白行，金额额度保留金额对。</li><li>设置窗口打开期间，应用出现在 Dock、调度中心和 ⌘Tab 中，收起菜单面板后仍能找回窗口；再次打开会恢复已最小化的窗口，关闭后恢复菜单栏常驻模式。</li><li>补充 Pulse、Sparkle 与 Lobe Icons 的致谢，并修正文档中的第三方依赖说明。</li></ul><p><strong>English</strong></p><ul><li>Fixed Codex device authorization parsing to accept polling intervals as strings or numbers and the <code>expires_at</code> deadline, preventing an immediate error when starting authorization.</li><li>The Codex usage card now shows the plan name, account quota windows, per-model limits and prepaid credits. Credits-only responses are supported, and balance colours can be customized in appearance settings.</li><li>Rail details show balances as the remaining amount. Percentage quotas no longer repeat count pairs or leave empty rows; monetary quotas retain their amount pairs.</li><li>While the settings window is open, the app appears in the Dock, Mission Control and ⌘Tab, so the window remains accessible after dismissing the menu panel. Reopening restores a minimized window; closing it returns the app to menu-bar mode.</li><li>Added acknowledgements for Pulse, Sparkle and Lobe Icons, and corrected the documentation about third-party dependencies.</li></ul><p><a href="https://github.com/Amdeo/TokenMeter/releases/tag/v0.4.1">Release notes on GitHub</a></p>]]></description>
+            <enclosure url="https://github.com/Amdeo/TokenMeter/releases/download/v0.4.1/TokenMeter-0.4.1-macos-universal.zip"
+                       length="6636706"
+                       type="application/octet-stream"
+                       sparkle:edSignature="2TwgJ+bEzzCsyQX8MlweW2F4OuEVdlIsfSaXhajXFBWDSI1cGSXcwB/O20d4cBuqvD6c9FZZwXpLLJn0GXqwBw==" />
+        </item>
+        <item>
             <title>0.4.0</title>
             <pubDate>Thu, 24 Sep 2026 18:31:33 -0000</pubDate>
             <sparkle:version>400</sparkle:version>
