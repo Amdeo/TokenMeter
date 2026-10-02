@@ -86,6 +86,7 @@ final class EmbeddedWebLoginController: NSObject, NSWindowDelegate {
     // MARK: - Private
 
     private func showPanel() {
+        closedByUser = false
         let webViewConfiguration = WKWebViewConfiguration()
         // 持久化站点数据：会话留在 App 内，重登时通常免登录。
         webViewConfiguration.websiteDataStore = .default()
@@ -115,6 +116,8 @@ final class EmbeddedWebLoginController: NSObject, NSWindowDelegate {
 
     private func closePanel() {
         panel?.delegate = nil
+        webView?.stopLoading()
+        panel?.contentView = nil
         panel?.close()
         panel = nil
         webView = nil

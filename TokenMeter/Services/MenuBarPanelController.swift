@@ -212,6 +212,8 @@ final class MenuBarPanelController: NSObject {
     private var isStarted = false
     private var geometryUpdateScheduled = false
 
+    var panelContentView: NSView? { hostingView }
+
     init(store: UsageStore, navigation: PanelNavigationState) {
         self.store = store
         self.navigation = navigation
@@ -248,43 +250,7 @@ final class MenuBarPanelController: NSObject {
             panel.setFrame(frame, display: false)
         }
 
-        let rootView = AnyView(
-            MenuBarView(
-                onPanelSizeChange: { [weak self] _ in
-                    self?.schedulePanelGeometryUpdate()
-                },
-                onReorderModeChange: { [weak self] reordering in
-                    self?.panel.isReordering = reordering
-                },
-                onOpenSettings: { [weak self] in
-                    self?.openSettings()
-                },
-                onAddSubscription: { [weak self] in
-                    self?.addSubscription()
-                },
-                onEditSubscription: { [weak self] id in
-                    self?.editSubscription(id)
-                }
-            )
-            .environment(store)
-            .environment(navigation)
-        )
-        let container = PanelContainerView(frame: NSRect(origin: .zero, size: panel.frame.size))
-        container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor.clear.cgColor
-        container.autoresizingMask = [.width, .height]
-
-        let hostingView = MenuBarHostingView(rootView: rootView)
-        hostingView.wantsLayer = true
-        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-        panel.contentView = container
-        // 宿主尺寸只由容器决定：四边约束 + 关掉 NSHostingView 自尺寸，装配写在容器里，
-        // 控制器与回归测试共用同一入口。
-        container.installHostedContentView(hostingView)
-        self.hostingView = hostingView
-
         installEventHandling()
-        refreshPanelGeometry()
     }
 
     func stop() {
@@ -307,8 +273,6 @@ final class MenuBarPanelController: NSObject {
             NSStatusBar.system.removeStatusItem(statusItem)
         }
         self.statusItem = nil
-        hostingView = nil
-        panel.contentView = nil
         store.stop()
     }
 
@@ -495,8 +459,9 @@ final class MenuBarPanelController: NSObject {
         if !store.settings.menuBarItemOpensPanel { hidePanel() }
     }
 
-    private func showPanel() {
+    func showPanel() {
         guard isStarted else { return }
+        installPanelContentIfNeeded()
         // 显示与切页走同一几何入口，先定位到菜单栏下沿再显示。
         refreshPanelGeometry()
         NSApp.activate(ignoringOtherApps: true)
@@ -508,14 +473,67 @@ final class MenuBarPanelController: NSObject {
         }
     }
 
-    private func hidePanel() {
+    func hidePanel() {
         guard panel.isVisible else {
             visibilityGate.didReceiveHiddenEvent()
+            releasePanelContent()
             return
         }
         panel.orderOut(nil)
         panel.resignKey()
         visibilityGate.didReceiveHiddenEvent()
+        releasePanelContent()
+    }
+
+    /// 面板只在可见期间持有 SwiftUI 树。隐藏面板时释放宿主，避免后台继续保留订阅列表、
+    /// 图片和观察链；`PanelNavigationState` 独立保存高度与预览状态，重新显示不会丢布局。
+    private func installPanelContentIfNeeded() {
+        guard hostingView == nil else { return }
+
+        let rootView = AnyView(
+            MenuBarView(
+                onPanelSizeChange: { [weak self] _ in
+                    self?.schedulePanelGeometryUpdate()
+                },
+                onReorderModeChange: { [weak self] reordering in
+                    self?.panel.isReordering = reordering
+                },
+                onOpenSettings: { [weak self] in
+                    self?.openSettings()
+                },
+                onAddSubscription: { [weak self] in
+                    self?.addSubscription()
+                },
+                onEditSubscription: { [weak self] id in
+                    self?.editSubscription(id)
+                }
+            )
+            .environment(store)
+            .environment(navigation)
+        )
+        let container = PanelContainerView(frame: NSRect(origin: .zero, size: panel.frame.size))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.clear.cgColor
+        container.autoresizingMask = [.width, .height]
+
+        let hostingView = MenuBarHostingView(rootView: rootView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        panel.contentView = container
+        // 宿主尺寸只由容器决定：四边约束 + 关掉 NSHostingView 自尺寸，装配写在容器里，
+        // 控制器与回归测试共用同一入口。
+        container.installHostedContentView(hostingView)
+        self.hostingView = hostingView
+    }
+
+    private func releasePanelContent() {
+        panel.isReordering = false
+        guard panel.contentView != nil || hostingView != nil else { return }
+        if let container = panel.contentView as? PanelContainerView {
+            container.hostedContentView?.removeFromSuperview()
+        }
+        panel.contentView = nil
+        hostingView = nil
     }
 
     private func hideIfClickedOutside() {

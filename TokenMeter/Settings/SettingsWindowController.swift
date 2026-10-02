@@ -19,9 +19,10 @@ final class SettingsWindowController {
     private let settings: SettingsStore
     private let railPlacement: RailPlacement
     private let update: AppUpdate
-    private let navigation = SettingsNavigation()
-    private var window: NSWindow?
+    let navigation = SettingsNavigation()
+    private(set) var window: NSWindow?
     private var hasBeenPlaced = false
+    private var lastWindowFrame: NSRect?
 
     init(store: UsageStore, settings: SettingsStore, railPlacement: RailPlacement, update: AppUpdate) {
         self.store = store
@@ -116,6 +117,7 @@ final class SettingsWindowController {
             backing: .buffered,
             defer: false
         )
+        if let lastWindowFrame { window.setFrame(lastWindowFrame, display: false) }
 
         // 这两条要一起用，配对才是重点。
         //
@@ -131,7 +133,11 @@ final class SettingsWindowController {
         window.titlebarSeparatorStyle = .automatic
         window.isReleasedWhenClosed = false
         window.title = "TokenMeter 设置"
-        window.onClose = { [weak navigation] in
+        window.onClose = { [weak self, weak navigation, weak window] in
+            if let frame = window?.frame { self?.lastWindowFrame = frame }
+            window?.makeFirstResponder(nil)
+            window?.contentView = nil
+            self?.window = nil
             navigation?.isWindowVisible = false
             // 窗口不在了就回菜单栏应用：Dock 图标跟着窗口走。
             Self.updateActivationPolicy(regular: false)
