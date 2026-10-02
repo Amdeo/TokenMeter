@@ -230,7 +230,9 @@ struct CodexOAuthService: Sendable {
         }
     }
 
-    private struct DeviceAuthorizationResponse: Decodable {
+    /// 设备授权响应。**非 private**：`CodexTests` 直接解码它，才能钉住服务端当前的字段形态
+    /// （`interval` 是字符串、`expires_in` 换成 `expires_at`）而不必发真实请求。
+    struct DeviceAuthorizationResponse: Decodable {
         let deviceAuthID: String
         let userCode: String
         let interval: Int
@@ -241,14 +243,43 @@ struct CodexOAuthService: Sendable {
             case userCode = "user_code"
             case interval
             case expiresIn = "expires_in"
+            case expiresAt = "expires_at"
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             deviceAuthID = try container.decode(String.self, forKey: .deviceAuthID)
             userCode = try container.decode(String.self, forKey: .userCode)
-            interval = max(1, try container.decodeIfPresent(Int.self, forKey: .interval) ?? 5)
-            expiresIn = max(1, try container.decodeIfPresent(Int.self, forKey: .expiresIn) ?? 600)
+            // `interval` 服务端现在返回**字符串**（`"5"`），旧版返回数字——codex 自己的
+            // `deserialize_interval` 也是按字符串读的，所以两种都得认；缺失时回退 5 秒。
+            interval = max(1, Int(Self.number(in: container, forKey: .interval) ?? 5))
+            // 新版不再给 `expires_in`，改给 ISO8601 的 `expires_at`；都没有时按 15 分钟兜底
+            // （codex 的提示语正是「expires in 15 minutes」）。此前只读 `expires_in`，
+            // 缺失时按 600 秒算，比真实窗口短。
+            if let seconds = Self.number(in: container, forKey: .expiresIn), seconds > 0 {
+                expiresIn = max(1, Int(seconds))
+            } else if let text = (try? container.decodeIfPresent(String.self, forKey: .expiresAt)) ?? nil,
+                      let date = Self.iso8601(text) {
+                expiresIn = max(1, Int(date.timeIntervalSinceNow.rounded()))
+            } else {
+                expiresIn = 900
+            }
+        }
+
+        /// 字符串或数字都认的取值（服务端把 `interval` 从数字改成了字符串）。
+        private static func number(
+            in container: KeyedDecodingContainer<CodingKeys>,
+            forKey key: CodingKeys
+        ) -> Double? {
+            guard let raw = try? container.decodeIfPresent(FlexibleNumber.self, forKey: key) else { return nil }
+            return raw.value
+        }
+
+        private static func iso8601(_ text: String) -> Date? {
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = fractional.date(from: text) { return date }
+            return ISO8601DateFormatter().date(from: text)
         }
     }
 

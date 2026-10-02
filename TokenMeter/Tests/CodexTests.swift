@@ -301,6 +301,40 @@ struct CodexTests {
         let pendingPolls = await stub.callCount(path: "/api/accounts/deviceauth/token")
         #expect(pendingPolls >= 1)
     }
+
+    // MARK: - 设备授权响应形态（回归：OAuth 授权不起作用）
+
+    /// 服务端把 `interval` 从数字改成了**字符串**、把 `expires_in` 换成了 ISO8601 的
+    /// `expires_at`。按旧的 `Int` / `expires_in` 解码会整条抛错，设备授权因此完全用不了。
+    @Test
+    func deviceAuthorizationParsesTheCurrentStringIntervalAndExpiresAt() throws {
+        let response = try JSONDecoder().decode(CodexOAuthService.DeviceAuthorizationResponse.self, from: Data("""
+        {
+          "device_auth_id": "deviceauth_6abf99345260819183905d81c63fa7a9",
+          "user_code": "A3AS-M0Z3X",
+          "interval": "5",
+          "expires_at": "2030-01-01T00:00:00.000000+00:00"
+        }
+        """.utf8))
+
+        #expect(response.deviceAuthID.hasPrefix("deviceauth_"))
+        #expect(response.userCode == "A3AS-M0Z3X")
+        // 字符串 "5" 要读成 5，而不是把整个响应判成无法解析。
+        #expect(response.interval == 5)
+        // 没有 expires_in 时按 expires_at 推算，约等于到那个时刻的秒数（远大于 600）。
+        #expect(response.expiresIn > 600)
+    }
+
+    /// 旧形态（数字 `interval` + `expires_in`）继续可解：老账户/旧响应不能被这次修复弄坏。
+    @Test
+    func deviceAuthorizationStillParsesTheLegacyNumericShape() throws {
+        let response = try JSONDecoder().decode(CodexOAuthService.DeviceAuthorizationResponse.self, from: Data("""
+        {"device_auth_id": "device-1", "user_code": "ABCD-1234", "interval": 1, "expires_in": 600}
+        """.utf8))
+
+        #expect(response.interval == 1)
+        #expect(response.expiresIn == 600)
+    }
 }
 
 /// 按 URL path 返回脚本化响应的传输桩，并记录每个 path 的调用次数。
